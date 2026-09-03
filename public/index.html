@@ -361,8 +361,9 @@
                                     <div class="form-group mb-4">
                                         <label class="field-label" for="cfgGeminiApiKey" style="font-weight: 600;">Google Gemini API Key (Miễn phí 100%)</label>
                                         <input type="password" id="cfgGeminiApiKey" class="input input-styled" style="padding: 12px 16px; height: 46px; font-size: 0.95rem;" placeholder="Dán Gemini API Key của bạn (AIzaSy...)">
-                                        <div class="d-flex justify-between align-center mt-2">
+                                        <div class="d-flex justify-between align-center mt-2 wrap-gap">
                                             <span class="text-muted text-xs">Chưa có API Key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link text-xs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">👉 Bấm vào đây để lấy Gemini API Key miễn phí từ Google</a></span>
+                                            <span id="cfgGeminiModelBadge" class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" title="Mô hình Gemini được hệ thống tự động kiểm tra và lựa chọn">⚡ Model: Tự động phát hiện</span>
                                         </div>
                                     </div>
 
@@ -370,7 +371,7 @@
                                         <div class="form-group">
                                             <label class="field-label" for="cfgAiProvider" style="font-weight: 600;">Mô hình AI sử dụng</label>
                                             <select id="cfgAiProvider" class="input input-styled" style="height: 46px;">
-                                                <option value="gemini">✨ Google Gemini 3.7 / 3.5 / 2.5 Flash (Tự động nhận diện - Khuyên dùng)</option>
+                                                <option value="gemini">✨ Google Gemini (Tự động chọn Model Mới Nhất & Mạnh Nhất - Khuyên dùng)</option>
                                                 <option value="openai">🧠 OpenAI GPT-4o-mini</option>
                                                 <option value="deepseek">🚀 DeepSeek V3</option>
                                                 <option value="free_hybrid">⚡ Miễn phí Tốc độ cao (Free Hybrid AI)</option>

@@ -154,7 +154,7 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     if (provider === 'gemini') {
       const key = geminiKey || apiKey;
       if (!key) throw new Error('Chưa cấu hình Gemini API Key');
-      return await this._callGeminiAPI(key, systemPrompt);
+      return await this._callGeminiAPI(key, systemPrompt, config.geminiModel);
     } else if (provider === 'openai') {
       const key = apiKey || geminiKey;
       if (!key) throw new Error('Chưa cấu hình OpenAI API Key');
@@ -205,7 +205,13 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
 
     let result = null;
     if (provider === 'gemini') {
-      result = await this._callGeminiAPI(apiKey, systemPrompt);
+      const discovery = await this.discoverAndVerifyGeminiModels(apiKey, systemPrompt);
+      result = discovery.result;
+      if (result) {
+        result.selectedModel = discovery.selectedModel;
+        result.supportedModels = discovery.supportedModels;
+        result.latencyMs = discovery.latencyMs;
+      }
     } else if (provider === 'openai') {
       result = await this._callOpenAIAPI(apiKey, systemPrompt);
     } else if (provider === 'deepseek') {
@@ -221,13 +227,177 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
   }
 
   /**
-   * Google Gemini API Integration (Official Google Gemini 3.6 Flash & Fallback)
+   * Helper function to score and rank Gemini models by version and performance
    */
-  async _callGeminiAPI(apiKey, prompt) {
-    const modelsToTry = [
-      'gemini-3.6-flash',
-      'gemini-2.5-flash'
+  _scoreGeminiModel(name = '') {
+    let score = 0;
+    const n = name.toLowerCase();
+    if (n.includes('2.5')) score += 2500;
+    else if (n.includes('2.0')) score += 2000;
+    else if (n.includes('1.5')) score += 1500;
+    else if (n.includes('1.0')) score += 1000;
+
+    if (n.includes('flash')) score += 60; // Flash is fast & has 15 RPM, ideal for crawling
+    else if (n.includes('pro')) score += 40;
+
+    if (n.includes('8b')) score -= 10;
+    if (n.includes('exp')) score -= 5;
+    if (n.includes('thinking')) score -= 20; // Thinking models add delay and token usage
+    return score;
+  }
+
+  /**
+   * Automatically discovers available Gemini models, ranks them, and verifies live execution
+   */
+  async discoverAndVerifyGeminiModels(apiKey, customPrompt = null) {
+    if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+      throw new Error('Vui lòng cung cấp Google Gemini API Key!');
+    }
+    const cleanKey = apiKey.trim();
+
+    // 1. Kiểm tra kết nối và lấy danh sách model được hỗ trợ cho API Key này
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
+    let listRes;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      listRes = await fetch(listUrl, {
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      clearTimeout(timer);
+    } catch (netErr) {
+      throw new Error(`Không thể kết nối đến máy chủ Google Gemini: ${netErr.message}`);
+    }
+
+    if (!listRes.ok) {
+      const errJson = await listRes.json().catch(() => ({}));
+      const errCode = listRes.status;
+      const errMsg = errJson.error?.message || `Lỗi HTTP ${errCode}`;
+      if (errCode === 400 && (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID'))) {
+        throw new Error('Google Gemini API Key không hợp lệ! Vui lòng kiểm tra lại API key từ Google AI Studio.');
+      }
+      if (errCode === 403) {
+        throw new Error(`API Key bị từ chối truy cập (HTTP 403): ${errMsg}`);
+      }
+      throw new Error(`Google Gemini API trả về lỗi ${errCode}: ${errMsg}`);
+    }
+
+    const data = await listRes.json();
+    const allModels = Array.isArray(data.models) ? data.models : [];
+
+    // 2. Lọc các model hỗ trợ generateContent
+    const contentModels = allModels
+      .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => m.name.replace(/^models\//, ''))
+      .filter(name => name.startsWith('gemini'));
+
+    if (contentModels.length === 0) {
+      throw new Error('API Key hợp lệ nhưng tài khoản không có model Gemini nào hỗ trợ generateContent!');
+    }
+
+    // 3. Xếp hạng và chọn model MỚI NHẤT & TỐI ƯU NHẤT
+    const rankedModels = [...contentModels].sort((a, b) => this._scoreGeminiModel(b) - this._scoreGeminiModel(a));
+
+    // 4. Gửi bài test thẩm định thực tế với model cao nhất
+    let verifiedModel = null;
+    let lastTestError = null;
+    let testLatencyMs = 0;
+    let testResult = null;
+
+    const testPrompt = customPrompt || `Bạn là chuyên gia thẩm định khách hàng tiềm năng cho phần mềm POS.
+Dữ liệu đầu vào:
+- Tác giả: "Trà Sữa Cây Si"
+- Nội dung bài viết: "TƯNG BỪNG KHAI TRƯƠNG chi nhánh 2 tại 45 Nguyễn Huệ vào ngày mai! Giảm 50% menu. Kính mời quý khách!"
+- Số điện thoại phát hiện: "0912345678"
+
+Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
+{
+  "score": 95,
+  "summary": "Khai trương quán trà sữa chi nhánh 2",
+  "location": "TP. Hồ Chí Minh",
+  "businessType": "F&B - Trà sữa",
+  "intent": "Khai trương",
+  "salesPitch": "Chào anh/chị, em thấy quán mình chuẩn bị khai trương, bên em có giải pháp máy in bill và order bàn...",
+  "recommendedFeatures": "In bill & Order QR",
+  "reason": "Quán F&B mở chi nhánh mới, nhu cầu cao về phần mềm bán hàng"
+}`;
+
+    for (const candidateModel of rankedModels.slice(0, 4)) {
+      const startTime = Date.now();
+      try {
+        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/${candidateModel}:generateContent?key=${cleanKey}`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+
+        const testRes = await fetch(testUrl, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: testPrompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
+          })
+        });
+        clearTimeout(timer);
+
+        if (testRes.ok) {
+          const testData = await testRes.json();
+          const replyText = testData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            testLatencyMs = Date.now() - startTime;
+            verifiedModel = candidateModel;
+            testResult = this._parseJSONResponse(replyText, verifiedModel);
+            break;
+          }
+        } else {
+          const errData = await testRes.json().catch(() => ({}));
+          lastTestError = new Error(errData.error?.message || `HTTP ${testRes.status}`);
+        }
+      } catch (err) {
+        lastTestError = err;
+      }
+    }
+
+    if (!verifiedModel) {
+      throw new Error(`Không thể kích hoạt bất kỳ model Gemini nào: ${lastTestError?.message || 'Lỗi không xác định'}`);
+    }
+
+    // Tự động lưu model đã được kiểm tra thực tế vào cấu hình hệ thống
+    await configManager.update({
+      geminiApiKey: cleanKey,
+      geminiModel: verifiedModel
+    }).catch(() => {});
+
+    return {
+      success: true,
+      selectedModel: verifiedModel,
+      supportedModels: rankedModels,
+      latencyMs: testLatencyMs,
+      result: testResult,
+      message: `Kết nối thành công! Đã tự động chọn model mới nhất: ${verifiedModel} (${testLatencyMs}ms)`
+    };
+  }
+
+  /**
+   * Google Gemini API Integration (Dynamic Model Selection & Fallbacks)
+   */
+  async _callGeminiAPI(apiKey, prompt, preferredModel = null) {
+    const config = configManager.get();
+    const activeModel = preferredModel || config.geminiModel;
+
+    const modelsToTry = [];
+    if (activeModel) modelsToTry.push(activeModel);
+
+    const standardModels = [
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-pro'
     ];
+    for (const m of standardModels) {
+      if (!modelsToTry.includes(m)) modelsToTry.push(m);
+    }
 
     let lastError = null;
 

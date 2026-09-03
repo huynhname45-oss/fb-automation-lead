@@ -124,6 +124,19 @@ function initEventListeners() {
     const btnTestAiConnection = document.getElementById('btnTestAiConnection');
     if (btnTestAiConnection) btnTestAiConnection.addEventListener('click', handleTestAiConnection);
 
+    const inputGeminiKey = document.getElementById('cfgGeminiApiKey');
+    if (inputGeminiKey) {
+        inputGeminiKey.addEventListener('paste', () => {
+            setTimeout(() => {
+                const val = inputGeminiKey.value.trim();
+                if (val.length > 20) {
+                    showToast('Đã phát hiện Gemini API Key! Đang tự động kiểm tra kết nối & chọn model mạnh nhất...', 'info');
+                    handleTestAiConnection();
+                }
+            }, 200);
+        });
+    }
+
     const btnResetAiContext = document.getElementById('btnResetAiContext');
     if (btnResetAiContext) {
         btnResetAiContext.addEventListener('click', () => {
@@ -1225,6 +1238,15 @@ async function fetchConfig() {
             inputMinLeadScore.value = config.acceptedLeadScore ?? config.minLeadScore;
         }
         if (txtAiPromptContext) txtAiPromptContext.value = config.aiPromptContext || DEFAULT_AI_PROMPT_CONTEXT;
+        if (config.geminiModel) {
+            const modelBadge = document.getElementById('cfgGeminiModelBadge');
+            if (modelBadge) {
+                modelBadge.textContent = `⚡ Model: ${config.geminiModel}`;
+                modelBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                modelBadge.style.color = '#10b981';
+                modelBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            }
+        }
 
         const inputExportProvince = document.getElementById('cfgExportProvinceCode');
         const inputExportProduct = document.getElementById('cfgExportProductGroup');
@@ -1299,6 +1321,7 @@ async function handleSaveConfig(e) {
         aiProvider: aiProviderVal,
         aiApiKey: geminiApiKeyVal,
         geminiApiKey: geminiApiKeyVal,
+        geminiModel: state.config?.geminiModel || 'gemini-2.0-flash',
         minLeadScore: minLeadScoreVal,
         acceptedLeadScore: minLeadScoreVal,
         reviewLeadScore: state.config?.reviewLeadScore ?? 45,
@@ -1345,10 +1368,10 @@ async function handleTestAiConnection() {
     }
 
     if (btnTest) setLoading(btnTest, true);
-    if (statusText) statusText.textContent = '⏳ Đang kết nối tới Google Gemini...';
+    if (statusText) statusText.textContent = '⏳ Đang kiểm tra kết nối API Key & tự động tìm model mới nhất...';
     if (resultBox) {
         resultBox.style.display = 'block';
-        resultBox.innerHTML = '<div class="p-3 text-sm" style="color: #93c5fd;">⏳ Đang gửi bài viết mẫu tới Google Gemini... Vui lòng đợi trong giây lát!</div>';
+        resultBox.innerHTML = '<div class="p-3 text-sm" style="color: #93c5fd;">⏳ Đang kết nối tới Google Gemini để kiểm tra kết nối và tìm model mới nhất... Vui lòng đợi trong giây lát!</div>';
     }
 
     try {
@@ -1359,13 +1382,40 @@ async function handleTestAiConnection() {
         });
 
         if (res.success) {
-            showToast(`✅ Kết nối thành công (${res.latencyMs}ms)! AI hoạt động tốt.`, 'success');
-            if (statusText) statusText.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ Kết nối Google Gemini thành công (${res.latencyMs}ms)</span>`;
+            const selectedModel = res.selectedModel || res.result?.provider || 'gemini-2.0-flash';
+            state.config.geminiModel = selectedModel;
+            state.config.geminiApiKey = apiKey;
+            state.config.aiApiKey = apiKey;
+
+            const modelBadge = document.getElementById('cfgGeminiModelBadge');
+            if (modelBadge) {
+                modelBadge.textContent = `⚡ Model: ${selectedModel}`;
+                modelBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                modelBadge.style.color = '#10b981';
+                modelBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            }
+
+            showToast(`✅ Kết nối thành công! Đã tự động chọn model: ${selectedModel} (${res.latencyMs}ms)`, 'success');
+            if (statusText) statusText.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ Kết nối thành công (${res.latencyMs}ms) — Đã chọn: ${selectedModel}</span>`;
             if (resultBox) {
+                const supportedList = Array.isArray(res.supportedModels) ? res.supportedModels.slice(0, 6).join(', ') : selectedModel;
+                const resultData = res.result || {};
                 resultBox.innerHTML = `
-                <div class="ai-result-success-card" style="padding: 14px 18px;">
-                    <div class="ai-result-header" style="color: #10b981; margin-bottom: 0; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
-                        <span>✅</span> KẾT NỐI GOOGLE GEMINI THÀNH CÔNG (${res.latencyMs}ms) — Mô hình: <code>${escapeHtml(res.result?.provider || 'gemini-3.6-flash')}</code>
+                <div class="ai-result-success-card" style="padding: 16px 20px;">
+                    <div class="ai-result-header" style="color: #10b981; margin-bottom: 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                        <span>✅</span> KẾT NỐI GOOGLE GEMINI THÀNH CÔNG (${res.latencyMs}ms)
+                    </div>
+                    <div style="font-size: 0.88rem; color: #f1f5f9; margin-bottom: 6px;">
+                        🚀 <strong>Model mới nhất & mạnh nhất được chọn:</strong> <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.85rem; padding: 3px 8px;">${escapeHtml(selectedModel)}</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">
+                        📋 <strong>Các model hỗ trợ khả dụng trong key:</strong> <code>${escapeHtml(supportedList)}</code>
+                    </div>
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; font-size: 0.85rem;">
+                        <div style="color: #38bdf8; font-weight: 600; margin-bottom: 4px;">🧪 Kết quả thẩm định thử nghiệm:</div>
+                        <div style="color: #cbd5e1;">- Ngành nghề: <strong>${escapeHtml(resultData.businessType || 'F&B - Trà sữa')}</strong> (Điểm: <strong style="color: #10b981;">${resultData.score || 95}/100</strong>)</div>
+                        <div style="color: #cbd5e1;">- Tóm tắt: ${escapeHtml(resultData.summary || 'Khai trương quán mới')}</div>
+                        ${resultData.salesPitch ? `<div style="color: #a78bfa; margin-top: 4px;">- Gợi ý mở lời (Sales Pitch): <em>"${escapeHtml(resultData.salesPitch)}"</em></div>` : ''}
                     </div>
                 </div>`;
             }

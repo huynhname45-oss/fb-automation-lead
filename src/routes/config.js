@@ -18,6 +18,7 @@ const configSchema = z.object({
   aiProvider: z.enum(['free_hybrid', 'gemini', 'openai', 'deepseek']).optional(),
   aiApiKey: z.string().optional(),
   geminiApiKey: z.string().optional(),
+  geminiModel: z.string().optional(),
   minLeadScore: z.number().int().min(0).max(100).optional(),
   acceptedLeadScore: z.number().int().min(0).max(100).optional(),
   reviewLeadScore: z.number().int().min(0).max(100).optional(),
@@ -57,7 +58,7 @@ router.put('/', async (req, res) => {
 });
 
 /**
- * Live AI Test Endpoint to verify Gemini / OpenAI key & prompt context
+ * Live AI Test & Model Discovery Endpoint
  */
 router.post('/test-ai', async (req, res) => {
   try {
@@ -68,6 +69,19 @@ router.post('/test-ai', async (req, res) => {
 
     const { default: aiLeadEvaluator } = await import('../core/ai-lead-evaluator.js');
 
+    if (provider === 'gemini') {
+      const discovery = await aiLeadEvaluator.discoverAndVerifyGeminiModels(apiKey.trim(), context);
+      return res.json({
+        success: true,
+        selectedModel: discovery.selectedModel,
+        supportedModels: discovery.supportedModels,
+        latencyMs: discovery.latencyMs,
+        result: discovery.result,
+        message: discovery.message
+      });
+    }
+
+    // Other providers
     const testPost = {
       authorName: 'Trà Sữa Cây Si - Chi Nhánh 2',
       content: 'TƯNG BỪNG KHAI TRƯƠNG chi nhánh 2 tại 45 Nguyễn Huệ vào ngày mai! Giảm 50% toàn bộ menu trà sữa và trà trái cây. Kính mời quý khách ghé trải nghiệm!',
@@ -81,6 +95,8 @@ router.post('/test-ai', async (req, res) => {
     return res.json({
       success: true,
       latencyMs,
+      selectedModel: provider,
+      supportedModels: [provider],
       result,
       message: `Kết nối thành công tới ${provider.toUpperCase()} (${latencyMs}ms)`
     });
