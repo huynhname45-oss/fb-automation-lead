@@ -736,10 +736,12 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          // Quick Lead Qualification Check (Chuỗi lớn, Đối thủ POS, Ngành không phù hợp)
+          // Quick Lead Qualification Check (Chuỗi lớn, Đối thủ POS, Ngành không phù hợp, Nước ngoài)
           const quickEval = leadFilter.evaluateLead({
             authorName: post.authorName,
-            content: post.content
+            content: post.content,
+            location: post.feedTimeText || '',
+            phones: post.phones || []
           }, filterConfig);
 
           if (!quickEval.qualified) {

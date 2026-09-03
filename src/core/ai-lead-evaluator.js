@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter from './lead-filter.js';
+import leadFilter, { checkForeignLead } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -428,6 +428,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
    * Advanced Local NLP Heuristic Lead Evaluator (Zero-Network Fallback)
    */
   _localNLPEvaluate(authorName, content, phones, minScore = 50) {
+    // -1. Foreign Location Check (Highest Priority)
+    const foreignCheck = checkForeignLead({ authorName, content, phones });
+    if (foreignCheck.isForeign) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Cửa hàng / Quán ở Nước ngoài (Đã loại trừ)',
+        businessType: 'Nước ngoài',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: `Bài viết ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi triển khai POS tại Việt Nam.`,
+        provider: 'local_nlp'
+      };
+    }
+
     const textLower = `${authorName} ${content}`.toLowerCase();
 
     // 0. Explicit Negative Service & Unsupported Sector Check

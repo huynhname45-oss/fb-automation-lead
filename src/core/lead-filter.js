@@ -111,6 +111,57 @@ export function hasOnlyTollFreeNumbers(phones = []) {
   return hasTollFree && !hasMobile;
 }
 
+// Patterns detecting foreign countries / overseas businesses & diaspora
+export const FOREIGN_PATTERNS = [
+  // Cụ thể địa điểm / khu vực nước ngoài
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:nhật|nhật bản|japan|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|kobe|kyoto)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:hàn|hàn quốc|korea|seoul|busan|incheon|daegu|daejeon|gwangju|suwon)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:đài|đài loan|taiwan|taipei|đài bắc|đài trung|đài nam|cao hùng|đào viên|taichung|kaohsiung)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:mỹ|hoa kỳ|usa|california|cali|texas|houston|san jose|florida|seattle|new york|dallas)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:úc|australia|sydney|melbourne|brisbane|perth|adelaide)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:canada|toronto|vancouver|montreal|calgary)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:châu âu|đức|germany|berlin|anh|london|pháp|paris|nga|ba lan|séc|czech)\b)/i,
+  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:singapore|malaysia|thái lan|bangkok|campuchia|phnom penh|lao|philippines)\b)/i,
+
+  // Đối tượng / thị trường / cộng đồng nước ngoài
+  /\b(?:du học sinh|xklđ|xuất khẩu lao động|tu nghiệp sinh|tokutei|định cư|kiều bào|việt kiều)\s+(?:nhật|hàn|đài|mỹ|úc|canada|âu|đức|anh)/i,
+  /\b(?:ship toàn đài loan|ship toàn nhật|ship toàn hàn|ship us|order us|order uk|ship quốc tế)\b/i,
+  /\b(?:tân đài tệ|đài tệ|tiền đài)\b/i,
+  /\b\d+\s*(?:man|sen|won|ntd|aud|cad)\b/i
+];
+
+/**
+ * Checks if a post represents a business or person located overseas / in a foreign country.
+ */
+export function checkForeignLead(post = {}) {
+  const phones = Array.isArray(post.phones) ? post.phones : (post.phone ? [post.phone] : []);
+
+  // 1. Check International Phone Prefixes (+81, +82, +886, +1, +61, +44, +49, +33, +65, +60, +66...)
+  for (const p of phones) {
+    const cleanP = String(p).trim();
+    if (/^\+(?:81|82|886|1|61|44|49|33|65|60|66|855|856|7|48|420)\d{6,}/.test(cleanP)) {
+      return { isForeign: true, reason: `Số điện thoại quốc tế (${cleanP})` };
+    }
+  }
+
+  const rawText = `${post.authorName || ''} ${post.content || ''} ${post.location || ''}`;
+  if (!rawText.trim()) return { isForeign: false };
+
+  // 2. Check foreign patterns
+  for (const regex of FOREIGN_PATTERNS) {
+    const m = rawText.match(regex);
+    if (m) {
+      // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan"
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà sữa|mỹ phẩm|đồ|hàng|tiêu chuẩn|phong cách)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(m[0])) {
+        continue;
+      }
+      return { isForeign: true, reason: `Địa điểm / Thị trường nước ngoài: "${m[0].trim()}"` };
+    }
+  }
+
+  return { isForeign: false };
+}
+
 export class LeadFilter {
   constructor(customEntities = null) {
     this.customEntities = customEntities;
@@ -133,6 +184,17 @@ export class LeadFilter {
    * @returns {Object} { qualified: boolean, reason: string, matchedTerm: string }
    */
   evaluateLead(post = {}, config = {}) {
+    // 0. Foreign / Overseas Location Check (Highest Priority - POS software operates only in Vietnam)
+    const foreignCheck = checkForeignLead(post);
+    if (foreignCheck.isForeign) {
+      return {
+        qualified: false,
+        category: 'foreign_location',
+        matchedTerm: foreignCheck.reason,
+        reason: `Khách hàng / Cửa hàng ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi triển khai POS tại Việt Nam.`
+      };
+    }
+
     const authorClean = cleanTextForMatching(post.authorName || '');
     const contentClean = cleanTextForMatching(post.content || '');
     const combinedText = `${authorClean} ${contentClean}`;
