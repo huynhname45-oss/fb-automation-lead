@@ -11,7 +11,7 @@ const searchRequestSchema = z.object({
   keyword: z.string().min(1, 'Keyword is required'),
   maxPosts: z.number().int().positive().optional(),
   filters: z.object({
-    recentPosts: z.boolean().default(false),
+    recentPosts: z.boolean().default(true),
     datePosted: z.string().default('any'),
     excludeKeywords: z.union([z.array(z.string()), z.string()]).optional().default([]),
     requirePhoneOnly: z.boolean().optional().default(false)

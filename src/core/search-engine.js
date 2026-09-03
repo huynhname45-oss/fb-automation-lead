@@ -144,6 +144,54 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
     };
   }
 
+  // 4.1. "Hôm nay" / "today" (today at HH:mm)
+  const todayMatch = cleanTime.match(/(?:hôm nay|hom nay|today)(?:\s+(?:lúc|at))?\s*(\d{1,2}):(\d{2})/iu);
+  if (todayMatch) {
+    const d = new Date(nowTs);
+    d.setHours(parseInt(todayMatch[1], 10), parseInt(todayMatch[2], 10), 0, 0);
+    const diffHours = (nowTs - d.getTime()) / (3600 * 1000);
+    return {
+      status: 'exact',
+      publishedAt: d.toISOString(),
+      earliestAt: d.toISOString(),
+      latestAt: d.toISOString(),
+      source: 'feed_text',
+      confidence: 0.95,
+      withinRequestedWindow: diffHours >= 0 && diffHours <= recencyHours,
+      isWithin24h: diffHours >= 0 && diffHours <= 24,
+      formattedDate: timeText,
+      fullContent: rawContent
+    };
+  }
+
+  // 4.2. Specific calendar date (e.g. "1 tháng 9 lúc 10:49", "01/09/2026", "1 Tháng 9")
+  const dateMatch = cleanTime.match(/(?:ngày\s+)?(\d{1,2})(?:\s+tháng\s+|[\/\-])(\d{1,2})(?:[\/\-](\d{4}))?(?:(?:\s+lúc|\s+at)?\s*(\d{1,2}):(\d{2}))?/iu);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10) - 1;
+    const year = dateMatch[3] ? parseInt(dateMatch[3], 10) : new Date(nowTs).getFullYear();
+    const hours = dateMatch[4] ? parseInt(dateMatch[4], 10) : 12;
+    const mins = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
+    
+    let postDate = new Date(year, month, day, hours, mins, 0);
+    if (!dateMatch[3] && postDate.getTime() > nowTs + 3600 * 1000) {
+      postDate.setFullYear(year - 1);
+    }
+    const diffHours = (nowTs - postDate.getTime()) / (3600 * 1000);
+    return {
+      status: 'exact',
+      publishedAt: postDate.toISOString(),
+      earliestAt: postDate.toISOString(),
+      latestAt: postDate.toISOString(),
+      source: 'feed_text',
+      confidence: 0.9,
+      withinRequestedWindow: diffHours >= 0 && diffHours <= recencyHours,
+      isWithin24h: diffHours >= 0 && diffHours <= 24,
+      formattedDate: timeText,
+      fullContent: rawContent
+    };
+  }
+
   // 5. Relative days (e.g. "2 ngày", "3 ngày", "4 ngày")
   const dayMatch = cleanTime.match(/(?:^|\s)(\d+)\s*(?:ngày|ngay|days?|d)(?:\s|$|[^\p{L}\p{N}])/iu);
   if (dayMatch) {
@@ -781,7 +829,8 @@ class SearchEngine extends EventEmitter {
                 post.content, 
                 crawlDelay, 
                 post.authorName, 
-                post.feedTimeText
+                post.feedTimeText,
+                targetRecencyHours
               );
               if (detailedVerif && detailedVerif.formattedDate !== 'Lỗi kiểm tra') {
                 postVerification = detailedVerif;
@@ -789,7 +838,7 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          if (enableRecent && (!postVerification.withinRequestedWindow || postVerification.status === 'unknown')) {
+          if (enableRecent && (!postVerification.isWithin24h || !postVerification.withinRequestedWindow || postVerification.status === 'unknown')) {
             logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 24 giờ qua!`);
             this.rejectedCount++;
             continue;
@@ -1125,11 +1174,11 @@ class SearchEngine extends EventEmitter {
   /**
    * Fast DOM Post Verification (No Resource Aborting, Ultra Fast Page Load)
    */
-  async _verifyPostDetails(context, postUrl, rawFeedContent = '', crawlDelay = 2000, targetAuthorName = '', rawFeedTimeText = '') {
+  async _verifyPostDetails(context, postUrl, rawFeedContent = '', crawlDelay = 2000, targetAuthorName = '', rawFeedTimeText = '', recencyHours = 24) {
     let inspectPage;
     try {
       if (!postUrl || !postUrl.startsWith('http')) {
-        return resolveTimeResult({ timeText: rawFeedTimeText, rawContent: rawFeedContent, recencyHours: 72 });
+        return resolveTimeResult({ timeText: rawFeedTimeText, rawContent: rawFeedContent, recencyHours });
       }
 
       inspectPage = await context.newPage();
@@ -1254,7 +1303,7 @@ class SearchEngine extends EventEmitter {
         const nowSec = Math.floor(Date.now() / 1000);
         const diffHours = (nowSec - exactTimeSec) / 3600;
         isWithin24h = diffHours >= 0 && diffHours <= 24;
-        withinRequestedWindow = diffHours >= 0 && diffHours <= 72;
+        withinRequestedWindow = diffHours >= 0 && diffHours <= recencyHours;
 
         const d = new Date(exactTimeSec * 1000);
         const hours = String(d.getHours()).padStart(2, '0');
@@ -1267,7 +1316,7 @@ class SearchEngine extends EventEmitter {
         const d = new Date(pageData.metaTime);
         const diffHours = (Date.now() - d.getTime()) / (3600 * 1000);
         isWithin24h = diffHours >= 0 && diffHours <= 24;
-        withinRequestedWindow = diffHours >= 0 && diffHours <= 72;
+        withinRequestedWindow = diffHours >= 0 && diffHours <= recencyHours;
         
         const hours = String(d.getHours()).padStart(2, '0');
         const mins = String(d.getMinutes()).padStart(2, '0');
@@ -1276,7 +1325,7 @@ class SearchEngine extends EventEmitter {
         const year = d.getFullYear();
         formattedDate = `${hours}:${mins} ${day}/${month}/${year}`;
       } else {
-        const fallback = resolveTimeResult({ timeText: rawFeedTimeText, rawContent: pageData.fullContent || rawFeedContent, recencyHours: 72 });
+        const fallback = resolveTimeResult({ timeText: rawFeedTimeText, rawContent: pageData.fullContent || rawFeedContent, recencyHours });
         return { ...fallback, imageUrls: pageData.imageUrls || [] };
       }
 
@@ -1294,13 +1343,13 @@ class SearchEngine extends EventEmitter {
         imageUrls: pageData.imageUrls || [] 
       };
     } catch (e) {
-      return resolveTimeResult({ timeText: rawFeedTimeText, rawContent: rawFeedContent, recencyHours: 72 });
+      return resolveTimeResult({ timeText: rawFeedTimeText, rawContent: rawFeedContent, recencyHours });
     } finally {
       if (inspectPage) await inspectPage.close().catch(() => {});
     }
   }
 
-  _checkTextTimestampFallback(timeText = '', rawContent = '', recencyHours = 72) {
+  _checkTextTimestampFallback(timeText = '', rawContent = '', recencyHours = 24) {
     return resolveTimeResult({ timeText, rawContent, recencyHours });
   }
 

@@ -154,4 +154,20 @@ test('resolveTimeResult strictly flags 1 day and > 24h as outside 24h window', a
   const post3Days = resolveTimeResult({ timeText: '3 ngày trước', recencyHours: 24 });
   assert.equal(post3Days.withinRequestedWindow, false);
   assert.equal(post3Days.isWithin24h, false);
+
+  // Calendar dates like '1 tháng 9 lúc 10:49' when now is September 3, 2026
+  const refDate = new Date('2026-09-03T20:54:25+07:00');
+  const postSept1 = resolveTimeResult({ timeText: '1 tháng 9 lúc 10:49', recencyHours: 24, now: refDate });
+  assert.equal(postSept1.withinRequestedWindow, false, '1 tháng 9 must be rejected when today is 3 tháng 9');
+  assert.equal(postSept1.isWithin24h, false);
+
+  // Today post '3 tháng 9 lúc 10:00'
+  const postToday = resolveTimeResult({ timeText: '3 tháng 9 lúc 10:00', recencyHours: 24, now: refDate });
+  assert.equal(postToday.withinRequestedWindow, true, '3 tháng 9 lúc 10:00 should be within 24h');
+  assert.equal(postToday.isWithin24h, true);
+
+  // "Hôm nay lúc 14:00"
+  const postHomNay = resolveTimeResult({ timeText: 'Hôm nay lúc 14:00', recencyHours: 24, now: refDate });
+  assert.equal(postHomNay.withinRequestedWindow, true);
+  assert.equal(postHomNay.isWithin24h, true);
 });

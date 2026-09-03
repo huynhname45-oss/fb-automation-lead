@@ -51,7 +51,7 @@ const DEFAULT_CONFIG = {
   reviewLeadScore: 45,
   aiPromptContext: DEFAULT_AI_PROMPT_CONTEXT,
   defaultFilters: {
-    recentPosts: false,
+    recentPosts: true,
     datePosted: 'any'
   }
 };
