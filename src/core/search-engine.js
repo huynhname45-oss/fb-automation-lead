@@ -511,9 +511,9 @@ class SearchEngine extends EventEmitter {
       const pages = context.pages();
       page = pages.length > 0 ? pages[0] : await context.newPage();
 
-      // 1. Navigate to Search Page (Use /search/top/ which contains the full "Tất cả" sidebar filters)
-      const searchUrl = `https://www.facebook.com/search/top/?q=${encodeURIComponent(keyword)}`;
-      logger.info(`1. Đang mở trang tìm kiếm Facebook: ${searchUrl}`);
+      // 1. Navigate to Posts Search Page (Use /search/posts/ which provides dedicated infinite post feed)
+      const searchUrl = `https://www.facebook.com/search/posts/?q=${encodeURIComponent(keyword)}`;
+      logger.info(`1. Đang mở trang tìm kiếm Bài viết Facebook: ${searchUrl}`);
       const navRes = await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await delay(crawlDelay);
 
@@ -525,8 +525,8 @@ class SearchEngine extends EventEmitter {
         throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
       }
 
-      // 2. Select All (Tất cả) Tab in sidebar (if present)
-      await this._applyAllTab(page);
+      // 2. Select Posts (Bài viết) Tab in sidebar (if present)
+      await this._applyPostsTab(page);
       await delay(1000);
 
       // 3. Toggle "Bài viết mới đây" (Recent Posts)
@@ -1123,6 +1123,9 @@ class SearchEngine extends EventEmitter {
 
         if (!foundNewCandidateInThisBatch) {
           noNewPostsCount++;
+          if (noNewPostsCount % 5 === 0) {
+            logger.info(`⏳ [CHỜ DỮ LIỆU MỚI] Đang cuộn Facebook để tải thêm bài viết... (Lần ${noNewPostsCount}/150)`);
+          }
         } else {
           noNewPostsCount = 0;
         }
@@ -1132,7 +1135,7 @@ class SearchEngine extends EventEmitter {
         // =========================================================================
         if (this.acceptedCount < targetAccepted && !this.isStopped) {
           scrollAttempts++;
-          await this._smoothScrollDown(page, 1500);
+          await this._smoothScrollDown(page, 2500);
           await delay(crawlDelay);
         }
       }
@@ -1140,6 +1143,10 @@ class SearchEngine extends EventEmitter {
       const processedResults = processResults(this.results);
       await historyManager.addPosts(processedResults);
       
+      if (this.acceptedCount < targetAccepted && !this.isStopped) {
+        logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${this.acceptedCount}/${targetAccepted} bài đạt chuẩn).`);
+      }
+
       logger.info(`🎉 HOÀN TẤT! ${this.acceptedCount}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã lưu ${processedResults.length} bản ghi.`);
 
       this.status = this.isStopped ? 'stopped' : 'idle';
@@ -1353,12 +1360,12 @@ class SearchEngine extends EventEmitter {
     return resolveTimeResult({ timeText, rawContent, recencyHours });
   }
 
-  async _smoothScrollDown(page, totalDistance = 1500) {
+  async _smoothScrollDown(page, totalDistance = 2500) {
     try {
       await page.evaluate(async (dist) => {
         await new Promise((resolve) => {
           let moved = 0;
-          const step = 150;
+          const step = 250;
           const timer = setInterval(() => {
             window.scrollBy(0, step);
             moved += step;
@@ -1366,9 +1373,22 @@ class SearchEngine extends EventEmitter {
               clearInterval(timer);
               resolve();
             }
-          }, 35);
+          }, 30);
         });
       }, totalDistance);
+
+      // Scroll to document bottom to ensure Facebook infinite scroll sentinel is triggered
+      await page.evaluate(() => {
+        const bottom = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        window.scrollTo({ top: bottom, behavior: 'auto' });
+      });
+
+      try {
+        await page.keyboard.press('PageDown');
+      } catch (keyErr) {}
     } catch (e) {}
   }
 
@@ -1654,6 +1674,56 @@ class SearchEngine extends EventEmitter {
         }
       });
     } catch (e) {}
+  }
+
+  async _applyPostsTab(page) {
+    try {
+      logger.info('📌 Đang chọn mục "Bài viết" trên thanh bộ lọc tìm kiếm...');
+      // Strategy 1: Find sidebar item with text "Bài viết" or "Posts"
+      const postsTabLocators = [
+        page.locator('div[role="navigation"] a, div[role="navigation"] div[role="button"], div[role="listitem"]').filter({ hasText: /^Bài viết$|^Posts$/i }),
+        page.getByRole('link', { name: /^Bài viết$|^Posts$/i }),
+        page.getByRole('tab', { name: /^Bài viết$|^Posts$/i }),
+        page.getByText(/^Bài viết$|^Posts$/i)
+      ];
+
+      for (const loc of postsTabLocators) {
+        if (await loc.count() > 0) {
+          const first = loc.first();
+          if (await first.isVisible()) {
+            await first.click({ force: true });
+            logger.info('✔ Đã click mục "Bài viết" (Playwright locator)');
+            await delay(1000);
+            return true;
+          }
+        }
+      }
+
+      // Strategy 2: DOM evaluate with dispatchEvent
+      const clicked = await page.evaluate(() => {
+        const candidates = Array.from(document.querySelectorAll('a[href*="/search/posts"], div[role="listitem"], div[role="button"], div[role="tab"], span'));
+        for (const el of candidates) {
+          const txt = el.textContent.trim();
+          if (/^(Bài viết|Posts)$/i.test(txt) || txt.startsWith('Bài viết\n') || txt.startsWith('Posts\n')) {
+            const target = el.closest('a') || el.closest('div[role="button"]') || el.closest('div[role="listitem"]') || el;
+            target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (clicked) {
+        logger.info('✔ Đã click mục "Bài viết" (DOM dispatchEvent)');
+        await delay(1000);
+        return true;
+      }
+    } catch (e) {
+      logger.warn({ err: e }, 'Không thể click mục Bài viết');
+    }
+    return false;
   }
 
   async _applyAllTab(page) {
