@@ -1,0 +1,18 @@
+﻿# Dependencies & Portable Binaries
+node_modules/
+browsers/
+node.exe
+*.zip
+
+# Runtime & User Data
+logs/
+exports/
+session/
+data/history.json
+
+# Temporary & System files
+~$*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

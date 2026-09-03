@@ -1,0 +1,36 @@
+{
+  "name": "fb-automation",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "bin": "app_launcher.cjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/**/*.test.js",
+    "build:exe": "npx --yes pkg@5.8.1 . --targets node18-win-x64 --output FB_Automation.exe"
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "src/**/*",
+      "server.js"
+    ]
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.10",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "p-retry": "^6.2.0",
+    "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
+    "playwright": "^1.42.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "string-similarity": "^4.0.4",
+    "tesseract.js": "^7.0.0",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  }
+}

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
+    <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=2.7.0">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">FB</div>
+                    <span>FB Automation</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="sidebar-item active" id="navSession" data-tab="session">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                    <span>Session Manager</span>
+                </button>
+                <button class="sidebar-item" id="navSearch" data-tab="search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <span>Search & Export</span>
+                </button>
+                <button class="sidebar-item" id="navConfig" data-tab="config">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>Cấu hình (Settings)</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="version">v1.0.0 Premium</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h1 class="page-title" id="pageTitle">Session Manager</h1>
+                <div class="header-status">
+                    <span class="status-indicator none" id="globalSessionStatusIndicator"></span>
+                    <span class="status-text" id="globalSessionStatusText">Chưa đăng nhập</span>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <!-- Session Tab -->
+                <section id="tabSession" class="tab-content active">
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h2>Quản lý Phiên Đăng nhập (Facebook Session)</h2>
+                            <p>Phiên đăng nhập và Cookies Playwright được lưu tự động trong <code>session/facebook.json</code>.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="session-section-title">Trạng thái phiên làm việc hiện tại</div>
+                            
+                            <div class="session-status-box none" id="sessionStatusBox">
+                                <div class="status-title-row">
+                                    <span class="status-icon" id="sessionStatusIcon">✖</span>
+                                    <span class="status-title-text" id="sessionStatusTitle">Chưa có session đăng nhập!</span>
+                                </div>
+                                <div class="status-subtext" id="sessionStatusSubtext">Vui lòng bấm Đăng nhập Facebook mới để tiếp tục.</div>
+                                
+                                <div class="account-info-container mt-3" id="accountInfoContainer" style="display: none;">
+                                    <div class="account-row"><span class="account-label">Tên tài khoản:</span> <strong id="accountDisplayName" class="text-primary">—</strong></div>
+                                    <div class="account-row"><span class="account-label">ID Facebook (UID):</span> <code id="accountUid" class="code-badge">—</code></div>
+                                </div>
+                            </div>
+
+                            <div class="action-buttons-row mt-4">
+                                <button class="btn btn-primary btn-login-fb" id="btnLogin">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                                    Mở Trình duyệt Đăng nhập
+                                </button>
+                                <button class="btn btn-dark" id="btnVerifySession">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                    Kiểm tra lại Session
+                                </button>
+                                <button class="btn btn-danger" id="btnCloseBrowser">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                                    Đóng Trình duyệt & Xóa Session
+                                </button>
+                            </div>
+
+                            <!-- Cookie Login Card -->
+                            <div class="mt-4 p-4" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;">
+                                <div class="headless-title d-flex align-center gap-2 mb-2">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="color: #6366f1;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: #fff;">Đăng nhập nhanh bằng Cookie Facebook (Không cần gõ tài khoản/mật khẩu)</h3>
+                                </div>
+                                <p class="text-muted text-sm mb-3">Dán chuỗi Cookie Facebook (dạng <code>c_user=...; xs=...;</code> hoặc mảng/object JSON) để kích hoạt phiên làm việc tức thì:</p>
+                                
+                                <div class="form-group mb-3">
+                                    <textarea id="inputCookie" class="input input-styled" rows="3" placeholder="Dán chuỗi Cookie tại đây (Ví dụ: c_user=61592463158823; xs=...; datr=...; sb=...)" style="font-family: monospace; font-size: 0.85rem; width: 100%; resize: vertical; padding: 10px;"></textarea>
+                                </div>
+                                
+                                <div class="d-flex align-center justify-between wrap-gap">
+                                    <span class="text-xs text-muted">Hỗ trợ tự động nhận dạng Cookie String (c_user=...; xs=...) & JSON format</span>
+                                    <button class="btn btn-purple-full" id="btnLoginCookie">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                                        Xác nhận Đăng nhập bằng Cookie
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="headless-config-card mt-4">
+                                <div class="headless-info">
+                                    <div class="headless-title">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                                        Ẩn Trình Duyệt Playwright (Chạy Ngầm / Headless Mode)
+                                    </div>
+                                    <div class="headless-desc">Khi bật, Playwright Chromium sẽ tự động chạy ngầm dưới màn hình, không mở cửa sổ Chromium khi cào dữ liệu.</div>
+                                </div>
+                                <label class="toggle-container">
+                                    <input type="checkbox" id="configHeadless" class="toggle-switch">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Search Tab -->
+                <section id="tabSearch" class="tab-content">
+                    <div class="card glass-card mb-4">
+                        <div class="card-header">
+                            <h2>Tìm kiếm Bài viết & Trích xuất Số Điện Thoại (OCR + Regex + Crawl Profile)</h2>
+                            <p>Tự động click "Xem thêm", OCR ảnh bài viết và tự động tìm trên Trang cá nhân tác giả nếu bài viết không có SĐT.</p>
+                        </div>
+                        <div class="card-body">
+                            <form id="searchForm" class="search-form">
+                                <div class="search-inputs-row mb-4">
+                                    <div class="form-group">
+                                        <label class="field-label" for="searchInput">
+                                            Từ khóa bài viết Facebook <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="text" id="searchInput" class="input search-input-large" placeholder="Ví dụ: khai trương" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="field-label" for="excludeKeywordsInput">
+                                            Từ khóa loại bỏ <span class="text-muted text-xs font-normal">(Cách nhau bằng dấu phẩy)</span>
+                                        </label>
+                                        <input type="text" id="excludeKeywordsInput" class="input search-input-large" placeholder="Ví dụ: nhượng, tuyển dụng, cho thuê, thanh lý...">
+                                    </div>
+                                </div>
+                                
+                                <div class="filter-row mb-4">
+                                    <div class="filter-col">
+                                        <span class="filter-label-inline">Bài viết mới đây</span>
+                                        <label class="toggle-container">
+                                            <input type="checkbox" id="filterRecentPosts" class="toggle-switch">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+
+                                    <div class="filter-col">
+                                        <span class="filter-label-inline font-medium" style="color: #60a5fa;">📞 Chỉ lấy bài có SĐT</span>
+                                        <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
+                                            <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="filter-col flex-grow">
+                                        <label class="filter-label-top" for="filterDatePosted">Ngày đăng (Năm)</label>
+                                        <select id="filterDatePosted" class="select select-styled">
+                                            <option value="">Ngày bất kỳ (Mặc định)</option>
+                                            <option value="2026">2026</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2024">2024</option>
+                                            <option value="2023">2023</option>
+                                            <option value="2022">2022</option>
+                                            <option value="2021">2021</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="filter-col">
+                                        <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
+                                        <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000">
+                                    </div>
+                                </div>
+                                
+                                <div class="action-buttons mt-4">
+                                    <button type="submit" class="btn btn-purple-full" id="btnSearch">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                        Bắt đầu Tìm & Crawl SĐT Thành Công
+                                    </button>
+                                    <button type="button" class="btn btn-danger w-full" id="btnStopSearch" style="display: none;">
+                                        Dừng lại
+                                    </button>
+                                </div>
+                            </form>
+                            
+                            <div class="search-progress-container mt-4" id="searchProgressSection" style="display: none;">
+                                <div class="progress-info">
+                                    <span class="progress-text" id="searchProgressText">Đang tìm kiếm...</span>
+                                    <span class="progress-count" id="searchProgressCount">0 / 10</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="searchProgressFill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="results-section" id="resultsSection">
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <!-- Dòng 1: Tiêu đề & Huy hiệu thống kê -->
+                                <div class="d-flex align-center gap-3 wrap-gap">
+                                    <h2>Kết quả Dữ liệu Bóc tách</h2>
+                                    <div class="stat-badge-group d-flex align-center gap-2 wrap-gap">
+                                        <span class="stat-pill stat-pill-total" id="statPillTotal" title="Tổng số bài viết đã bóc tách và lưu">📊 Tổng: <strong>0</strong> bài</span>
+                                        <span class="stat-pill stat-pill-new" id="statPillNew" title="Số bài có trạng thái Mới tạo">🆕 <strong>0</strong> Mới</span>
+                                        <span class="stat-pill stat-pill-lead" id="statPillLead" title="Số bài có trạng thái Đã nhập lead">📥 <strong>0</strong> Lead</span>
+                                        <span class="stat-pill stat-pill-duplicate" id="statPillDuplicate" title="Số bài có trạng thái Trùng lead">⚠️ <strong>0</strong> Trùng</span>
+                                        <span class="stat-pill stat-pill-none" id="statPillNone" title="Số bài có trạng thái Không có nhu cầu">❌ <strong>0</strong> Bỏ</span>
+                                    </div>
+                                </div>
+
+                                <!-- Dòng 2: Phụ đề số lượng & trạng thái đang lọc -->
+                                <span class="text-muted text-sm mt-2 d-block" id="resultTotalBadge">Tất cả dữ liệu đã lưu</span>
+                                    
+                                <!-- Dòng 3: Khung bộ lọc (Tìm kiếm, Trạng thái, Ngày giờ, Lọc) -->
+                                <div class="date-filter-container d-flex align-center gap-3 wrap-gap">
+                                    <input type="text" id="filterKeywordInput" class="input-date-sm" placeholder="🔎 Tìm SĐT, tên tác giả..." style="width: 210px;" title="Tìm kiếm nhanh theo Số điện thoại hoặc Tên người đăng">
+
+                                    <div class="d-flex align-center gap-2">
+                                        <span class="text-xs text-muted">Trạng thái:</span>
+                                        <select id="filterStatusSelect" class="input-date-sm" title="Lọc theo trạng thái lead">
+                                            <option value="all">Tất cả trạng thái</option>
+                                            <option value="Mới tạo">🆕 Mới tạo</option>
+                                            <option value="Đã nhập lead">📥 Đã nhập lead</option>
+                                            <option value="Trùng lead">⚠️ Trùng lead</option>
+                                            <option value="Không có nhu cầu">❌ Không có nhu cầu</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="d-flex align-center gap-2">
+                                        <span class="text-xs text-muted">Điểm AI:</span>
+                                        <select id="filterAiScoreSelect" class="input-date-sm" title="Lọc theo điểm tiềm năng của AI">
+                                            <option value="all">Tất cả điểm</option>
+                                            <option value="high">🟢 Tiềm năng cao (>=80)</option>
+                                            <option value="medium">🟡 Tiềm năng vừa (50-79)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="d-flex align-center gap-2">
+                                        <span class="text-xs text-muted">Từ:</span>
+                                        <input type="datetime-local" id="filterFromDate" class="input-date-sm" title="Từ ngày và giờ:phút đăng">
+                                        <span class="text-xs text-muted">Đến:</span>
+                                        <input type="datetime-local" id="filterToDate" class="input-date-sm" title="Đến ngày và giờ:phút đăng">
+                                    </div>
+
+                                    <button class="btn btn-ghost btn-sm btn-filter-date" id="btnApplyDateFilter" title="Lọc bài viết">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                        Lọc
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" id="btnResetDateFilter" style="display: none;" title="Bỏ lọc">
+                                        ✕ Bỏ lọc
+                                    </button>
+                                </div>
+
+                                <!-- Dòng 4: 2 nút thao tác nằm BÊN DƯỚI bộ lọc (Xóa đã chọn & Xuất File Excel) -->
+                                <div class="header-action-group d-flex align-center gap-3">
+                                    <!-- Cố định nút Xóa đã chọn luôn hiển thị -->
+                                    <button class="btn btn-danger btn-sm" id="btnDeleteSelected" title="Xóa các bài viết đã chọn">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                        Xóa đã chọn ( <span id="selectedCountBadge">0</span> )
+                                    </button>
+                                    <button class="btn btn-success btn-sm" id="btnExport">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        Xuất File Excel (.xlsx)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th width="35px" class="text-center">
+                                                    <input type="checkbox" id="selectAllCheckbox" class="custom-checkbox" title="Chọn tất cả bài viết">
+                                                </th>
+                                                <th width="45px" class="text-center">STT</th>
+                                                <th width="140px">TRẠNG THÁI</th>
+                                                <th width="160px">TÊN NGƯỜI ĐĂNG</th>
+                                                <th width="120px">TỈNH THÀNH</th>
+                                                <th width="130px">SỐ ĐIỆN THOẠI</th>
+                                                <th width="110px">THỜI GIAN ĐĂNG</th>
+                                                <th>TÓM TẮT BÀI VIẾT</th>
+                                                <th width="125px" style="min-width: 125px; white-space: nowrap;">LIÊN KẾT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="resultsTableBody">
+                                            <!-- Results will be injected here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="empty-state" id="emptyResults" style="display: none;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    <p>Chưa có dữ liệu nào được bóc tách.</p>
+                                </div>
+
+                                <!-- Pagination Bar (10 rows per page) -->
+                                <div class="pagination-container d-flex justify-between align-center p-3" id="paginationSection">
+                                    <div class="pagination-info" id="paginationInfo">
+                                        Hiển thị 1 - 10 trên 0 kết quả
+                                    </div>
+                                    <div class="pagination-controls d-flex align-center gap-2">
+                                        <button class="btn btn-ghost btn-sm" id="btnPrevPage" disabled>« Trang trước</button>
+                                        <div class="page-numbers d-flex gap-1" id="pageNumbersContainer"></div>
+                                        <button class="btn btn-ghost btn-sm" id="btnNextPage" disabled>Trang sau »</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Config Tab -->
+                <section id="tabConfig" class="tab-content">
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h2>Cấu hình Hệ thống (System Settings)</h2>
+                            <p>Tùy chỉnh các thông số vận hành của công cụ tự động hóa Facebook.</p>
+                        </div>
+                        <div class="card-body">
+                            <form id="configForm">
+                                <div class="form-group mb-4">
+                                    <label class="field-label" for="cfgCrawlDelay">Thời gian chờ cuộn / chuyển trang (ms)</label>
+                                    <input type="number" id="cfgCrawlDelay" class="input input-styled" value="2500" min="500" step="500">
+                                </div>
+                                <div class="form-group mb-4">
+                                    <label class="field-label" for="cfgMaxPosts">Số lượng bài viết mặc định cần bóc tách</label>
+                                    <input type="number" id="cfgMaxPosts" class="input input-styled" value="10" min="1" max="1000">
+                                </div>
+
+                                <!-- AI Lead Qualification Card -->
+                                <div class="config-subcard-ai mb-4">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #c4b5fd;">
+                                        <span>✨</span> Google Gemini (AI Lead Scoring & Sales Pitch)
+                                    </h3>
+                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Sử dụng Google Gemini AI đọc hiểu bài viết, xác định quán mở mới, sinh câu mở lời tiếp cận (Sales Pitch) và tự động loại trừ hoa/lân/xe khách/nhà thuốc/khách sạn/BĐS.</p>
+
+                                    <div class="rule-item-box mb-4">
+                                        <label class="rule-item-label" for="cfgAiEnabled">
+                                            <input type="checkbox" id="cfgAiEnabled" class="custom-checkbox" style="margin-top: 3px;" checked>
+                                            <div>
+                                                <div class="rule-item-title" style="color: #c4b5fd;">Kích hoạt Gemini AI Đánh giá & Chấm điểm Khách hàng Tiềm năng</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Tự động phân tích nội dung, chấm điểm độ tiềm năng (0 - 100) và viết câu mở lời riêng cho từng khách hàng.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-group mb-4">
+                                        <label class="field-label" for="cfgGeminiApiKey" style="font-weight: 600;">Google Gemini API Key (Miễn phí 100%)</label>
+                                        <input type="password" id="cfgGeminiApiKey" class="input input-styled" style="padding: 12px 16px; height: 46px; font-size: 0.95rem;" placeholder="Dán Gemini API Key của bạn (AIzaSy...)">
+                                        <div class="d-flex justify-between align-center mt-2">
+                                            <span class="text-muted text-xs">Chưa có API Key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link text-xs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">👉 Bấm vào đây để lấy Gemini API Key miễn phí từ Google</a></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid grid-2 gap-4 mb-4">
+                                        <div class="form-group">
+                                            <label class="field-label" for="cfgAiProvider" style="font-weight: 600;">Mô hình AI sử dụng</label>
+                                            <select id="cfgAiProvider" class="input input-styled" style="height: 46px;">
+                                                <option value="gemini">✨ Google Gemini 3.7 / 3.5 / 2.5 Flash (Tự động nhận diện - Khuyên dùng)</option>
+                                                <option value="openai">🧠 OpenAI GPT-4o-mini</option>
+                                                <option value="deepseek">🚀 DeepSeek V3</option>
+                                                <option value="free_hybrid">⚡ Miễn phí Tốc độ cao (Free Hybrid AI)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="field-label" for="cfgMinLeadScore" style="font-weight: 600;">Điểm tiềm năng tối thiểu để duyệt (0 - 100)</label>
+                                            <input type="number" id="cfgMinLeadScore" class="input input-styled" style="height: 46px;" value="50" min="0" max="100">
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group mb-4">
+                                        <div class="d-flex justify-between align-center mb-2">
+                                            <label class="field-label mb-0" for="cfgAiPromptContext" style="font-weight: 600;">Mô tả & Ngữ cảnh phân tích cho AI (AI Prompt Context)</label>
+                                            <button type="button" class="btn btn-ghost btn-xs text-xs" id="btnResetAiContext" style="color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.4); padding: 5px 10px; border-radius: 6px;">↺ Khôi phục mặc định</button>
+                                        </div>
+                                        <textarea id="cfgAiPromptContext" class="prompt-context-textarea" placeholder="Nhập ngữ cảnh và tiêu chí thẩm định của bạn cho AI..."></textarea>
+                                        <span class="text-muted text-xs d-block mt-2" style="line-height: 1.5;">AI sẽ dựa trên mô tả này để đọc hiểu bài viết, xác định quán mở mới, chấm điểm và tự động viết câu mở lời cho Sale.</span>
+                                    </div>
+
+                                    <div class="ai-test-panel">
+                                        <div class="d-flex align-center gap-3 flex-wrap justify-between">
+                                            <div class="d-flex align-center gap-3 flex-wrap">
+                                                <button type="button" class="btn btn-purple btn-test-ai-lg" id="btnTestAiConnection">
+                                                    🧪 Kiểm Tra Kết Nối AI (Live Test)
+                                                </button>
+                                                <span class="text-xs text-muted" id="testAiStatusText">Bấm để kiểm tra kết nối với Google Gemini AI mới nhất.</span>
+                                            </div>
+                                        </div>
+                                        <div id="testAiResultBox" style="display: none;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Lead Rule Filter Card -->
+                                <div class="config-subcard-rules mb-4">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #93c5fd;">
+                                        <span>🎯</span> Quy Tắc Loại Trừ Bắt Buộc (Lead Rule Filter)
+                                    </h3>
+                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Các quy tắc loại trừ tự động trên Bảng tin để tiết kiệm thời gian quét.</p>
+
+                                    <!-- Rule 1 -->
+                                    <div class="rule-item-box">
+                                        <label class="rule-item-label" for="cfgExcludeEnterprise">
+                                            <input type="checkbox" id="cfgExcludeEnterprise" class="custom-checkbox" style="margin-top: 3px;" checked>
+                                            <div>
+                                                <div class="rule-item-title">Tự động loại trừ Chuỗi lớn & Doanh nghiệp (Phúc Long, Highlands, KFC, WinMart...)</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Bỏ qua các bài đăng của các tập đoàn, chuỗi thương hiệu lớn không thuộc tệp hộ kinh doanh cá thể.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Rule 2 -->
+                                    <div class="rule-item-box">
+                                        <label class="rule-item-label" for="cfgExcludeCompetitors">
+                                            <input type="checkbox" id="cfgExcludeCompetitors" class="custom-checkbox" style="margin-top: 3px;">
+                                            <div>
+                                                <div class="rule-item-title">Tự động loại trừ Đối thủ phần mềm POS (KiotViet, Sapo, MISA, iPOS...)</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Bật: Bỏ qua bài viết đối thủ. Tắt (Khuyên dùng): Vẫn lấy để tiếp cận khách hàng đang hỏi mua máy/phần mềm.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Rule 3 -->
+                                    <div class="rule-item-box">
+                                        <label class="rule-item-label" for="cfgExcludeUnsupported">
+                                            <input type="checkbox" id="cfgExcludeUnsupported" class="custom-checkbox" style="margin-top: 3px;" checked>
+                                            <div>
+                                                <div class="rule-item-title">Tự động loại trừ Nhà thuốc, Khách sạn, BĐS, Dịch vụ sinh đẻ, Hoa khai trương, Múa lân, Xe khách</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Loại trừ triệt để các ngành dịch vụ không sử dụng phần mềm POS bán lẻ/F&B.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Rule 4 -->
+                                    <div class="rule-item-box">
+                                        <label class="rule-item-label" for="cfgRequireMobileOnly">
+                                            <input type="checkbox" id="cfgRequireMobileOnly" class="custom-checkbox" style="margin-top: 3px;" checked>
+                                            <div>
+                                                <div class="rule-item-title">Chỉ lấy Số Di Động Cá Nhân (Tự động bỏ qua số Tổng đài 1800/1900)</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Đảm bảo số lấy được là của chủ quán trực tiếp (09x, 08x, 07x, 03x), có Zalo để gọi điện và tư vấn ngay.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Rule 5 -->
+                                    <div class="rule-item-box">
+                                        <label class="rule-item-label" for="cfgRequirePhoneOnly">
+                                            <input type="checkbox" id="cfgRequirePhoneOnly" class="custom-checkbox" style="margin-top: 3px;">
+                                            <div>
+                                                <div class="rule-item-title">Chế độ Mặc định: Bắt buộc bài viết phải có Số Điện Thoại (Bỏ qua bài không có SĐT)</div>
+                                                <div class="rule-item-desc" style="margin-left: 0;">Bật: Chỉ lưu bài có SĐT. Tắt (Mặc định): Lưu tất cả bài tiềm năng đạt chuẩn (kể cả chưa có SĐT) để nhắn tin qua Facebook.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Export Lead Template Config Card -->
+                                <div class="config-subcard-rules mb-4">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #34d399;">
+                                        <span>📊</span> Cấu Hình Xuất File Excel (Mẫu Template Import Lead)
+                                    </h3>
+                                    <p class="text-sm text-muted mb-3" style="line-height: 1.6;">
+                                        File Excel xuất ra sẽ có định dạng chuẩn theo <code>template_import_lead.xlsx</code>. Các trường bắt buộc cố định dưới đây:
+                                    </p>
+                                    <div class="grid grid-3 gap-3">
+                                        <div class="form-group mb-0">
+                                            <label class="field-label text-xs" for="cfgExportProvinceCode" style="font-weight: 600; color: #f87171;">Mã Tỉnh/Thành phố (Bắt buộc)</label>
+                                            <input type="text" id="cfgExportProvinceCode" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="__export__.res_province_121_cf34d119">
+                                        </div>
+                                        <div class="form-group mb-0">
+                                            <label class="field-label text-xs" for="cfgExportProductGroup" style="font-weight: 600; color: #f87171;">Nhóm gói sản phẩm (Bắt buộc)</label>
+                                            <input type="text" id="cfgExportProductGroup" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="RETAIL_PRO">
+                                        </div>
+                                        <div class="form-group mb-0">
+                                            <label class="field-label text-xs" for="cfgExportSalesRep" style="font-weight: 600; color: #f87171;">Nhân viên kinh doanh (Email)</label>
+                                            <input type="text" id="cfgExportSalesRep" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="trucnt@sapo.vn">
+                                        </div>
+                                    </div>
+                                    <span class="text-muted text-xs d-block mt-2" style="font-style: italic;">
+                                        * Cột "Tên cơ hội" tự động điền Tên người đăng, "Số điện thoại" tự động điền SĐT bóc tách được. Các cột khác để trống theo đúng chuẩn import CRM.
+                                    </span>
+                                </div>
+
+                                <div class="mt-5 text-center">
+                                    <button type="submit" class="btn btn-purple-full" id="btnSaveConfig" style="padding: 14px 36px; font-size: 1rem; max-width: 360px; margin: 0 auto; display: block; border-radius: 10px; font-weight: 700;">
+                                        💾 Lưu Cấu Hình Hệ Thống
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="js/app.js?v=2.7.0"></script>
+</body>
+</html>

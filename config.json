@@ -1,0 +1,28 @@
+{
+  "headless": true,
+  "crawlDelay": 2000,
+  "maxPosts": 20,
+  "excludeEnterpriseChains": true,
+  "excludePosCompetitors": false,
+  "excludeUnsupportedIndustries": true,
+  "requireMobilePhoneOnly": true,
+  "requirePhoneOnly": false,
+  "excludeKeywords": "",
+  "aiEnabled": true,
+  "aiProvider": "gemini",
+  "aiApiKey": "AQ.Ab8RN6Lag2a49jgpOBIbHjDIzDNrM_h7qO3d2LHVTo0tmXp6Hg",
+  "geminiApiKey": "AQ.Ab8RN6Lag2a49jgpOBIbHjDIzDNrM_h7qO3d2LHVTo0tmXp6Hg",
+  "minLeadScore": 75,
+  "acceptedLeadScore": 75,
+  "reviewLeadScore": 45,
+  "aiPromptContext": "Bạn là chuyên gia thẩm định khách hàng tiềm năng cho phần mềm Quản lý Bán hàng (POS) như Sapo, KiotViet, Haravan, MISA.\nMục tiêu của bạn là phân tích bài viết Facebook để xác định xem người đăng có phải là CHỦ CỬA HÀNG / QUÁN ĐỘC LẬP (SMB) đang chuẩn bị khai trương hoặc đang kinh doanh cần phần mềm bán hàng hay không.\n\nQUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):\n1. ĐIỂM CAO (80 - 100 điểm) - CHẮC CHẮN LÀ KHÁCH TIỀM NĂNG:\n   - Các quán F&B (quán cafe, trà sữa, quán ăn, nhà hàng, quán nhậu, tiệm bánh, bida, sinh tố, chè...).\n   - Các cửa hàng bán lẻ độc lập (shop thời trang, mỹ phẩm, tiệm tạp hóa, siêu thị mini, phụ kiện, mẹ & bé...).\n   - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, CHẠY THỬ (Cực kỳ cần máy in bill, phần mềm bán hàng, quản lý bàn/kho).\n\n2. ĐIỂM VỪA (50 - 79 điểm) - TIỀM NĂNG:\n   - Cửa hàng/quán độc lập đang TUYỂN THU NGÂN, nhân viên bán hàng, quản lý kho, hoặc SANG NHƯỢNG quán.\n   - Bài viết nhắc đến phần mềm POS đối thủ (KiotViet, Sapo, MISA, Haravan, iPOS...), hỏi mua máy tính tiền, thanh lý máy in bill, hoặc hỏi tư vấn phần mềm bán hàng.\n\n3. ĐIỂM THẤP (0 - 49 điểm) - BẮT BUỘC LOẠI BỎ (KHÔNG PHẢI KHÁCH MỤC TIÊU):\n   - Spa / Tiệm Nail / Thẩm mỹ viện / Massage / Chăm sóc da / Gội đầu dưỡng sinh / Phun xăm / Nối mi.\n   - Chuỗi lớn / Franchise quy mô lớn (Phúc Long, Highlands, WinMart, KFC, Lotte, XanhSM...).\n   - Nhà thuốc / Tiệm thuốc tây / Quầy thuốc.\n   - Khách sạn / Hotel / Resort / Homestay / Nhà nghỉ.\n   - Bất động sản / Căn hộ / Phòng trọ / Cho thuê nhà đất.\n   - Giao thông vận tải, Đường sắt, Tàu hỏa, Du lịch, Tour du lịch, Vé máy bay, Hàng không, Sân bay, Cơ quan nhà nước.\n   - Dịch vụ Sinh đẻ / Gói thai sản / Khám sản phụ khoa / Bệnh viện phụ sản / Chăm sóc mẹ và bé sau sinh / Tắm bé / Thông tắc tia sữa.\n   - Dịch vụ Hoa khai trương / Kệ hoa / Giỏ hoa chúc mừng.\n   - Dịch vụ Múa Lân khai trương / Đoàn lân / Lân sư rồng.\n   - Nhà xe / Xe khách / Tuyến xe / Vé xe limousine.\n   - Bài tuyển dụng đa cấp, việc làm online, bài viết đời sống cá nhân không kinh doanh.",
+  "exportConfig": {
+    "provinceCode": "__export__.res_province_121_cf34d119",
+    "productGroup": "RETAIL_PRO",
+    "salesRep": "trucnt@sapo.vn"
+  },
+  "defaultFilters": {
+    "recentPosts": false,
+    "datePosted": "any"
+  }
+}
