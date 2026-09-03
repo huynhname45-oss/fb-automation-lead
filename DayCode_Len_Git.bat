@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul 2>&1
 title Day Code Len Git
 color 0B
@@ -25,7 +25,7 @@ echo [2/3] Dang commit: "%commit_msg%"...
 git commit -m "%commit_msg%"
 
 echo [3/3] Dang day code len Git...
-git push origin main
+git push -u origin main
 
 if %errorlevel% equ 0 (
     echo.
