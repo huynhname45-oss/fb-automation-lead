@@ -230,20 +230,39 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
    * Helper function to score and rank Gemini models by version and performance
    */
   _scoreGeminiModel(name = '') {
-    let score = 0;
     const n = name.toLowerCase();
-    if (n.includes('2.5')) score += 2500;
-    else if (n.includes('2.0')) score += 2000;
-    else if (n.includes('1.5')) score += 1500;
-    else if (n.includes('1.0')) score += 1000;
 
-    if (n.includes('flash')) score += 60; // Flash is fast & has 15 RPM, ideal for crawling
-    else if (n.includes('pro')) score += 40;
+    // 1. Strictly EXCLUDE non-text / media generation / robotics models
+    if (/(?:image|tts|transcribe|clip|robotics|audio|computer-use|banana|lyria|gemma)/i.test(n)) {
+      return -99999;
+    }
 
-    if (n.includes('8b')) score -= 10;
-    if (n.includes('exp')) score -= 5;
-    if (n.includes('thinking')) score -= 20; // Thinking models add delay and token usage
-    return score;
+    // 2. Parse major and minor version numbers dynamically (e.g. 3.8, 3.7, 3.6, 3.5, 2.5)
+    const verMatch = n.match(/(?:gemini-)?(\d+)(?:\.(\d+))?/i);
+    let versionScore = 0;
+    if (verMatch) {
+      const major = parseInt(verMatch[1], 10) || 1;
+      const minor = parseInt(verMatch[2], 10) || 0;
+      versionScore = major * 1000 + minor * 100;
+    }
+
+    // Explicit boost for gemini-3.6-flash as preferred primary model
+    let boost = 0;
+    if (n.includes('3.6-flash')) boost += 500;
+    else if (n.includes('3.7-flash')) boost += 400;
+    else if (n.includes('3.8-flash')) boost += 300;
+    else if (n.includes('3.5-flash')) boost += 200;
+
+    let typeScore = 0;
+    if (n.includes('flash') && !n.includes('lite')) typeScore += 60;
+    else if (n.includes('pro')) typeScore += 40;
+    else if (n.includes('flash-lite') || n.includes('lite')) typeScore += 30;
+
+    if (n.includes('exp')) typeScore -= 10;
+    if (n.includes('preview')) typeScore -= 5;
+    if (n.includes('customtools')) typeScore -= 50;
+
+    return versionScore + boost + typeScore;
   }
 
   /**
@@ -286,17 +305,17 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     const data = await listRes.json();
     const allModels = Array.isArray(data.models) ? data.models : [];
 
-    // 2. Lọc các model hỗ trợ generateContent
+    // 2. Lọc các model hỗ trợ generateContent và loại trừ media/image/tts
     const contentModels = allModels
       .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
       .map(m => m.name.replace(/^models\//, ''))
-      .filter(name => name.startsWith('gemini'));
+      .filter(name => name.startsWith('gemini') && this._scoreGeminiModel(name) > 0);
 
     if (contentModels.length === 0) {
       throw new Error('API Key hợp lệ nhưng tài khoản không có model Gemini nào hỗ trợ generateContent!');
     }
 
-    // 3. Xếp hạng và chọn model MỚI NHẤT & TỐI ƯU NHẤT
+    // 3. Xếp hạng và chọn model MỚI NHẤT & TỐI ƯU NHẤT (Ưu tiên Gemini 3.6 Flash)
     const rankedModels = [...contentModels].sort((a, b) => this._scoreGeminiModel(b) - this._scoreGeminiModel(a));
 
     // 4. Gửi bài test thẩm định thực tế với model cao nhất
@@ -323,7 +342,7 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
   "reason": "Quán F&B mở chi nhánh mới, nhu cầu cao về phần mềm bán hàng"
 }`;
 
-    for (const candidateModel of rankedModels.slice(0, 4)) {
+    for (const candidateModel of rankedModels.slice(0, 8)) {
       const startTime = Date.now();
       try {
         const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/${candidateModel}:generateContent?key=${cleanKey}`;
@@ -353,9 +372,11 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
         } else {
           const errData = await testRes.json().catch(() => ({}));
           lastTestError = new Error(errData.error?.message || `HTTP ${testRes.status}`);
+          logger.warn(`Model candidate [${candidateModel}] failed test: ${lastTestError.message}. Trying next candidate...`);
         }
       } catch (err) {
         lastTestError = err;
+        logger.warn(`Model candidate [${candidateModel}] error: ${err.message}. Trying next candidate...`);
       }
     }
 
@@ -390,10 +411,10 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
     if (activeModel) modelsToTry.push(activeModel);
 
     const standardModels = [
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-2.5-flash',
-      'gemini-1.5-pro'
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash'
     ];
     for (const m of standardModels) {
       if (!modelsToTry.includes(m)) modelsToTry.push(m);

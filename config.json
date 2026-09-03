@@ -12,7 +12,6 @@
   "aiProvider": "gemini",
   "aiApiKey": "AQ.Ab8RN6Lag2a49jgpOBIbHjDIzDNrM_h7qO3d2LHVTo0tmXp6Hg",
   "geminiApiKey": "AQ.Ab8RN6Lag2a49jgpOBIbHjDIzDNrM_h7qO3d2LHVTo0tmXp6Hg",
-  "geminiModel": "gemini-2.0-flash",
   "minLeadScore": 75,
   "acceptedLeadScore": 75,
   "reviewLeadScore": 45,
@@ -21,6 +20,7 @@
     "recentPosts": false,
     "datePosted": "any"
   },
+  "geminiModel": "gemini-3.6-flash",
   "exportConfig": {
     "provinceCode": "__export__.res_province_121_cf34d119",
     "productGroup": "RETAIL_PRO",
