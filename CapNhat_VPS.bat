@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul 2>&1
 title Cap Nhat FB Automation Tool Tren VPS
 color 0A
@@ -13,18 +13,29 @@ echo.
 
 where git >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [LOI] Tren VPS chua cai dat Git!
-    echo Vui long tai va cai dat Git cho Windows tu: https://git-scm.com/download/win
+    echo [LỖI] Trên VPS chưa cài đặt Git!
+    echo Vui lòng tải và cài đặt Git cho Windows tại: https://git-scm.com/download/win
+    echo (Chỉ cần tải về bấm Next đến hết để cài).
     pause
     exit /b 1
 )
 
-echo [1/2] Dang tai code moi nhat tu Git...
-git pull origin main
+if not exist "%~dp0.git" (
+    echo [THIẾT LẬP LẦN ĐẦU] Đang kết nối thư mục VPS với Git Repository...
+    git init -b main
+    git remote add origin https://github.com/huynhname45-oss/fb-automation-lead.git
+    echo [1/2] Đang tải mã nguồn mới nhất từ GitHub...
+    git fetch origin main
+    git reset --hard origin/main
+    echo [OK] Đã kết nối và đồng bộ xong toàn bộ mã nguồn!
+) else (
+    echo [1/2] Đang tải code mới nhất từ Git...
+    git pull origin main
+)
 
 echo.
 echo ==================================================
-echo   [OK] CAP NHAT THANH CONG!
-echo   Hay khoi dong lai file ChayTool_VPS.bat de ap dung code moi.
+echo   [OK] CẬP NHẬT THÀNH CÔNG!
+echo   Vui lòng khởi động lại file ChayTool_VPS.bat để áp dụng code mới.
 echo ==================================================
 pause
