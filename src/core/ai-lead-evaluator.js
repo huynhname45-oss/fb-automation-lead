@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -131,6 +131,7 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
    - Bất động sản, Căn hộ, Nhà trọ, Dịch vụ sinh đẻ, Gói thai sản.
    - B2B & Phụ trợ: In bao bì, Thi công nội thất/setup quán, Bán xe đẩy bán hàng, Múa lân, Mâm cúng, Lắp đặt camera.
    - Chuỗi thương hiệu lớn (Highlands, Phúc Long, WinMart, KFC, Aeon...).
+   - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ đi ăn tiệc chúc mừng khai trương (ví dụ: "Chúc 2 thầy ... khai trương hồng phát", "Chúc anh/chị/em/bạn khai trương", "Hôm nay đi ăn khai trương", chụp ảnh kỷ niệm, chúc mừng suông) mà KHÔNG PHẢI CHỦ CỬA HÀNG đăng bài giới thiệu quán của mình -> BẮT BUỘC ĐIỂM 0 (isQualified = false).
    - Bài viết rác, chỉ có ảnh gia đình, meme, đời sống cá nhân không kinh doanh.`;
 
     const systemPrompt = `${contextInstruction}
@@ -637,6 +638,22 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
         salesPitch: '',
         recommendedFeatures: '',
         reason: `Bài viết ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi triển khai POS tại Việt Nam.`,
+        provider: 'local_nlp'
+      };
+    }
+
+    // -0.5. Guest / Congratulatory Post Check (Highest Priority)
+    const congratCheck = checkCongratulatoryLead({ authorName, content, phones });
+    if (congratCheck.isCongratulatory) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Khách mời / Bạn bè chúc mừng khai trương (Đã loại trừ)',
+        businessType: 'Khách mời chúc mừng',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`,
         provider: 'local_nlp'
       };
     }

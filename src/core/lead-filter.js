@@ -133,6 +133,27 @@ export const FOREIGN_PATTERNS = [
   /\b\d+\s*(?:man|sen|won|ntd|aud|cad)\b/i
 ];
 
+// Patterns detecting celebratory / guest / attendee congratulatory posts (NOT the business owner)
+export const CONGRATULATORY_PATTERNS = [
+  /(?:^|[\s,;:.!?-])(?:chúc|chuc)\s+(?:\d+\s+)?(?:thầy|cô|bạn|anh|chị|em|cháu|bác|chú|dì|mẹ|ba|sếp|người anh|người em|con bạn|thằng bạn|mấy đứa|hai bạn|2 bạn|hai đứa|2 đứa|hai anh|2 anh|hai chị|2 chị|hai thầy|2 thầy|quán|team)[^\n.!?]{0,50}(?:khai trương|khai truong|hồng phát|hong phat|đại thắng|thành công|mua may bán đắt|bội thu)/iu,
+  /(?:^|[\s,;:.!?-])(?:chúc mừng|chuc mung)\s+(?:khai trương|khai truong)/iu,
+  /(?:khai trương|khai truong)\s+(?:hồng phát|hong phat|đại thắng|thành công|may mắn)/iu,
+  /(?:^|[\s,;:.!?-])(?:dự lễ|tham dự lễ|đi ăn|đi tiệc|ăn tiệc|đi chúc mừng|đến chúc mừng|qua chúc mừng)\s+(?:lễ\s+)?khai trương/iu,
+  /(?:^|[\s,;:.!?-])(?:chung vui|đến chung vui|góp mặt)\s+(?:cùng|với)?[^\n.!?]{0,30}(?:khai trương|sinh nhật)/iu,
+  /(?:kỷ niệm|sinh nhật)\s+lần\s+thứ\s+\d+/iu
+];
+
+export function checkCongratulatoryLead(post = {}) {
+  const content = `${post.content || ''}`;
+  for (const regex of CONGRATULATORY_PATTERNS) {
+    const m = content.match(regex);
+    if (m) {
+      return { isCongratulatory: true, reason: `Lời chúc mừng của khách: "${m[0].trim()}"` };
+    }
+  }
+  return { isCongratulatory: false };
+}
+
 /**
  * Checks if a post represents a business or person located overseas / in a foreign country.
  */
@@ -195,6 +216,17 @@ export class LeadFilter {
         category: 'foreign_location',
         matchedTerm: foreignCheck.reason,
         reason: `Khách hàng / Cửa hàng ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi triển khai POS tại Việt Nam.`
+      };
+    }
+
+    // 0.5. Guest / Congratulatory Post Check (Khách mời / Bạn bè chúc mừng khai trương)
+    const congratCheck = checkCongratulatoryLead(post);
+    if (congratCheck.isCongratulatory) {
+      return {
+        qualified: false,
+        category: 'guest_congratulations',
+        matchedTerm: congratCheck.reason,
+        reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`
       };
     }
 
