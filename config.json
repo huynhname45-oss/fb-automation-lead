@@ -1,5 +1,5 @@
 {
-  "headless": true,
+  "headless": false,
   "crawlDelay": 2000,
   "maxPosts": 20,
   "excludeEnterpriseChains": true,
