@@ -69,6 +69,11 @@ test('Lead Filter & AI Evaluator: Strictly reject foreign / overseas leads while
       authorName: 'Shop Mỹ Phẩm Hàn Quốc',
       content: 'Khai trương shop mỹ phẩm Hàn Quốc chính hãng tại Đà Nẵng. Mua 1 tặng 1!',
       phones: ['0988654321']
+    },
+    {
+      authorName: 'Ty Meo Meo',
+      content: 'KHAI TRƯƠNG QUÁN NHẬU LẨU CUA ĐỒNG TÝ MEO - Mở tới khi nào anh em hết buồn, ship mọi lúc mọi nơi khi khách hàng có nhu cầu. Đặt bàn: 0966068606',
+      phones: ['0966068606', '0964616242']
     }
   ];
 

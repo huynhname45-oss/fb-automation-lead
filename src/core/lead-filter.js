@@ -111,17 +111,20 @@ export function hasOnlyTollFreeNumbers(phones = []) {
   return hasTollFree && !hasMobile;
 }
 
+// Prefix requires word boundary and whitespace (strictly avoids matching "mở", "phở", "cởi", etc.)
+const LOC_PREFIX = '(?:^|[\\s,;:!?\\(\\[])(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\\s:\\.-]+(?:nước|thành phố|tp|tiểu bang|khu vực|bên)?\\s*';
+
 // Patterns detecting foreign countries / overseas businesses & diaspora
 export const FOREIGN_PATTERNS = [
-  // Cụ thể địa điểm / khu vực nước ngoài
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:nhật|nhật bản|japan|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|kobe|kyoto)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:hàn|hàn quốc|korea|seoul|busan|incheon|daegu|daejeon|gwangju|suwon)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:đài|đài loan|taiwan|taipei|đài bắc|đài trung|đài nam|cao hùng|đào viên|taichung|kaohsiung)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:mỹ|hoa kỳ|usa|california|cali|texas|houston|san jose|florida|seattle|new york|dallas)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:úc|australia|sydney|melbourne|brisbane|perth|adelaide)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:canada|toronto|vancouver|montreal|calgary)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:châu âu|đức|germany|berlin|anh|london|pháp|paris|nga|ba lan|séc|czech)\b)/i,
-  /(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\s:\.\-]*([^\n,\.]{0,25}\b(?:singapore|malaysia|thái lan|bangkok|campuchia|phnom penh|lao|philippines)\b)/i,
+  // Cụ thể địa điểm / khu vực nước ngoài (Yêu cầu tên quốc gia rõ ràng, tránh từ đơn trùng đại từ/tên người Việt)
+  new RegExp(`${LOC_PREFIX}(?:nhật bản|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|kobe|kyoto|nhật)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:hàn quốc|korea|seoul|busan|incheon|daegu|daejeon|gwangju|suwon|hàn)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:đài loan|taiwan|taipei|đài bắc|đài trung|đài nam|cao hùng|đào viên|taichung|kaohsiung)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:mỹ|hoa kỳ|usa|california|cali|texas|houston|san jose|florida|seattle|new york|dallas)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:úc|australia|sydney|melbourne|brisbane|perth|adelaide)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:canada|toronto|vancouver|montreal|calgary)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:châu âu|nước đức|germany|berlin|nước anh|vương quốc anh|london|nước pháp|paris|nước nga|ba lan|cộng hòa séc|ch séc|czech|uk)\\b`, 'i'),
+  new RegExp(`${LOC_PREFIX}(?:singapore|malaysia|thái lan|bangkok|campuchia|phnom penh|nước lào|philippines)\\b`, 'i'),
 
   // Đối tượng / thị trường / cộng đồng nước ngoài
   /\b(?:du học sinh|xklđ|xuất khẩu lao động|tu nghiệp sinh|tokutei|định cư|kiều bào|việt kiều)\s+(?:nhật|hàn|đài|mỹ|úc|canada|âu|đức|anh)/i,
