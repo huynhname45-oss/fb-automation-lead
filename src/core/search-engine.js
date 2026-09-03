@@ -971,8 +971,8 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          // 5.2. Nếu vẫn chưa có SĐT: Truy vấn Profile / Tagged Place Page
-          if (phoneEvidence.length === 0 || !phoneEvidence.some(item => item.verified)) {
+          // 5.2. Nếu vẫn chưa có SĐT nào (cả trong chữ lẫn ảnh): Mới truy vấn Profile / Tagged Place Page
+          if (phoneEvidence.length === 0) {
             const candidateUrls = [];
             if (post.taggedPlaceUrl) candidateUrls.push(post.taggedPlaceUrl);
             if (post.profileLink) candidateUrls.push(post.profileLink);
@@ -1569,6 +1569,11 @@ class SearchEngine extends EventEmitter {
                 commentAndNavEls.forEach(el => el.remove());
 
                 const postText = (clone.innerText || '').trim();
+                // Exclude posts mentioning universities, schools, colleges, or admission hotlines
+                if (/(?:đại học|dai hoc|cao đẳng|cao dang|học viện|hoc vien|tuyển sinh|tuyen sinh|xét tuyển|xet tuyen|sinh viên|học sinh|học phí)/i.test(postText)) {
+                  continue;
+                }
+
                 if (postText.length > 10) {
                   combinedPostText += '\n' + postText;
                 }
@@ -1585,7 +1590,10 @@ class SearchEngine extends EventEmitter {
               const clone = main.cloneNode(true);
               const commentEls = clone.querySelectorAll('div[aria-label*="Bình luận"], div[aria-label*="Comment"], form, ul, ol, header, nav');
               commentEls.forEach(el => el.remove());
-              combinedPostText = (clone.innerText || '').trim();
+              const mainText = (clone.innerText || '').trim();
+              if (!/(?:đại học|dai hoc|cao đẳng|cao dang|học viện|hoc vien|tuyển sinh|tuyen sinh|xét tuyển|xet tuyen|sinh viên|học sinh|học phí)/i.test(mainText)) {
+                combinedPostText = mainText;
+              }
             }
 
             return { text: combinedPostText, telLinks: postTelLinks };
