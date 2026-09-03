@@ -24,6 +24,10 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
    - Bài viết nhắc đến phần mềm POS đối thủ (KiotViet, Sapo, MISA, Haravan, iPOS...), hỏi mua máy tính tiền, thanh lý máy in bill, hoặc hỏi tư vấn phần mềm bán hàng.
 
 3. ĐIỂM THẤP (0 - 49 điểm) - BẮT BUỘC LOẠI BỎ (KHÔNG PHẢI KHÁCH MỤC TIÊU):
+   - Trường học, Mầm non, Nhà trẻ, Trường tiểu học, THCS, THPT, Đại học, Cao đẳng, Học viện.
+   - Lễ khai giảng, Khai trường năm học mới, Mùa khai trường, Ngày hội tựu trường, Năm học mới, Học sinh, Sinh viên, Tân sinh viên, Lớp học, Niên khóa.
+   - Dịch vụ in ấn biển bảng/hoa/bóng bay chúc mừng khai giảng năm học.
+   - Spa / Tiệm Nail / Thẩm mỹ viện / Massage / Chăm sóc da / Gội đầu dưỡng sinh / Phun xăm / Nối mi.
    - Chuỗi lớn / Franchise quy mô lớn (Phúc Long, Highlands, WinMart, KFC, Lotte, XanhSM...).
    - Nhà thuốc / Tiệm thuốc tây / Quầy thuốc.
    - Khách sạn / Hotel / Resort / Homestay / Nhà nghỉ.

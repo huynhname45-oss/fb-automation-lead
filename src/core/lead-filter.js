@@ -40,6 +40,13 @@ function cleanTextForMatching(text = '') {
   return ` ${text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 }
 
+const ACCENT_SENSITIVE_KEYWORDS = new Set([
+  'khai trường',
+  'mùa khai trường',
+  'đơn khai trường',
+  'ngày hội khai trường'
+]);
+
 /**
  * Checks if text contains any of the keywords using whole-phrase inclusion (both accented and unaccented)
  */
@@ -48,11 +55,20 @@ function findMatchedKeyword(textClean, keywords = []) {
   const textNoAccent = cleanTextForMatching(removeAccents(textClean));
 
   for (const kw of keywords) {
-    const kwClean = ` ${kw.toLowerCase().trim()} `;
-    const kwNoAccent = ` ${removeAccents(kw.toLowerCase().trim())} `;
+    const kwTrim = kw.toLowerCase().trim();
+    const kwClean = ` ${kwTrim} `;
 
-    if (textClean.includes(kwClean) || textNoAccent.includes(kwNoAccent)) {
+    // 1. Accented exact phrase match
+    if (textClean.includes(kwClean)) {
       return kw;
+    }
+
+    // 2. Unaccented match (skip if keyword collides with positive business terms like "khai trương")
+    if (!ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
+      const kwNoAccent = ` ${removeAccents(kwTrim)} `;
+      if (textNoAccent.includes(kwNoAccent)) {
+        return kw;
+      }
     }
   }
   return null;

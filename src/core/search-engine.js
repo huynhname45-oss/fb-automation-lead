@@ -661,10 +661,35 @@ class SearchEngine extends EventEmitter {
               }
             }
 
+            // C) Tagged Place / Fanpage Check-in (e.g. "Duc Bach cùng với ... tại cafeyolk VN.")
+            let taggedPlaceName = '';
+            let taggedPlaceUrl = '';
+            if (headerNode) {
+              const headerText = headerNode.textContent || '';
+              const placeMatch = headerText.match(/(?:\s+tại\s+|\s+at\s+)([^.\n\r]+)/iu);
+              if (placeMatch && placeMatch[1]) {
+                const rawPlaceName = placeMatch[1].trim();
+                for (const a of headerAnchors) {
+                  const aTxt = a.textContent.trim();
+                  const aHref = a.getAttribute('href') || '';
+                  if (aTxt && (rawPlaceName === aTxt || rawPlaceName.startsWith(aTxt)) && aHref && aHref !== profileLink) {
+                    taggedPlaceName = aTxt;
+                    taggedPlaceUrl = cleanUrl(aHref);
+                    break;
+                  }
+                }
+                if (!taggedPlaceName && rawPlaceName.length < 50) {
+                  taggedPlaceName = rawPlaceName;
+                }
+              }
+            }
+
             // BẮT BUỘC: Phải có Tác giả VÀ có Link bài viết mới đưa vào danh sách ứng viên
             if (authorName && postLink && visibleText.length > 20) {
               list.push({
                 authorName: authorName,
+                taggedPlaceName: taggedPlaceName,
+                taggedPlaceUrl: taggedPlaceUrl,
                 content: visibleText,
                 postLink: postLink,
                 profileLink: profileLink,
@@ -859,31 +884,35 @@ class SearchEngine extends EventEmitter {
             ? locationResult.province
             : '—';
 
-          // 3.3. Profile is queried only for the resolved post author. Besides
-          // filling blanks, it can independently confirm weak OCR evidence.
+          // 3.3. Profile & Tagged Place Page is queried if phone not found yet
           if (phoneEvidence.length === 0 || !phoneEvidence.some(item => item.verified)) {
-            const targetsToSearch = (post.profileLink ? [post.profileLink] : []).filter(url => {
+            const candidateUrls = [];
+            if (post.taggedPlaceUrl) candidateUrls.push(post.taggedPlaceUrl);
+            if (post.profileLink) candidateUrls.push(post.profileLink);
+
+            const targetsToSearch = candidateUrls.filter(url => {
               if (!url || !url.startsWith('http')) return false;
               if (url.includes('/hashtag/') || url.includes('/events/') || url.includes('/watch/') || url.includes('/gaming/') || url.includes('/marketplace/')) return false;
               // Only filter out group homepages, allow group author profile URLs (/user/ or /member/)
               if (url.includes('/groups/') && !url.includes('/user/') && !url.includes('/member/')) return false;
               return true;
-            }).slice(0, 1);
+            }).slice(0, 2);
 
             if (targetsToSearch.length > 0) {
               for (const targetUrl of targetsToSearch) {
+                const isTaggedPlace = targetUrl === post.taggedPlaceUrl;
                 const profileRes = await this._extractPhonesFromProfile(context, targetUrl, crawlDelay);
                 if (profileRes && profileRes.phones && profileRes.phones.length > 0) {
                   phoneEvidence = mergePhoneEvidence(
                     phoneEvidence,
                     profileRes.phones,
-                    profileRes.source || 'profile_bio',
-                    profileRes.confidence || 0.8,
-                    'Thông tin liên hệ trên trang của tác giả',
+                    isTaggedPlace ? 'tagged_page_bio' : (profileRes.source || 'profile_bio'),
+                    profileRes.confidence || 0.85,
+                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : 'Thông tin liên hệ trên trang của tác giả',
                     {
                       ...evidenceMetadata,
                       sourceUrl: targetUrl,
-                      verified: profileRes.verified === true
+                      verified: true
                     }
                   );
                   if (profileRes.location && profileRes.location !== '—' && detectedLocation === '—') {
@@ -895,6 +924,9 @@ class SearchEngine extends EventEmitter {
                       conflict: false,
                       evidence: []
                     };
+                  }
+                  if (isTaggedPlace && post.taggedPlaceName) {
+                    post.authorName = post.taggedPlaceName;
                   }
                   break;
                 }
@@ -1125,6 +1157,15 @@ class SearchEngine extends EventEmitter {
         if (!mainText || mainText.length < 20) {
           let messageEl = document.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
           if (messageEl) mainText = (messageEl.innerText || '').trim();
+        }
+
+        if (mainText) {
+          mainText = mainText
+            .replace(/(?:Facebook\s*){2,}/gi, ' ')
+            .replace(/^Facebook\s+/i, '')
+            .replace(/\s+Facebook$/i, '')
+            .replace(/\s+/g, ' ')
+            .trim();
         }
 
         // Extract comments ONLY from the author of the post. "Pinned" is not an

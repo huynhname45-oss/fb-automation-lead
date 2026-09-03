@@ -459,6 +459,21 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       return { isQualified: false, score: 15, summary: 'Dịch vụ Spa / Nail / Thẩm mỹ viện / Massage (Đã loại trừ)', businessType: 'Spa / Thẩm mỹ', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Dịch vụ Spa, Thẩm mỹ viện, Massage, Tiệm Nail (Đã loại trừ theo quy tắc POS bán lẻ/F&B).', provider: 'local_nlp' };
     }
 
+    // 0. Education, School Opening, Kindergarten, Academic Year Exclusions (Highest Priority)
+    if (/mùa khai trường|khai trường|khai giảng|lễ khai giảng|năm học|tựu trường|mầm non|tiểu học|thcs|thpt|đại học|cao đẳng|học viện|học sinh|sinh viên|tân sinh viên|tập thể lớp|niên khóa|bảng tên khai giảng|hoa khai giảng|phông khai giảng|bóng bay khai giảng|đơn khai trường/i.test(textLower)) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Trường học / Lễ khai giảng năm học / Giáo dục (Đã loại trừ)',
+        businessType: 'Giáo dục / Trường học',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: 'Bài viết về trường học, lễ khai giảng, mùa khai trường năm học mới (Không phải quán kinh doanh F&B/Bán lẻ).',
+        provider: 'local_nlp'
+      };
+    }
+
     // 1. Opening / Launching Intent Keywords (Highest Intent)
     const openingKeywords = [
       'khai trương', 'grand opening', 'opening', 'chính thức mở cửa', 'tưng bừng khai trương',
@@ -503,11 +518,20 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     }
 
     // 5. Score Calculation & Sales Pitch Generation
-    let score = 55;
-    let intent = 'Hoạt động kinh doanh';
-    let reason = 'Cửa hàng/quán đang hoạt động kinh doanh độc lập.';
-    let salesPitch = `Chào anh/chị, em thấy ${businessType} của mình đang hoạt động, bên em đang có giải pháp máy tính tiền và in bill chuyên dụng...`;
-    let recommendedFeatures = 'In bill & Quản lý bán hàng';
+    let score = 25;
+    let intent = 'Chưa rõ mục đích';
+    let reason = 'Bài viết không có tín hiệu rõ ràng về kinh doanh bán lẻ hay F&B.';
+    let salesPitch = '';
+    let recommendedFeatures = '';
+
+    const hasSpecificBusinessCategory = businessType !== 'Bán lẻ / Dịch vụ SMB';
+    if (hasSpecificBusinessCategory) {
+      score = 60;
+      intent = 'Hoạt động kinh doanh';
+      reason = `${businessType} đang hoạt động kinh doanh độc lập.`;
+      salesPitch = `Chào anh/chị, em thấy ${businessType} của mình đang hoạt động, bên em đang có giải pháp máy tính tiền và in bill chuyên dụng...`;
+      recommendedFeatures = 'In bill & Quản lý bán hàng';
+    }
 
     if (isOpening) {
       score = 95;
@@ -536,7 +560,10 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     }
 
     // Generate clean post summary for local NLP fallback
-    let cleanSnippet = (content || '').replace(/\s+/g, ' ').trim();
+    let cleanSnippet = (content || '')
+      .replace(/(?:Facebook\s*){2,}/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (cleanSnippet.length > 180) {
       cleanSnippet = cleanSnippet.substring(0, 180) + '...';
     }
