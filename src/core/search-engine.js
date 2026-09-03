@@ -1512,131 +1512,18 @@ class SearchEngine extends EventEmitter {
             };
           }
         }
-      } catch (resolveErr) {}
-
-      if (!resolvedUid) {
-        resolvedUid = extractUidFromUrl(profileUrl);
+        return {
+          phones: Array.from(foundPhones),
+          location: detectedLoc,
+          locationResult,
+          source: foundPhones.size > 0 ? 'profile_bio' : 'profile_unknown',
+          confidence: foundPhones.size > 0 ? 0.95 : 0,
+          verified: foundPhones.size > 0
+        };
+      } catch (resolveErr) {
+        logger.warn({ err: resolveErr }, `Không thể tải trang giới thiệu: ${profileUrl}`);
+        return { phones: [], location: '—' };
       }
-
-      if (!resolvedUid) {
-        logger.warn(`Không thể phân giải UID tác giả từ ${profileUrl}.`);
-        return { phones: Array.from(foundPhones), location: '—' };
-      }
-
-      logger.info(`🎯 Đã nhận diện UID tác giả: [${resolvedUid}]`);
-
-      // =========================================================================
-      // DÒNG THỜI GIAN TRANG CÁ NHÂN: Chỉ tìm đúng các từ khóa: 'lh', 'sđt', 'hotline'
-      // URL chuẩn: ALWAYS https://www.facebook.com/profile/{UID}/search/?q=lh
-      // và https://www.facebook.com/profile/{UID}/search/?q=s%C4%91t
-      // =========================================================================
-      const searchKeywords = ['lh', 'sđt', 'hotline'];
-      for (const kw of searchKeywords) {
-        if (this.isStopped || foundPhones.size > 0) break;
-        try {
-          const searchUrl = `https://www.facebook.com/profile/${resolvedUid}/search/?q=${encodeURIComponent(kw)}`;
-
-          logger.info(`🔍 Tìm kiếm từ khóa "${kw}" trên dòng thời gian UID [${resolvedUid}]: ${searchUrl}`);
-          await profilePage.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 14000 });
-          await delay(Math.min(crawlDelay, 2000));
-
-          try {
-            await profilePage.evaluate(() => window.scrollBy(0, 1200));
-            await delay(1000);
-          } catch (e) {}
-
-          await this._expandSeeMore(profilePage);
-
-          const searchData = await profilePage.evaluate(() => {
-            // Find all post articles/feed units on the timeline search results
-            const articles = Array.from(document.querySelectorAll('div[role="feed"] div[role="article"], div[role="article"], div[data-pagelet*="FeedUnit"], div[data-ad-preview="message"], div[data-ad-comet-preview="message"]'));
-            
-            let combinedPostText = '';
-            const postTelLinks = [];
-
-            if (articles.length > 0) {
-              for (const article of articles) {
-                // Clone the article node to manipulate without affecting DOM
-                const clone = article.cloneNode(true);
-                
-                // EXCLUDE comments, comment forms, replies, reactions, checkins, and nav bars
-                const commentAndNavEls = clone.querySelectorAll(
-                  'div[aria-label*="Bình luận"], div[aria-label*="Comment"], div[aria-label*="bình luận"], ' +
-                  'ul li, ol li, form, ' +
-                  'div[aria-label*="Viết bình luận"], div[aria-label*="Write a comment"], ' +
-                  'div[role="navigation"], header, footer, nav, svg, button'
-                );
-                commentAndNavEls.forEach(el => el.remove());
-
-                const postText = (clone.innerText || '').trim();
-                // Exclude posts mentioning universities, schools, colleges, or admission hotlines
-                if (/(?:đại học|dai hoc|cao đẳng|cao dang|học viện|hoc vien|tuyển sinh|tuyen sinh|xét tuyển|xet tuyen|sinh viên|học sinh|học phí)/i.test(postText)) {
-                  continue;
-                }
-
-                if (postText.length > 10) {
-                  combinedPostText += '\n' + postText;
-                }
-
-                // Extract tel / zalo links from the post content only (excluding comments)
-                const links = Array.from(clone.querySelectorAll('a[href^="tel:"], a[href*="zalo.me/"], a[href*="wa.me/"]'))
-                  .map(a => a.getAttribute('href') || '')
-                  .filter(Boolean);
-                links.forEach(l => postTelLinks.push(l));
-              }
-            } else {
-              // Fallback to main content excluding comment blocks
-              const main = document.querySelector('div[role="main"]') || document.body;
-              const clone = main.cloneNode(true);
-              const commentEls = clone.querySelectorAll('div[aria-label*="Bình luận"], div[aria-label*="Comment"], form, ul, ol, header, nav');
-              commentEls.forEach(el => el.remove());
-              const mainText = (clone.innerText || '').trim();
-              if (!/(?:đại học|dai hoc|cao đẳng|cao dang|học viện|hoc vien|tuyển sinh|tuyen sinh|xét tuyển|xet tuyen|sinh viên|học sinh|học phí)/i.test(mainText)) {
-                combinedPostText = mainText;
-              }
-            }
-
-            return { text: combinedPostText, telLinks: postTelLinks };
-          });
-
-          if (detectedLoc === '—') {
-            const searchLocation = extractLocationDetailed(searchData.text);
-            if (searchLocation.confidence >= 0.75) {
-              locationResult = searchLocation;
-              detectedLoc = searchLocation.province;
-            }
-          }
-
-          const searchPhones = extractPhonesFromText(searchData.text, { isOCR: false });
-          searchPhones.forEach(p => foundPhones.add(p));
-          for (const link of searchData.telLinks) {
-            extractPhonesFromText(link, { isOCR: false }).forEach(p => foundPhones.add(p));
-          }
-
-          if (foundPhones.size > 0) {
-            const phones = Array.from(foundPhones);
-            logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ tìm kiếm từ khóa "${kw}" trên trang cá nhân: [${phones.join(', ')}]`);
-            return {
-              phones,
-              location: detectedLoc,
-              locationResult,
-              source: 'profile_search',
-              confidence: 0.85,
-              verified: true
-            };
-          }
-        } catch (e) {}
-      }
-
-      // Nếu cả 2 từ khóa 'lh' và 'sđt' đều không có SĐT chính chủ: Dừng tìm kiếm ngay
-      return {
-        phones: [],
-        location: detectedLoc,
-        locationResult,
-        source: 'profile_unknown',
-        confidence: 0,
-        verified: false
-      };
     } catch (e) {
       logger.warn({ err: e }, `Không thể tải trang cá nhân: ${profileUrl}`);
       return { phones: [], location: '—' };
