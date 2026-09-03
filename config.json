@@ -20,7 +20,7 @@
     "recentPosts": false,
     "datePosted": "any"
   },
-  "geminiModel": "gemini-3.6-flash",
+  "geminiModel": "gemini-3.5-flash-lite",
   "exportConfig": {
     "provinceCode": "__export__.res_province_121_cf34d119",
     "productGroup": "RETAIL_PRO",

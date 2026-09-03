@@ -9,6 +9,7 @@ test('Gemini Model Discovery & Ranking: Correctly ranks newest and most powerful
     'gemini-2.5-flash',
     'gemini-2.5-flash-preview-image',
     'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.6-flash',
     'gemini-3.7-flash',
     'gemini-3.1-flash-tts-preview'
@@ -21,8 +22,9 @@ test('Gemini Model Discovery & Ranking: Correctly ranks newest and most powerful
   const valid = models.filter(m => aiLeadEvaluator._scoreGeminiModel(m) > 0);
   const sorted = [...valid].sort((a, b) => aiLeadEvaluator._scoreGeminiModel(b) - aiLeadEvaluator._scoreGeminiModel(a));
 
-  // Top model must be gemini-3.6-flash
-  assert.equal(sorted[0], 'gemini-3.6-flash', 'gemini-3.6-flash should be top-ranked');
+  // Top speed models must be gemini-3.5-flash-lite and gemini-3.6-flash
+  assert.equal(sorted[0], 'gemini-3.5-flash-lite', 'gemini-3.5-flash-lite should be top-ranked for speed');
+  assert.equal(sorted[1], 'gemini-3.6-flash', 'gemini-3.6-flash should be second');
   assert.ok(sorted.indexOf('gemini-3.6-flash') < sorted.indexOf('gemini-3.5-flash'));
   assert.ok(sorted.indexOf('gemini-3.5-flash') < sorted.indexOf('gemini-2.5-flash'));
   assert.ok(sorted.indexOf('gemini-2.5-flash') < sorted.indexOf('gemini-1.5-flash'));

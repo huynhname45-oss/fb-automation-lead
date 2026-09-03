@@ -833,8 +833,9 @@ class SearchEngine extends EventEmitter {
 
           const postExcerpt = generateExcerpt(fullPostContent);
 
+
           // =========================================================================
-          // BƯỚC 3: TRÍCH XUẤT SĐT (SEARCH-P0-005: Tích lũy PhoneEvidence có nguồn gốc)
+          // BƯỚC 3: TRÍCH XUẤT SĐT NHANH TRỰC TIẾP TỪ VĂN BẢN (0ms)
           // =========================================================================
           let phoneEvidence = [];
           const evidenceMetadata = {
@@ -845,7 +846,6 @@ class SearchEngine extends EventEmitter {
             minConfidence: 0.8
           };
 
-          // 3.1. Quét SĐT trực tiếp trong nội dung văn bản bài viết
           const textPhones = extractPhonesFromText(fullPostContent);
           if (textPhones.length > 0) {
             phoneEvidence = mergePhoneEvidence(
@@ -862,9 +862,53 @@ class SearchEngine extends EventEmitter {
             );
           }
 
-          // 3.2. Nếu bài viết không có SĐT trong chữ, quét OCR trên ảnh bài viết
+          let locationResult = extractLocationDetailed({
+            content: fullPostContent,
+            authorName: post.authorName
+          });
+          let detectedLocation = locationResult.confidence >= 0.75 && !locationResult.conflict
+            ? locationResult.province
+            : '—';
+
+          // =========================================================================
+          // BƯỚC 4: THẨM ĐỊNH AI SỚM (FAST AI PRE-EVALUATION)
+          // Tự động loại bỏ ngay các bài rác/không kinh doanh chỉ trong 1s mà KHÔNG
+          // tốn 10-15s tải ảnh chạy OCR hay mở trang cá nhân của bài không đạt!
+          // =========================================================================
+          const currentPhones = phoneEvidence.map(e => e.phone);
+
+          const aiEval = await aiLeadEvaluator.evaluateLeadWithAI({
+            authorName: post.authorName,
+            content: fullPostContent,
+            phones: currentPhones,
+            location: detectedLocation
+          }, filterConfig);
+
+          if (!aiEval.isQualified) {
+            if (aiEval.errorCode === 'AI_UNAVAILABLE') {
+              // Tự động chuyển tiếp sang Local NLP khi API AI bị giới hạn tần suất (429) hoặc lỗi mạng
+              const localEval = aiLeadEvaluator._localNLPEvaluate(post.authorName, fullPostContent, currentPhones);
+              if (localEval.isQualified) {
+                logger.info(`⚡ [LOCAL NLP DUYỆT LEAD - ${localEval.score}/100] [${post.authorName}] | Ngành: ${localEval.businessType} (AI tạm thời bận)`);
+                Object.assign(aiEval, localEval, { isQualified: true, decision: 'ACCEPTED' });
+              } else {
+                logger.info(`❌ [LOCAL NLP LOẠI TRỪ SỚM] BỎ QUA [${post.authorName}] - Điểm: ${localEval.score}/100 - Lý do: ${localEval.reason}`);
+                this.rejectedCount++;
+                continue;
+              }
+            } else {
+              logger.info(`❌ [AI LOẠI TRỪ SỚM] BỎ QUA [${post.authorName}] - Điểm: ${aiEval.score}/100 - Lý do: ${aiEval.reason}`);
+              this.rejectedCount++;
+              continue; // Bỏ qua ngay: tiết kiệm 10-15s cho mỗi bài rác!
+            }
+          }
+
+          // =========================================================================
+          // BƯỚC 5: TRÍCH XUẤT SĐT CHUYÊN SÂU (CHỈ CHẠY CHO BÀI VIẾT ĐÃ ĐƯỢC AI DUYỆT)
+          // =========================================================================
+          // 5.1. Nếu bài viết được AI duyệt mà chưa có SĐT: quét OCR trên ảnh bài viết
           if (phoneEvidence.length === 0 && postImages.length > 0) {
-            logger.info(`📸 [BƯỚC 3 - OCR ẢNH] Đang quét OCR ${postImages.length} ảnh của bài viết [${post.authorName}]...`);
+            logger.info(`📸 [OCR ẢNH QUÁN TIỀM NĂNG] Đang quét OCR ${postImages.length} ảnh của bài viết [${post.authorName}]...`);
             const ocrPhones = await ocrManager.extractPhonesFromImageUrls(postImages);
             if (ocrPhones.length > 0) {
               phoneEvidence = mergePhoneEvidence(
@@ -878,15 +922,7 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          let locationResult = extractLocationDetailed({
-            content: fullPostContent,
-            authorName: post.authorName
-          });
-          let detectedLocation = locationResult.confidence >= 0.75 && !locationResult.conflict
-            ? locationResult.province
-            : '—';
-
-          // 3.3. Profile & Tagged Place Page is queried if phone not found yet
+          // 5.2. Nếu vẫn chưa có SĐT: Truy vấn Profile / Tagged Place Page
           if (phoneEvidence.length === 0 || !phoneEvidence.some(item => item.verified)) {
             const candidateUrls = [];
             if (post.taggedPlaceUrl) candidateUrls.push(post.taggedPlaceUrl);
@@ -943,35 +979,6 @@ class SearchEngine extends EventEmitter {
           if (phones.length > 0 && filterConfig.requireMobilePhoneOnly && !phones.some(p => leadFilter.classifyPhoneType(p) === 'mobile')) {
             logger.info(`❌ [LOẠI TRỪ SỐ KHÔNG PHẢI DI ĐỘNG] BỎ QUA [${post.authorName}] vì không có SĐT di động cá nhân.`);
             continue;
-          }
-
-          // =========================================================================
-          // BƯỚC 4: THẨM ĐỊNH CHUYÊN SÂU BẰNG AI (GEMINI) - KHÔNG BẮT BUỘC CÓ SĐT
-          // =========================================================================
-          const aiEval = await aiLeadEvaluator.evaluateLeadWithAI({
-            authorName: post.authorName,
-            content: fullPostContent,
-            phones: phones,
-            location: detectedLocation
-          }, filterConfig);
-
-          if (!aiEval.isQualified) {
-            if (aiEval.errorCode === 'AI_UNAVAILABLE') {
-              // Tự động chuyển tiếp sang Local NLP khi API AI bị giới hạn tần suất (429) hoặc lỗi mạng
-              const localEval = aiLeadEvaluator._localNLPEvaluate(post.authorName, fullPostContent, phones);
-              if (localEval.isQualified) {
-                logger.info(`⚡ [LOCAL NLP DUYỆT LEAD - ${localEval.score}/100] [${post.authorName}] | Ngành: ${localEval.businessType} (AI tạm thời bận)`);
-                Object.assign(aiEval, localEval, { isQualified: true, decision: 'ACCEPTED' });
-              } else {
-                logger.info(`❌ [LOCAL NLP LOẠI TRỪ] BỎ QUA [${post.authorName}] - Điểm: ${localEval.score}/100 - Lý do: ${localEval.reason}`);
-                this.rejectedCount++;
-                continue;
-              }
-            } else {
-              logger.info(`❌ [AI LOẠI TRỪ] BỎ QUA [${post.authorName}] - Điểm: ${aiEval.score}/100 - Lý do: ${aiEval.reason}`);
-              this.rejectedCount++;
-              continue;
-            }
           }
 
           // Kiểm tra chế độ "Chỉ lấy bài có SĐT"
