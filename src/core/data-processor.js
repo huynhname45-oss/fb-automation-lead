@@ -29,6 +29,8 @@ const postSchema = z.object({
   salesPitch: z.string().optional(),
   recommendedFeatures: z.string().optional(),
   aiReason: z.string().optional(),
+  groupName: z.string().optional(),
+  groupLink: z.string().optional(),
   status: z.string().default('Mới tạo')
 });
 
@@ -176,6 +178,8 @@ export function processResults(rawPosts) {
         salesPitch: post.salesPitch || undefined,
         recommendedFeatures: post.recommendedFeatures || undefined,
         aiReason: post.aiReason || undefined,
+        groupName: post.groupName || undefined,
+        groupLink: post.groupLink || undefined,
         status: post.status || 'Mới tạo'
       };
       

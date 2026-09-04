@@ -372,6 +372,150 @@ export function getCanonicalAuthorKey(post = {}) {
 }
 
 /**
+ * Pure helper function to extract post metadata (authorName, profileLink, groupName, groupLink, postLink)
+ * from an array of anchor objects [{ text, href, aria }].
+ * Supports Facebook Group posts, Page posts, Personal posts, and Media posts.
+ */
+export function extractPostMetadataFromAnchors(anchorsData = []) {
+  let authorName = '';
+  let profileLink = '';
+  let groupName = '';
+  let groupLink = '';
+  let postLink = '';
+
+  function cleanUrl(href) {
+    if (!href) return '';
+    return href.startsWith('/') ? 'https://www.facebook.com' + href : href;
+  }
+
+  function isGroupHome(href) {
+    return href.includes('/groups/') && 
+           !href.includes('/user/') && 
+           !href.includes('/member/') && 
+           !href.includes('/members/') && 
+           !href.includes('/posts/') && 
+           !href.includes('/permalink');
+  }
+
+  // Phase 1: Extract Group Name (if posted in a Facebook Group)
+  for (const a of anchorsData) {
+    const rawTxt = (a.text || '').trim();
+    const txt = rawTxt.split('\n')[0].trim();
+    const href = a.href || '';
+    if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+    if (isGroupHome(href) && txt && txt.length >= 2 && txt.length <= 100) {
+      if (!/(?:tham gia|join|theo dõi|follow|đã tham gia|thích|nhắn tin)/i.test(txt)) {
+        groupName = txt;
+        groupLink = cleanUrl(href);
+        break;
+      }
+    }
+  }
+
+  // Phase 2: Extract Author Name & Profile Link (Supports Group Posts & Personal/Page Posts)
+  for (const a of anchorsData) {
+    const rawTxt = (a.text || '').trim();
+    const txt = rawTxt.split('\n')[0].trim();
+    const href = a.href || '';
+    if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+    const isPostPermalink = href.includes('/posts/') || 
+                            href.includes('/permalink') || 
+                            href.includes('story_fbid') || 
+                            href.includes('pfbid') || 
+                            href.includes('/photos/') || 
+                            href.includes('/videos/') || 
+                            href.includes('/reel/') || 
+                            href.includes('fbid=') || 
+                            href.includes('comment_id=') || 
+                            href.includes('multi_permalinks');
+    if (isPostPermalink) continue;
+    if (isGroupHome(href)) continue;
+
+    const isActionButton = /(?:xem thêm|ẩn bớt|theo dõi|tham gia|join|follow|đã tham gia|thích|like|nhắn tin|gửi tin nhắn|bình luận|chia sẻ|share)/i.test(txt);
+    if (isActionButton) continue;
+
+    const isTimestamp = /(?:\d{1,2}\s*(?:phút|giờ|h|ngày|tháng|năm)|vừa xong|hôm qua)/i.test(txt);
+    if (isTimestamp) continue;
+
+    const aria = (a.aria || '').trim();
+    const isNavIcon = (!txt) || 
+                      aria.includes('Home') || 
+                      aria.includes('Trang chủ') || 
+                      aria.includes('Watch') || 
+                      aria.includes('Notifications') || 
+                      aria.includes('Facebook');
+    if (isNavIcon) continue;
+
+    const isNonProfile = href.includes('/hashtag/') || 
+                         href.includes('/events/') || 
+                         href.includes('/gaming/') || 
+                         href.includes('/watch/') || 
+                         href.includes('/marketplace/') || 
+                         href.includes('/search/') || 
+                         href.includes('/messages/') || 
+                         href.includes('/sharer/') || 
+                         href.includes('/dialog/') || 
+                         href.includes('/settings/') || 
+                         href.includes('/help/');
+    if (isNonProfile) continue;
+
+    if (txt && txt.length >= 2 && txt.length <= 70 && !txt.startsWith('#')) {
+      authorName = txt;
+      if (href.includes('/groups/') && href.includes('/user/')) {
+        const mUid = href.match(/\/user\/([^/?#]+)/i);
+        if (mUid && mUid[1]) {
+          profileLink = /^\d+$/.test(mUid[1])
+            ? `https://www.facebook.com/profile.php?id=${mUid[1]}`
+            : `https://www.facebook.com/${mUid[1]}`;
+        } else {
+          profileLink = cleanUrl(href);
+        }
+      } else {
+        profileLink = cleanUrl(href);
+      }
+      break;
+    }
+  }
+
+  // Phase 3: Post Permalink (Direct permalinks prioritized over media permalinks)
+  for (const a of anchorsData) {
+    const href = a.href || '';
+    if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+    const isDirectPosts = href.includes('/posts/') || 
+                          href.includes('/permalink') || 
+                          href.includes('story_fbid') || 
+                          href.includes('pfbid') || 
+                          href.includes('multi_permalinks');
+    if (isDirectPosts) {
+      postLink = cleanUrl(href);
+      break;
+    }
+  }
+
+  if (!postLink) {
+    for (const a of anchorsData) {
+      const href = a.href || '';
+      if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+      const isMediaPermalink = href.includes('/photos/') || 
+                               href.includes('/videos/') || 
+                               href.includes('/reel/') || 
+                               href.includes('fbid=') || 
+                               href.includes('/watch/?v=');
+      if (isMediaPermalink) {
+        postLink = cleanUrl(href);
+        break;
+      }
+    }
+  }
+
+  return { authorName, profileLink, groupName, groupLink, postLink };
+}
+
+/**
  * Checks if a comment is from the author of the post (SEARCH-P0-014)
  * Strict badge & exact normalized name match (no loose substring overlap).
  */
@@ -622,6 +766,8 @@ class SearchEngine extends EventEmitter {
             const anchors = Array.from(node.querySelectorAll('a[href]'));
             let authorName = '';
             let profileLink = '';
+            let groupName = '';
+            let groupLink = '';
             let postLink = '';
 
             function cleanUrl(href) {
@@ -629,65 +775,109 @@ class SearchEngine extends EventEmitter {
               return href.startsWith('/') ? 'https://www.facebook.com' + href : href;
             }
 
-            // SEARCH-P0-003: Dedicated Header-first Selector for Author Extraction
-            const headerNode = node.querySelector('header, h2, h3, h4, strong') || node.querySelector('div[role="article"] > div:first-child');
-            const headerAnchors = headerNode ? Array.from(headerNode.querySelectorAll('a[href]')) : Array.from(node.querySelectorAll('a[href]')).slice(0, 8);
+            function isGroupHome(href) {
+              return href.includes('/groups/') && 
+                     !href.includes('/user/') && 
+                     !href.includes('/member/') && 
+                     !href.includes('/members/') && 
+                     !href.includes('/posts/') && 
+                     !href.includes('/permalink');
+            }
 
-            for (const a of headerAnchors) {
-              const text = a.textContent.trim();
+            // SEARCH-P0-003: Robust Candidate Anchors (Header elements first, followed by top 15 post anchors)
+            const headerElements = Array.from(node.querySelectorAll('header a[href], h2 a[href], h3 a[href], h4 a[href], strong a[href], div[role="heading"] a[href]'));
+            const candidateAnchors = [];
+            const seenAnchorEls = new Set();
+            for (const a of [...headerElements, ...anchors.slice(0, 15)]) {
+              if (a && !seenAnchorEls.has(a)) {
+                seenAnchorEls.add(a);
+                candidateAnchors.push(a);
+              }
+            }
+
+            // Phase 1: Extract Group Name (if posted in a Facebook Group)
+            for (const a of candidateAnchors) {
+              const rawTxt = (a.textContent || '').trim();
+              const txt = rawTxt.split('\n')[0].trim();
               const href = a.getAttribute('href') || '';
               if (!href || href === '#' || href.startsWith('javascript:')) continue;
 
-              const isPostPermalink = href.includes('/posts/') || 
-                                      href.includes('/permalink/') || 
-                                      href.includes('story_fbid') || 
-                                      href.includes('pfbid') || 
-                                      href.includes('/photos/') || 
-                                      href.includes('/videos/') || 
-                                      href.includes('/reel/') ||
-                                      href.includes('fbid=') ||
-                                      href.includes('comment_id=') ||
-                                      href.includes('multi_permalinks');
-
-              if (text && text.length >= 2 && text.length <= 60 && !isPostPermalink && !text.startsWith('#')) {
-                const aria = a.getAttribute('aria-label') || '';
-                const isNavIcon = aria.includes('Home') || aria.includes('Trang chủ') || aria.includes('Watch') || aria.includes('Notifications') || a.querySelector('svg');
-                
-                // Group home page is not an author profile, BUT /groups/.../user/... IS an author profile!
-                const isGroupHomeLink = href.includes('/groups/') && !href.includes('/user/') && !href.includes('/member/');
-
-                const isNonProfile = href.includes('/hashtag/') || 
-                                     isGroupHomeLink || 
-                                     href.includes('/events/') || 
-                                     href.includes('/gaming/') || 
-                                     href.includes('/watch/') || 
-                                     href.includes('/marketplace/') || 
-                                     href.includes('/search/') || 
-                                     href.includes('/messages/');
-
-                const isActionButton = /(?:xem thêm|theo dõi|tham gia|join|follow|đã tham gia|thích|nhắn tin|gửi tin nhắn)/i.test(text);
-
-                if (!isNavIcon && !isNonProfile && !isActionButton) {
-                  authorName = text;
-                  // If group user link, canonicalize to root user URL if possible
-                  if (href.includes('/groups/') && href.includes('/user/')) {
-                    const mUid = href.match(/\/user\/([^/?#]+)/i);
-                    if (mUid && mUid[1]) {
-                      profileLink = /^\d+$/.test(mUid[1]) 
-                        ? `https://www.facebook.com/profile.php?id=${mUid[1]}`
-                        : `https://www.facebook.com/${mUid[1]}`;
-                    } else {
-                      profileLink = cleanUrl(href);
-                    }
-                  } else {
-                    profileLink = cleanUrl(href);
-                  }
-                  break; // Found primary post author in header!
+              if (isGroupHome(href) && txt && txt.length >= 2 && txt.length <= 100) {
+                if (!/(?:tham gia|join|theo dõi|follow|đã tham gia|thích|nhắn tin)/i.test(txt)) {
+                  groupName = txt;
+                  groupLink = cleanUrl(href);
+                  break;
                 }
               }
             }
 
-            // B) Post Permalink
+            // Phase 2: Extract Author Name & Profile Link (Supports Group Posts & Personal/Page Posts)
+            for (const a of candidateAnchors) {
+              const rawTxt = (a.textContent || '').trim();
+              const txt = rawTxt.split('\n')[0].trim();
+              const href = a.getAttribute('href') || '';
+              if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+              const isPostPermalink = href.includes('/posts/') || 
+                                      href.includes('/permalink') || 
+                                      href.includes('story_fbid') || 
+                                      href.includes('pfbid') || 
+                                      href.includes('/photos/') || 
+                                      href.includes('/videos/') || 
+                                      href.includes('/reel/') || 
+                                      href.includes('fbid=') || 
+                                      href.includes('comment_id=') || 
+                                      href.includes('multi_permalinks');
+              if (isPostPermalink) continue;
+              if (isGroupHome(href)) continue;
+
+              const isActionButton = /(?:xem thêm|ẩn bớt|theo dõi|tham gia|join|follow|đã tham gia|thích|like|nhắn tin|gửi tin nhắn|bình luận|chia sẻ|share)/i.test(txt);
+              if (isActionButton) continue;
+
+              const isTimestamp = /(?:\d{1,2}\s*(?:phút|giờ|h|ngày|tháng|năm)|vừa xong|hôm qua)/i.test(txt);
+              if (isTimestamp) continue;
+
+              const aria = (a.getAttribute('aria-label') || '').trim();
+              const isNavIcon = (!txt) || 
+                                aria.includes('Home') || 
+                                aria.includes('Trang chủ') || 
+                                aria.includes('Watch') || 
+                                aria.includes('Notifications') || 
+                                aria.includes('Facebook');
+              if (isNavIcon) continue;
+
+              const isNonProfile = href.includes('/hashtag/') || 
+                                   href.includes('/events/') || 
+                                   href.includes('/gaming/') || 
+                                   href.includes('/watch/') || 
+                                   href.includes('/marketplace/') || 
+                                   href.includes('/search/') || 
+                                   href.includes('/messages/') || 
+                                   href.includes('/sharer/') || 
+                                   href.includes('/dialog/') || 
+                                   href.includes('/settings/') || 
+                                   href.includes('/help/');
+              if (isNonProfile) continue;
+
+              if (txt && txt.length >= 2 && txt.length <= 70 && !txt.startsWith('#')) {
+                authorName = txt;
+                if (href.includes('/groups/') && href.includes('/user/')) {
+                  const mUid = href.match(/\/user\/([^/?#]+)/i);
+                  if (mUid && mUid[1]) {
+                    profileLink = /^\d+$/.test(mUid[1])
+                      ? `https://www.facebook.com/profile.php?id=${mUid[1]}`
+                      : `https://www.facebook.com/${mUid[1]}`;
+                  } else {
+                    profileLink = cleanUrl(href);
+                  }
+                } else {
+                  profileLink = cleanUrl(href);
+                }
+                break; // Found post author!
+              }
+            }
+
+            // Phase 3: Post Permalink (Direct permalinks prioritized over media permalinks)
             for (const a of anchors) {
               const href = a.getAttribute('href') || '';
               if (!href || href === '#' || href.startsWith('javascript:')) continue;
@@ -696,29 +886,41 @@ class SearchEngine extends EventEmitter {
                                     href.includes('/permalink') || 
                                     href.includes('story_fbid') || 
                                     href.includes('pfbid') || 
-                                    href.includes('/photos/') ||
-                                    href.includes('/videos/') ||
-                                    href.includes('/reel/') ||
-                                    href.includes('fbid=') ||
-                                    href.includes('/watch/?v=') ||
                                     href.includes('multi_permalinks');
-
-              if (isDirectPosts && !postLink) {
+              if (isDirectPosts) {
                 postLink = cleanUrl(href);
                 break;
               }
             }
 
-            // C) Tagged Place / Fanpage Check-in (e.g. "Duc Bach cùng với ... tại cafeyolk VN.")
+            if (!postLink) {
+              for (const a of anchors) {
+                const href = a.getAttribute('href') || '';
+                if (!href || href === '#' || href.startsWith('javascript:')) continue;
+
+                const isMediaPermalink = href.includes('/photos/') || 
+                                         href.includes('/videos/') || 
+                                         href.includes('/reel/') || 
+                                         href.includes('fbid=') || 
+                                         href.includes('/watch/?v=');
+                if (isMediaPermalink) {
+                  postLink = cleanUrl(href);
+                  break;
+                }
+              }
+            }
+
+            // Phase 4: Tagged Place / Fanpage Check-in
             let taggedPlaceName = '';
             let taggedPlaceUrl = '';
+            const headerNode = node.querySelector('header, h2, h3, h4') || node.querySelector('div[role="article"] > div:first-child');
             if (headerNode) {
               const headerText = headerNode.textContent || '';
               const placeMatch = headerText.match(/(?:\s+tại\s+|\s+at\s+)([^.\n\r]+)/iu);
               if (placeMatch && placeMatch[1]) {
                 const rawPlaceName = placeMatch[1].trim();
-                for (const a of headerAnchors) {
-                  const aTxt = a.textContent.trim();
+                for (const a of candidateAnchors) {
+                  const aTxt = (a.textContent || '').trim();
                   const aHref = a.getAttribute('href') || '';
                   if (aTxt && (rawPlaceName === aTxt || rawPlaceName.startsWith(aTxt)) && aHref && aHref !== profileLink) {
                     taggedPlaceName = aTxt;
@@ -738,6 +940,8 @@ class SearchEngine extends EventEmitter {
                 authorName: authorName,
                 taggedPlaceName: taggedPlaceName,
                 taggedPlaceUrl: taggedPlaceUrl,
+                groupName: groupName,
+                groupLink: groupLink,
                 content: visibleText,
                 postLink: postLink,
                 profileLink: profileLink,
@@ -912,7 +1116,7 @@ class SearchEngine extends EventEmitter {
           }
 
           let locationResult = extractLocationDetailed({
-            content: fullPostContent,
+            content: fullPostContent + (post.groupName ? `\nNhóm: ${post.groupName}` : ''),
             authorName: post.authorName
           });
           let detectedLocation = locationResult.confidence >= 0.75 && !locationResult.conflict
@@ -1048,6 +1252,8 @@ class SearchEngine extends EventEmitter {
             authorName: post.authorName,
             authorKey,
             location: detectedLocation,
+            groupName: post.groupName || undefined,
+            groupLink: post.groupLink || undefined,
             locationSource: locationResult?.source || 'unknown',
             locationConfidence: locationResult?.confidence || 0,
             locationEvidence: Array.isArray(locationResult?.evidence) ? locationResult.evidence : [],
@@ -1377,13 +1583,29 @@ class SearchEngine extends EventEmitter {
         });
       }, totalDistance);
 
-      // Scroll to document bottom to ensure Facebook infinite scroll sentinel is triggered
+      // Kỹ thuật Jiggle Scroll để kích hoạt lại IntersectionObserver / Infinite Scroll của Facebook
       await page.evaluate(() => {
         const bottom = Math.max(
           document.body ? document.body.scrollHeight : 0,
           document.documentElement ? document.documentElement.scrollHeight : 0
         );
-        window.scrollTo({ top: bottom, behavior: 'auto' });
+        // Cuộn ngược nhẹ 350px để lôi sentinel ra khỏi viewport
+        window.scrollTo({ top: Math.max(0, bottom - 350), behavior: 'auto' });
+        setTimeout(() => {
+          // Cuộn lại chạm đáy và dispatch event scroll
+          window.scrollTo({ top: bottom, behavior: 'auto' });
+          window.dispatchEvent(new Event('scroll'));
+        }, 50);
+
+        // Tự động bấm nút "Thử lại" hoặc "Tải thêm" nếu Facebook bị nghẽn mạng
+        const actionButtons = Array.from(document.querySelectorAll('div[role="button"], span, a'));
+        for (const btn of actionButtons) {
+          const txt = (btn.textContent || '').trim();
+          if (/^(Thử lại|Tải thêm|Xem thêm kết quả|Retry|Load more)$/i.test(txt)) {
+            try { btn.click(); } catch (e) {}
+            break;
+          }
+        }
       });
 
       try {
