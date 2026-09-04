@@ -120,3 +120,18 @@ test('SEARCH-GROUP-005: Extract phone from shop cover photo on profile/page (e.g
   const phones = extractPhonesFromText(recognizedCoverText, { isOCR: true });
   assert.ok(phones.includes('0796666428'), 'Phone 0796666428 must be extracted from cover photo OCR text');
 });
+
+test('SEARCH-GROUP-006: Extract phone from author profile search result with keyword sdt (e.g. Đặng Diễm 0364513335)', () => {
+  const profileSearchPostText = `Ăn Vặt Quận Tân Phú · Tham gia
+Đặng Diễm · 2 Tháng 7, 2021 · 🌐
+MỰC RIM NHÀ LÀM
+MỰC VỪA ĂN DAI ,CAY CAY MẶN MẶN NGỌT NGỌT SIÊU NGON
+Mùa dịch có 1 phần ăn quá chuẩn ak
+1kg :#330k #330
+Nửa kg: #170k #170k
+Mọi người ăn hú em ship tận nơi
+Sđt :0364513335 Ẩn bớt`;
+
+  const phones = extractPhonesFromText(profileSearchPostText, { isOCR: false });
+  assert.ok(phones.includes('0364513335'), 'Phone 0364513335 must be extracted from profile search result');
+});

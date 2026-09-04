@@ -324,12 +324,15 @@ export function extractUidFromUrl(profileUrl = '') {
 /**
  * Build Direct Profile Timeline Search URL (ALWAYS https://www.facebook.com/profile/{UID}/search/?q=...)
  */
-export function buildProfileSearchUrl(profileUrlOrUid = '', keyword = 'lh') {
+export function buildProfileSearchUrl(profileUrlOrUid = '', keyword = 'sdt') {
   if (!profileUrlOrUid || typeof profileUrlOrUid !== 'string') return '';
   const kw = encodeURIComponent(keyword.trim());
   const uid = extractUidFromUrl(profileUrlOrUid);
   if (uid) {
     return `https://www.facebook.com/profile/${uid}/search/?q=${kw}`;
+  }
+  if (/^\d{8,}$/.test(profileUrlOrUid.trim())) {
+    return `https://www.facebook.com/profile/${profileUrlOrUid.trim()}/search/?q=${kw}`;
   }
   return '';
 }
@@ -1199,14 +1202,14 @@ class SearchEngine extends EventEmitter {
                     profileRes.phones,
                     isTaggedPlace ? 'tagged_page_bio' : (profileRes.source || 'profile_bio'),
                     profileRes.confidence || 0.9,
-                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : (profileRes.source?.includes('timeline') ? `Bài viết mới nhất trên tường [${post.authorName}]` : 'Thông tin liên hệ trên trang của tác giả'),
+                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : (profileRes.source?.includes('search') ? `Bài viết tìm kiếm 'sdt' trên trang [${post.authorName}]` : (profileRes.source?.includes('timeline') ? `Bài viết mới nhất trên tường [${post.authorName}]` : 'Thông tin liên hệ trên trang của tác giả')),
                     {
                       ...evidenceMetadata,
                       sourceUrl: targetUrl,
                       verified: true
                     }
                   );
-                  if (profileRes.location && profileRes.location !== '—' && (detectedLocation === '—' || profileRes.source?.includes('timeline'))) {
+                  if (profileRes.location && profileRes.location !== '—' && (detectedLocation === '—' || profileRes.source?.includes('timeline') || profileRes.source?.includes('search'))) {
                     detectedLocation = profileRes.location;
                     locationResult = profileRes.locationResult || {
                       province: profileRes.location,
@@ -1903,6 +1906,106 @@ class SearchEngine extends EventEmitter {
             }
           } catch (tlErr) {
             logger.debug({ err: tlErr.message }, 'Lỗi khi đọc bài viết trên tường profile');
+          }
+
+          // H) Nếu Bio, Ảnh bìa và Tường nhà chưa có SĐT: Tìm kiếm chuyên sâu trong bài viết của tác giả bằng từ khóa "sdt" (Profile Search)
+          if (foundPhones.size === 0) {
+            try {
+              const searchProfileUrl = resolvedUid 
+                ? `https://www.facebook.com/profile/${resolvedUid}/search/?q=sdt`
+                : buildProfileSearchUrl(profileUrl, 'sdt');
+
+              if (searchProfileUrl) {
+                logger.info(`🔍 [TÌM KIẾM PROFILE] Đang tìm bài viết chứa 'sdt' của [${targetAuthorName || 'Tác giả'}]: ${searchProfileUrl}`);
+                await profilePage.goto(searchProfileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                await delay(Math.min(crawlDelay, 2500));
+                await this._expandSeeMore(profilePage);
+
+                const searchResultsData = await profilePage.evaluate((targetAuthor) => {
+                  function norm(s) {
+                    return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                  }
+                  const targetNorm = norm(targetAuthor);
+
+                  const articles = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"], div[data-pagelet*="FeedUnit"], div[data-ad-preview="message"]'));
+                  const texts = [];
+                  const imgs = [];
+
+                  for (const art of articles.slice(0, 6)) {
+                    const rawText = (art.innerText || art.textContent || '').trim();
+                    if (rawText.length < 15) continue;
+
+                    // Xác thực bài viết do chính tác giả đăng (hoặc tác giả đăng trong nhóm)
+                    if (targetNorm) {
+                      const authorLinks = Array.from(art.querySelectorAll('a[role="link"], h2 a, h3 a, h4 a, strong a'));
+                      const authorFound = authorLinks.some(a => norm(a.textContent).includes(targetNorm));
+                      if (!authorFound && !norm(rawText.substring(0, 200)).includes(targetNorm) && authorLinks.length > 0) {
+                        continue;
+                      }
+                    }
+
+                    texts.push(rawText);
+
+                    const imgEls = Array.from(art.querySelectorAll('img[src]'));
+                    for (const img of imgEls) {
+                      const s = img.src || '';
+                      if (s && (s.includes('scontent') || s.includes('fbcdn')) && !s.includes('emoji') && !s.includes('rsrc.php') && !s.includes('/static.xx/')) {
+                        if (!imgs.includes(s)) imgs.push(s);
+                      }
+                    }
+                  }
+                  return { texts, imgs: imgs.slice(0, 3) };
+                }, targetAuthorName);
+
+                if (searchResultsData && searchResultsData.texts.length > 0) {
+                  for (const st of searchResultsData.texts) {
+                    const pList = extractPhonesFromText(st, { isOCR: false });
+                    pList.forEach(p => foundPhones.add(p));
+
+                    if (detectedLoc === '—') {
+                      const sLoc = extractLocationDetailed({ content: st, authorName: targetAuthorName });
+                      if (sLoc && sLoc.confidence >= 0.75 && !sLoc.conflict && sLoc.province !== '—') {
+                        detectedLoc = sLoc.province;
+                        locationResult = sLoc;
+                      }
+                    }
+                  }
+
+                  if (foundPhones.size > 0) {
+                    const phones = Array.from(foundPhones);
+                    logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ tìm kiếm 'sdt' trên profile [${targetAuthorName || 'Tác giả'}]: [${phones.join(', ')}]`);
+                    return {
+                      phones,
+                      location: detectedLoc,
+                      locationResult,
+                      source: 'profile_search',
+                      confidence: 0.95,
+                      verified: true
+                    };
+                  }
+
+                  // Quét OCR trên ảnh kết quả tìm kiếm nếu chữ chưa có SĐT
+                  if (searchResultsData.imgs.length > 0) {
+                    const ocrPhones = await ocrManager.extractPhonesFromImageUrls(searchResultsData.imgs);
+                    ocrPhones.forEach(p => foundPhones.add(p));
+                    if (foundPhones.size > 0) {
+                      const phones = Array.from(foundPhones);
+                      logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ ảnh tìm kiếm 'sdt' trên profile [${targetAuthorName || 'Tác giả'}]: [${phones.join(', ')}]`);
+                      return {
+                        phones,
+                        location: detectedLoc,
+                        locationResult,
+                        source: 'profile_search_ocr',
+                        confidence: 0.95,
+                        verified: true
+                      };
+                    }
+                  }
+                }
+              }
+            } catch (searchErr) {
+              logger.debug({ err: searchErr.message }, 'Lỗi khi tìm kiếm bài viết sdt trên profile');
+            }
           }
         }
         return {
