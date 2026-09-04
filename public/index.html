@@ -6,7 +6,7 @@
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.9.3">
+    <link rel="stylesheet" href="css/style.css?v=2.9.4">
 </head>
 <body>
     <div class="app-container">
@@ -218,12 +218,12 @@
                         <div class="card glass-card">
                             <div class="card-header">
                                 <!-- Dòng 1: Tiêu đề & Huy hiệu thống kê Realtime -->
-                                <div class="d-flex align-center gap-3 wrap-gap">
+                                <div class="d-flex align-center gap-2 flex-wrap">
                                     <div class="d-flex align-center gap-2">
                                         <h2>Kết quả Dữ liệu Bóc tách</h2>
-                                        <span class="badge-live-sync" title="Dữ liệu thống kê & bài viết tự động đồng bộ thời gian thực"><span class="live-dot"></span> Realtime</span>
+                                        <span class="badge-live-sync" title="Dữ liệu thống kê & bài viết tự động đồng bộ thời gian thực"><span class="live-dot"></span> Live</span>
                                     </div>
-                                    <div class="stat-badge-group d-flex align-center gap-2 wrap-gap">
+                                    <div class="stat-badge-group">
                                         <span class="stat-pill stat-pill-total" id="statPillTotal" role="button" tabindex="0" title="Bấm để xem toàn bộ danh sách bài viết">📊 Tổng: <strong>0</strong> bài</span>
                                         <span class="stat-pill stat-pill-new" id="statPillNew" role="button" tabindex="0" title="Bấm để lọc nhanh bài Mới tạo">🆕 <strong>0</strong> Mới</span>
                                         <span class="stat-pill stat-pill-lead" id="statPillLead" role="button" tabindex="0" title="Bấm để lọc nhanh bài Đã nhập lead">📥 <strong>0</strong> Lead</span>
@@ -236,7 +236,7 @@
                                 <span class="text-muted text-sm mt-2 d-block" id="resultTotalBadge">Tất cả dữ liệu đã lưu</span>
                                     
                                 <!-- Dòng 3: Khung bộ lọc (Tìm kiếm, Trạng thái, Ngày giờ, Lọc) -->
-                                <div class="date-filter-container d-flex align-center gap-3 wrap-gap">
+                                <div class="date-filter-container d-flex align-center wrap-gap">
                                     <input type="text" id="filterKeywordInput" class="input-date-sm" placeholder="🔎 Tìm SĐT, tên tác giả..." style="width: 210px;" title="Tìm kiếm nhanh theo Số điện thoại hoặc Tên người đăng">
 
                                     <div class="d-flex align-center gap-2">
@@ -536,6 +536,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.9.3"></script>
+    <script src="js/app.js?v=2.9.4"></script>
 </body>
 </html>
