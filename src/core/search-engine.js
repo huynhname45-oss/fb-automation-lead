@@ -613,10 +613,14 @@ class SearchEngine extends EventEmitter {
     this.total = 0;
     this.isStopped = false;
     this.results = [];
+    this.currentKeyword = '';
+    this.finishedReason = null;
   }
 
   async search(keyword, filters = {}, maxPosts = null) {
     this.status = 'searching';
+    this.currentKeyword = keyword;
+    this.finishedReason = null;
     this.found = 0;
     this.acceptedCount = 0;
     this.reviewCount = 0;
@@ -1355,7 +1359,12 @@ class SearchEngine extends EventEmitter {
       await historyManager.addPosts(processedResults);
       
       if (this.acceptedCount < targetAccepted && !this.isStopped) {
+        this.finishedReason = 'all_posts_exhausted';
         logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${this.acceptedCount}/${targetAccepted} bài đạt chuẩn).`);
+      } else if (!this.isStopped) {
+        this.finishedReason = 'target_reached';
+      } else {
+        this.finishedReason = 'user_stopped';
       }
 
       logger.info(`🎉 HOÀN TẤT! ${this.acceptedCount}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã lưu ${processedResults.length} bản ghi.`);
@@ -2041,13 +2050,20 @@ class SearchEngine extends EventEmitter {
   }
 
   getProgress() {
+    const phonesFound = Array.isArray(this.results)
+      ? this.results.filter(r => (r.verifiedPhones && r.verifiedPhones.length > 0) || (r.phones && r.phones.length > 0)).length
+      : 0;
+
     return {
       status: this.status,
       found: this.found,
       total: this.total,
       accepted: this.acceptedCount,
       review: this.reviewCount,
-      rejected: this.rejectedCount
+      rejected: this.rejectedCount,
+      keyword: this.currentKeyword || '',
+      finishedReason: this.finishedReason || null,
+      phoneCount: phonesFound
     };
   }
 

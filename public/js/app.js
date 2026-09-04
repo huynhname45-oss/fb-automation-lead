@@ -860,7 +860,7 @@ async function pollSearchProgress() {
 
         updateProgressUI(progress);
 
-        if (progress.status === 'idle' || progress.status === 'stopped') {
+            const wasSearching = state.search.status === 'searching';
             stopPollingSearch();
             setSearchState('idle');
 
@@ -873,13 +873,85 @@ async function pollSearchProgress() {
                 }
             } catch (e) {}
 
-            if (progress.status === 'idle') {
+            if (wasSearching && progress.status === 'idle') {
                 showToast(`Hoàn tất tìm kiếm! Đã thu thập đủ bài viết`, 'success');
+                showSearchCompletionModal(progress);
             }
         }
     } catch (err) {
         // Silently retry polling
     }
+}
+
+function showSearchCompletionModal(progress) {
+    const existing = document.getElementById('searchCompletionModalOverlay');
+    if (existing) existing.remove();
+
+    const keyword = progress.keyword || document.getElementById('inputKeyword')?.value?.trim() || '';
+    const accepted = progress.accepted || progress.found || 0;
+    const total = progress.total || 0;
+    const phones = progress.phoneCount || 0;
+    const rejected = progress.rejected || 0;
+    const isExhausted = progress.finishedReason === 'all_posts_exhausted';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'searchCompletionModalOverlay';
+    overlay.innerHTML = `
+      <div class="modal glass-panel" style="max-width: 480px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: fadeIn 0.25s ease-out;">
+        <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.8rem;">🎉</span>
+            <div>
+              <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #fff;">Hoàn Tất Quét Bài Viết</h3>
+              ${keyword ? `<p style="margin: 2px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Từ khóa: <strong style="color: #60a5fa;">"${escapeHtml(keyword)}"</strong></p>` : ''}
+            </div>
+          </div>
+          <button class="modal-close" id="btnCloseCompleteModal">&times;</button>
+        </div>
+        <div class="modal-body" style="padding-top: 16px; margin-bottom: 20px;">
+          <div style="background: ${isExhausted ? 'rgba(245, 158, 11, 0.12)' : 'rgba(59, 130, 246, 0.12)'}; border-left: 4px solid ${isExhausted ? '#f59e0b' : '#3b82f6'}; padding: 12px 14px; border-radius: 8px; margin-bottom: 18px;">
+            <p style="margin: 0; font-size: 0.92rem; line-height: 1.45; color: #f1f5f9;">
+              ${isExhausted 
+                ? '⚡ <strong>Đã quét sạch toàn bộ bài viết trên Facebook!</strong><br><span style="font-size: 0.82rem; color: #cbd5e1;">Facebook không còn bài viết mới nào khác để cuộn thêm trong 24 giờ qua cho từ khóa này.</span>' 
+                : `🎯 <strong>Đã hoàn thành thu thập đủ ${accepted}/${total} lead mục tiêu!</strong>`}
+            </p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
+              <div style="font-size: 1.5rem; font-weight: 800; color: #34d399;">${accepted}</div>
+              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Lead được duyệt</div>
+            </div>
+            <div style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
+              <div style="font-size: 1.5rem; font-weight: 800; color: #60a5fa;">${phones}</div>
+              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Có số điện thoại</div>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
+              <div style="font-size: 1.5rem; font-weight: 800; color: #f87171;">${rejected}</div>
+              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Bài rác đã loại</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; gap: 10px;">
+          <button class="btn btn-secondary" id="btnDismissCompleteModal">Xem Danh Sách Lead</button>
+          <button class="btn btn-primary" id="btnExportFromModal" style="background: #10b981; border-color: #10b981;">📊 Xuất File Excel</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    document.getElementById('btnCloseCompleteModal')?.addEventListener('click', closeFn);
+    document.getElementById('btnDismissCompleteModal')?.addEventListener('click', closeFn);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeFn();
+    });
+    document.getElementById('btnExportFromModal')?.addEventListener('click', () => {
+        closeFn();
+        handleExport();
+    });
 }
 
 function setSearchState(status) {
