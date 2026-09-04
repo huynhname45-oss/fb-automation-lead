@@ -126,7 +126,18 @@ function initEventListeners() {
 
     const selAiProvider = document.getElementById('cfgAiProvider');
     if (selAiProvider) {
+        let prevProvider = selAiProvider.value;
         selAiProvider.addEventListener('change', (e) => {
+            const inputApiKey = document.getElementById('cfgGeminiApiKey');
+            if (inputApiKey && state.config) {
+                const entered = inputApiKey.value.trim();
+                if (entered) {
+                    if (prevProvider === 'groq') state.config.groqApiKey = entered;
+                    else if (prevProvider === 'gemini') state.config.geminiApiKey = entered;
+                    else state.config.aiApiKey = entered;
+                }
+            }
+            prevProvider = e.target.value;
             updateAiProviderUI(e.target.value);
         });
     }
@@ -1313,7 +1324,7 @@ function updateAiProviderUI(provider) {
             linkHelp.textContent = '👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)';
         }
         if (badgeModel) {
-            badgeModel.textContent = `⚡ Model: ${state.config?.groqModel || 'openai/gpt-oss-120b'}`;
+            badgeModel.textContent = `⚡ Model: ${state.config?.groqModel || 'qwen/qwen3.8-27b'}`;
             badgeModel.style.background = 'rgba(16, 185, 129, 0.15)';
             badgeModel.style.color = '#10b981';
             badgeModel.style.borderColor = 'rgba(16, 185, 129, 0.4)';
@@ -1332,7 +1343,7 @@ function updateAiProviderUI(provider) {
             linkHelp.textContent = '👉 Bấm vào đây để lấy Gemini API Key miễn phí tại Google AI Studio';
         }
         if (badgeModel) {
-            badgeModel.textContent = `⚡ Model: ${state.config?.geminiModel || 'gemini-2.0-flash'}`;
+            badgeModel.textContent = `⚡ Model: ${state.config?.geminiModel || 'gemini-3.5-flash-lite'}`;
             badgeModel.style.background = 'rgba(16, 185, 129, 0.15)';
             badgeModel.style.color = '#10b981';
             badgeModel.style.borderColor = 'rgba(16, 185, 129, 0.4)';
@@ -1433,9 +1444,9 @@ async function handleSaveConfig(e) {
         aiProvider: aiProviderVal,
         aiApiKey: enteredApiKey,
         geminiApiKey: geminiKey,
-        geminiModel: state.config?.geminiModel || 'gemini-2.0-flash',
+        geminiModel: state.config?.geminiModel || 'gemini-3.5-flash-lite',
         groqApiKey: groqKey,
-        groqModel: state.config?.groqModel || 'openai/gpt-oss-120b',
+        groqModel: state.config?.groqModel || 'qwen/qwen3.8-27b',
         minLeadScore: minLeadScoreVal,
         acceptedLeadScore: minLeadScoreVal,
         reviewLeadScore: state.config?.reviewLeadScore ?? 45,
@@ -1498,7 +1509,7 @@ async function handleTestAiConnection() {
         });
 
         if (res.success) {
-            const selectedModel = res.selectedModel || res.result?.provider || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-2.0-flash');
+            const selectedModel = res.selectedModel || res.result?.provider || (provider === 'groq' ? 'qwen/qwen3.8-27b' : 'gemini-3.5-flash-lite');
             if (provider === 'gemini') {
                 state.config.geminiModel = selectedModel;
                 state.config.geminiApiKey = apiKey;
