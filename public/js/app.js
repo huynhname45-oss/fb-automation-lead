@@ -43,12 +43,47 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
  * App Initialization
  */
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initNavigation();
     initEventListeners();
     checkSessionStatus();
     fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
 });
+
+/**
+ * Theme Switcher (Giao diện Sáng / Tối)
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem('fb_theme') || 'light';
+    applyTheme(savedTheme);
+
+    const btnThemeToggle = document.getElementById('btnThemeToggle');
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            applyTheme(newTheme);
+            localStorage.setItem('fb_theme', newTheme);
+            showToast(`Đã chuyển sang ${newTheme === 'light' ? 'Giao diện Sáng ☀️' : 'Giao diện Tối 🌙'}`, 'info');
+        });
+    }
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const iconEl = document.getElementById('themeToggleIcon');
+    const textEl = document.getElementById('themeToggleText');
+    if (iconEl && textEl) {
+        if (theme === 'dark') {
+            iconEl.textContent = '🌙';
+            textEl.textContent = 'Giao diện Tối';
+        } else {
+            iconEl.textContent = '☀️';
+            textEl.textContent = 'Giao diện Sáng';
+        }
+    }
+}
 
 function initNavigation() {
     const navSession = document.getElementById('navSession');

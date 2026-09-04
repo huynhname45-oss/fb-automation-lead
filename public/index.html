@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.7.0">
+    <link rel="stylesheet" href="css/style.css?v=2.8.0">
 </head>
 <body>
     <div class="app-container">
@@ -42,9 +42,15 @@
             <!-- Header -->
             <header class="header">
                 <h1 class="page-title" id="pageTitle">Session Manager</h1>
-                <div class="header-status">
-                    <span class="status-indicator none" id="globalSessionStatusIndicator"></span>
-                    <span class="status-text" id="globalSessionStatusText">Chưa đăng nhập</span>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <button class="theme-toggle-btn" id="btnThemeToggle" title="Chuyển đổi giao diện Sáng / Tối">
+                        <span id="themeToggleIcon">☀️</span>
+                        <span id="themeToggleText">Giao diện Sáng</span>
+                    </button>
+                    <div class="header-status">
+                        <span class="status-indicator none" id="globalSessionStatusIndicator"></span>
+                        <span class="status-text" id="globalSessionStatusText">Chưa đăng nhập</span>
+                    </div>
                 </div>
             </header>
 
@@ -512,6 +518,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.7.0"></script>
+    <script src="js/app.js?v=2.8.0"></script>
 </body>
 </html>

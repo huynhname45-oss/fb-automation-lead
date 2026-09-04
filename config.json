@@ -12,7 +12,7 @@
   "aiProvider": "groq",
   "aiApiKey": "AQ.Ab8RN6K7D64ZvqO_oCalWpUg3VJw4oK8UWt47jPmA1ynCZUsDQ",
   "geminiApiKey": "AQ.Ab8RN6K7D64ZvqO_oCalWpUg3VJw4oK8UWt47jPmA1ynCZUsDQ",
-  "geminiModel": "gemini-3.7-flash",
+  "geminiModel": "gemini-3.5-flash-lite",
   "groqApiKey": "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",
   "groqModel": "qwen/qwen3.8-27b",
   "minLeadScore": 75,
