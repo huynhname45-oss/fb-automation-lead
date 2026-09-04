@@ -6,7 +6,7 @@
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.9.1">
+    <link rel="stylesheet" href="css/style.css?v=2.9.2">
 </head>
 <body>
     <div class="app-container">
@@ -338,21 +338,35 @@
                         </div>
                         <div class="card-body">
                             <form id="configForm">
-                                <div class="form-group mb-4">
-                                    <label class="field-label" for="cfgCrawlDelay">Thời gian chờ cuộn / chuyển trang (ms)</label>
-                                    <input type="number" id="cfgCrawlDelay" class="input input-styled" value="2500" min="500" step="500">
-                                </div>
-                                <div class="form-group mb-4">
-                                    <label class="field-label" for="cfgMaxPosts">Số lượng bài viết mặc định cần bóc tách</label>
-                                    <input type="number" id="cfgMaxPosts" class="input input-styled" value="10" min="1" max="1000">
+                                <!-- Cụm 1: Thu Thập & Tốc Độ Cào -->
+                                <div class="config-subcard config-subcard-crawler">
+                                    <span class="config-category-badge badge-crawler">⚙️ NHÓM 1: VẬN HÀNH & TỐC ĐỘ</span>
+                                    <h3 class="config-section-title">
+                                        <span>⚡</span> Cấu Hình Thu Thập & Giới Hạn Quét Facebook
+                                    </h3>
+                                    <p class="config-section-desc">Tùy chỉnh độ trễ giữa các lần cuộn trang để tránh thuật toán chống spam của Facebook và số lượng bài viết quét tối đa trong mỗi phiên làm việc.</p>
+
+                                    <div class="grid-2">
+                                        <div class="form-group mb-0">
+                                            <label class="field-label" for="cfgCrawlDelay">Thời gian chờ cuộn / chuyển trang (ms)</label>
+                                            <input type="number" id="cfgCrawlDelay" class="input input-styled" value="2500" min="500" step="500">
+                                            <span class="text-xs text-muted mt-1 d-block">Mặc định 2500ms (2.5 giây) giúp cuộn mượt và an toàn cho tài khoản.</span>
+                                        </div>
+                                        <div class="form-group mb-0">
+                                            <label class="field-label" for="cfgMaxPosts">Số lượng bài viết tối đa mỗi lượt quét</label>
+                                            <input type="number" id="cfgMaxPosts" class="input input-styled" value="10" min="1" max="1000">
+                                            <span class="text-xs text-muted mt-1 d-block">Hệ thống sẽ dừng quét khi đạt đủ số bài viết tiềm năng này.</span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <!-- AI Lead Qualification Card -->
-                                <div class="config-subcard-ai mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-ai">
-                                        <span>✨</span> Cấu Hình Trí Tuệ Nhân Tạo AI (Groq Cloud / Google Gemini / OpenAI)
+                                <!-- Cụm 2: Trí Tuệ Nhân Tạo AI -->
+                                <div class="config-subcard config-subcard-ai">
+                                    <span class="config-category-badge badge-ai">✨ NHÓM 2: TRÍ TUỆ NHÂN TẠO (AI)</span>
+                                    <h3 class="config-section-title section-title-ai">
+                                        <span>✨</span> Cấu Hình AI Thẩm Định Tiềm Năng & Viết Sales Pitch
                                     </h3>
-                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Sử dụng AI siêu tốc (Khuyên dùng <strong>Groq Cloud 14.400 req/ngày</strong>) đọc hiểu bài viết, xác định quán mở mới, sinh câu mở lời tiếp cận (Sales Pitch) và tự động lọc dữ liệu.</p>
+                                    <p class="config-section-desc">Sử dụng AI siêu tốc (Khuyên dùng <strong>Groq Cloud 14.400 req/ngày</strong> hoặc <strong>Google Gemini</strong>) để đọc hiểu ngữ cảnh bài viết, phân biệt chủ quán mở mới, chấm điểm tiềm năng và tạo sẵn câu mở lời bán hàng cho nhân viên kinh doanh.</p>
 
                                     <div class="rule-item-box mb-4">
                                         <label class="rule-item-label" for="cfgAiEnabled">
@@ -373,8 +387,8 @@
                                         </div>
                                     </div>
 
-                                    <div class="d-grid grid-2 gap-4 mb-4">
-                                        <div class="form-group">
+                                    <div class="grid-2 mb-4">
+                                        <div class="form-group mb-0">
                                             <label class="field-label" for="cfgAiProvider" style="font-weight: 600;">Mô hình AI sử dụng</label>
                                             <select id="cfgAiProvider" class="input input-styled" style="height: 46px;">
                                                 <option value="groq" selected>⚡ Groq Cloud (Qwen 3.8 / GPT-OSS 120B - 100% Free, Siêu Tốc 14.400 req/ngày - Khuyên dùng)</option>
@@ -384,7 +398,7 @@
                                                 <option value="free_hybrid">⚡ Miễn phí Tốc độ cao (Free Hybrid AI)</option>
                                             </select>
                                         </div>
-                                        <div class="form-group">
+                                        <div class="form-group mb-0">
                                             <label class="field-label" for="cfgMinLeadScore" style="font-weight: 600;">Điểm tiềm năng tối thiểu để duyệt (0 - 100)</label>
                                             <input type="number" id="cfgMinLeadScore" class="input input-styled" style="height: 46px;" value="50" min="0" max="100">
                                         </div>
@@ -393,7 +407,7 @@
                                     <div class="form-group mb-4">
                                         <div class="d-flex justify-between align-center mb-2">
                                             <label class="field-label mb-0" for="cfgAiPromptContext" style="font-weight: 600;">Mô tả & Ngữ cảnh phân tích cho AI (AI Prompt Context)</label>
-                                            <button type="button" class="btn btn-ghost btn-xs text-xs" id="btnResetAiContext" style="color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.4); padding: 5px 10px; border-radius: 6px;">↺ Khôi phục mặc định</button>
+                                            <button type="button" class="btn btn-ghost btn-xs text-xs" id="btnResetAiContext" style="color: #4f46e5; border: 1px solid rgba(79, 70, 229, 0.4); padding: 5px 10px; border-radius: 6px; font-weight: 600;">↺ Khôi phục mặc định</button>
                                         </div>
                                         <textarea id="cfgAiPromptContext" class="prompt-context-textarea" placeholder="Nhập ngữ cảnh và tiêu chí thẩm định của bạn cho AI..."></textarea>
                                         <span class="text-muted text-xs d-block mt-2" style="line-height: 1.5;">AI sẽ dựa trên mô tả này để đọc hiểu bài viết, xác định quán mở mới, chấm điểm và tự động viết câu mở lời cho Sale.</span>
@@ -405,19 +419,20 @@
                                                 <button type="button" class="btn btn-purple btn-test-ai-lg" id="btnTestAiConnection">
                                                     🧪 Kiểm Tra Kết Nối AI (Live Test)
                                                 </button>
-                                                <span class="text-xs text-muted" id="testAiStatusText">Bấm để kiểm tra kết nối với Google Gemini AI mới nhất.</span>
+                                                <span class="text-xs text-muted" id="testAiStatusText">Bấm để kiểm tra kết nối với Google Gemini / Groq AI mới nhất.</span>
                                             </div>
                                         </div>
                                         <div id="testAiResultBox" style="display: none;"></div>
                                     </div>
                                 </div>
 
-                                <!-- Lead Rule Filter Card -->
-                                <div class="config-subcard-rules mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-rules">
-                                        <span>🎯</span> Quy Tắc Loại Trừ Bắt Buộc (Lead Rule Filter)
+                                <!-- Cụm 3: Bộ Quy Tắc Lọc Cứng -->
+                                <div class="config-subcard config-subcard-rules">
+                                    <span class="config-category-badge badge-rules">🎯 NHÓM 3: BỘ LỌC QUY TẮC CỨNG (0ms)</span>
+                                    <h3 class="config-section-title section-title-rules">
+                                        <span>🎯</span> Bộ Quy Tắc Loại Trừ Bắt Buộc Trên Dòng Thời Gian
                                     </h3>
-                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Các quy tắc loại trừ tự động trên Bảng tin để tiết kiệm thời gian quét.</p>
+                                    <p class="config-section-desc">Các quy tắc lọc tức thì (0ms) loại bỏ tự động bài viết rác, chuỗi doanh nghiệp lớn, ngành không phù hợp ngay trên Bảng tin Facebook mà không cần tốn lượt gọi AI.</p>
 
                                     <!-- Rule 1 -->
                                     <div class="rule-item-box">
@@ -475,36 +490,36 @@
                                     </div>
                                 </div>
 
-                                <!-- Export Lead Template Config Card -->
-                                <div class="config-subcard-rules mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-export">
-                                        <span>📊</span> Cấu Hình Xuất File Excel (Mẫu Template Import Lead)
+                                <!-- Cụm 4: Mẫu Xuất File Excel -->
+                                <div class="config-subcard config-subcard-export">
+                                    <span class="config-category-badge badge-export">📊 NHÓM 4: XUẤT DỮ LIỆU EXCEL CRM</span>
+                                    <h3 class="config-section-title section-title-export">
+                                        <span>📊</span> Cấu Hình Xuất File Excel (Chuẩn Mẫu Import Lead CRM)
                                     </h3>
-                                    <p class="text-sm text-muted mb-3" style="line-height: 1.6;">
-                                        File Excel xuất ra sẽ có định dạng chuẩn theo <code>template_import_lead.xlsx</code>. Các trường bắt buộc cố định dưới đây:
-                                    </p>
-                                    <div class="grid grid-3 gap-3">
+                                    <p class="config-section-desc">Định dạng file Excel xuất ra khớp chính xác 100% theo cấu trúc của <code>template_import_lead.xlsx</code> để import trực tiếp vào phần mềm bán hàng/CRM mà không cần chỉnh sửa thủ công.</p>
+                                    
+                                    <div class="grid-3 mb-3">
                                         <div class="form-group mb-0">
                                             <label class="field-label text-xs" for="cfgExportProvinceCode" style="font-weight: 700; color: #dc2626;">Mã Tỉnh/Thành phố (Bắt buộc)</label>
-                                            <input type="text" id="cfgExportProvinceCode" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="__export__.res_province_121_cf34d119">
+                                            <input type="text" id="cfgExportProvinceCode" class="input input-styled" style="height: 42px; font-size: 0.88rem;" value="__export__.res_province_121_cf34d119">
                                         </div>
                                         <div class="form-group mb-0">
                                             <label class="field-label text-xs" for="cfgExportProductGroup" style="font-weight: 700; color: #dc2626;">Nhóm gói sản phẩm (Bắt buộc)</label>
-                                            <input type="text" id="cfgExportProductGroup" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="RETAIL_PRO">
+                                            <input type="text" id="cfgExportProductGroup" class="input input-styled" style="height: 42px; font-size: 0.88rem;" value="RETAIL_PRO">
                                         </div>
                                         <div class="form-group mb-0">
                                             <label class="field-label text-xs" for="cfgExportSalesRep" style="font-weight: 700; color: #dc2626;">Nhân viên kinh doanh (Email)</label>
-                                            <input type="text" id="cfgExportSalesRep" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="trucnt@sapo.vn">
+                                            <input type="text" id="cfgExportSalesRep" class="input input-styled" style="height: 42px; font-size: 0.88rem;" value="trucnt@sapo.vn">
                                         </div>
                                     </div>
-                                    <span class="text-muted text-xs d-block mt-2" style="font-style: italic;">
+                                    <span class="text-muted text-xs d-block mt-2" style="font-style: italic; line-height: 1.5;">
                                         * Cột "Tên cơ hội" tự động điền Tên người đăng, "Số điện thoại" tự động điền SĐT bóc tách được. Các cột khác để trống theo đúng chuẩn import CRM.
                                     </span>
                                 </div>
 
-                                <div class="mt-5 text-center">
-                                    <button type="submit" class="btn btn-purple-full" id="btnSaveConfig" style="padding: 14px 36px; font-size: 1rem; max-width: 360px; margin: 0 auto; display: block; border-radius: 10px; font-weight: 700;">
-                                        💾 Lưu Cấu Hình Hệ Thống
+                                <div class="mt-5 text-center" style="padding-top: 24px; border-top: 1px solid var(--glass-border);">
+                                    <button type="submit" class="btn btn-purple-full" id="btnSaveConfig" style="padding: 15px 42px; font-size: 1.05rem; max-width: 380px; margin: 0 auto; display: inline-flex; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.35);">
+                                        💾 Lưu Cấu Hình Toàn Bộ Hệ Thống
                                     </button>
                                 </div>
                             </form>
@@ -518,6 +533,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.9.1"></script>
+    <script src="js/app.js?v=2.9.2"></script>
 </body>
 </html>

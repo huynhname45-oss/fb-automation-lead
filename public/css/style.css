@@ -990,6 +990,30 @@ body {
 .gap-3 { gap: 14px; }
 .gap-4 { gap: 20px; }
 
+/* Grid Utilities */
+.grid, .d-grid {
+  display: grid;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 820px) {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
 .summary-cell {
   font-size: 0.84rem;
   color: var(--text-secondary);
@@ -1428,43 +1452,124 @@ body {
   color: #94a3b8;
 }
 
-/* Enhanced Setting & Rule Filter Styling (Readable & Spacious) */
+/* Enhanced Setting & Rule Filter Styling (Readable, Semantic & Spacious) */
 .config-section-card {
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
-  padding: 24px 28px;
-  margin-bottom: 24px;
+  border-radius: 16px;
+  padding: 28px 32px;
+  margin-bottom: 28px;
 }
 
+/* Base Subcard for Config Sections */
+.config-subcard {
+  border-radius: 16px;
+  padding: 26px 30px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s ease;
+}
+
+/* Cụm 1: Thu thập & Tốc độ cào */
+.config-subcard-crawler {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-left: 5px solid #3b82f6;
+}
+
+/* Cụm 2: Trí tuệ nhân tạo AI */
 .config-subcard-ai {
-  background: #fbf9ff;
-  border: 1px solid #ede9fe;
-  border-radius: 14px;
-  padding: 24px 28px;
-  margin-bottom: 24px;
+  background: #faf7ff;
+  border: 1.5px solid #d8b4fe;
+  border-left: 5px solid #8b5cf6;
 }
 
+/* Cụm 3: Bộ quy tắc loại trừ cứng */
 .config-subcard-rules {
-  background: #f8faff;
-  border: 1px solid #e0e7ff;
-  border-radius: 14px;
-  padding: 24px 28px;
-  margin-bottom: 24px;
+  background: #f4f8ff;
+  border: 1.5px solid #bfdbfe;
+  border-left: 5px solid #2563eb;
+}
+
+/* Cụm 4: Cấu hình xuất file Excel */
+.config-subcard-export {
+  background: #f2fbf6;
+  border: 1.5px solid #a7f3d0;
+  border-left: 5px solid #059669;
+}
+
+/* Section Header Badges for Semantic Context */
+.config-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.badge-crawler {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.badge-ai {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #6d28d9;
+}
+
+.badge-rules {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.badge-export {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.config-section-title {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-section-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--glass-border);
 }
 
 .rule-item-box {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   border-radius: 10px;
-  padding: 14px 18px;
+  padding: 16px 20px;
   margin-bottom: 14px;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
 }
 
 .rule-item-box:hover {
   background: #f8fafc;
-  border-color: #cbd5e1;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
 }
 
 .rule-item-label {
@@ -1477,18 +1582,19 @@ body {
 }
 
 .rule-item-title {
-  font-size: 0.94rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--text-primary);
   line-height: 1.5;
 }
 
 .rule-item-desc {
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   margin-top: 6px;
   margin-left: 28px;
   line-height: 1.55;
+  font-weight: 500;
 }
 
 .prompt-context-textarea {
@@ -1583,14 +1689,60 @@ body {
   display: block;
 }
 
+[data-theme="dark"] .config-subcard-crawler {
+  background: #101726;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-left: 5px solid #3b82f6;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
 [data-theme="dark"] .config-subcard-ai {
   background: rgba(139, 92, 246, 0.06);
-  border: 1px solid rgba(139, 92, 246, 0.28);
+  border: 1.5px solid rgba(139, 92, 246, 0.35);
+  border-left: 5px solid #8b5cf6;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
 }
 
 [data-theme="dark"] .config-subcard-rules {
   background: rgba(24, 119, 242, 0.04);
-  border: 1px solid rgba(24, 119, 242, 0.22);
+  border: 1.5px solid rgba(24, 119, 242, 0.3);
+  border-left: 5px solid #3b82f6;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .config-subcard-export {
+  background: rgba(16, 185, 129, 0.04);
+  border: 1.5px solid rgba(16, 185, 129, 0.3);
+  border-left: 5px solid #10b981;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .badge-crawler {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .badge-ai {
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+
+[data-theme="dark"] .badge-rules {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .badge-export {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .config-section-desc {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
 [data-theme="dark"] .rule-item-box {
