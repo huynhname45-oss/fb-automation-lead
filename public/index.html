@@ -6,7 +6,7 @@
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.9.0">
+    <link rel="stylesheet" href="css/style.css?v=2.9.1">
 </head>
 <body>
     <div class="app-container">
@@ -94,20 +94,20 @@
                             </div>
 
                             <!-- Cookie Login Card -->
-                            <div class="mt-4 p-4 cookie-login-card" style="border-radius: 12px;">
-                                <div class="headless-title d-flex align-center gap-2 mb-2">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="color: #6366f1;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
-                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Đăng nhập nhanh bằng Cookie Facebook (Không cần gõ tài khoản/mật khẩu)</h3>
+                            <div class="cookie-login-card">
+                                <div class="headless-title d-flex align-center gap-2 mb-3">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="color: #6366f1; flex-shrink: 0;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); line-height: 1.4;">Đăng nhập nhanh bằng Cookie Facebook (Không cần gõ tài khoản/mật khẩu)</h3>
                                 </div>
-                                <p class="text-muted text-sm mb-3">Dán chuỗi Cookie Facebook (dạng <code>c_user=...; xs=...;</code> hoặc mảng/object JSON) để kích hoạt phiên làm việc tức thì:</p>
+                                <p class="text-muted text-sm mb-3" style="line-height: 1.65; margin-bottom: 14px;">Dán chuỗi Cookie Facebook (dạng <code>c_user=...; xs=...;</code> hoặc mảng/object JSON) để kích hoạt phiên làm việc tức thì:</p>
                                 
                                 <div class="form-group mb-3">
-                                    <textarea id="inputCookie" class="input input-styled" rows="3" placeholder="Dán chuỗi Cookie tại đây (Ví dụ: c_user=61592463158823; xs=...; datr=...; sb=...)" style="font-family: monospace; font-size: 0.85rem; width: 100%; resize: vertical; padding: 10px;"></textarea>
+                                    <textarea id="inputCookie" class="input input-styled" rows="3" placeholder="Dán chuỗi Cookie tại đây (Ví dụ: c_user=61592463158823; xs=...; datr=...; sb=...)"></textarea>
                                 </div>
                                 
-                                <div class="d-flex align-center justify-between wrap-gap">
-                                    <span class="text-xs text-muted">Hỗ trợ tự động nhận dạng Cookie String (c_user=...; xs=...) & JSON format</span>
-                                    <button class="btn btn-purple-full" id="btnLoginCookie">
+                                <div class="d-flex align-center justify-between wrap-gap mt-3">
+                                    <span class="text-xs text-muted" style="line-height: 1.5;">Hỗ trợ tự động nhận dạng Cookie String (c_user=...; xs=...) & JSON format</span>
+                                    <button class="btn btn-purple-full" id="btnLoginCookie" style="width: auto; padding: 10px 24px; white-space: nowrap;">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
                                         Xác nhận Đăng nhập bằng Cookie
                                     </button>
@@ -518,6 +518,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.9.0"></script>
+    <script src="js/app.js?v=2.9.1"></script>
 </body>
 </html>
