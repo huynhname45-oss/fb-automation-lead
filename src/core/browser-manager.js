@@ -209,24 +209,33 @@ class BrowserManager {
 
   async saveSession() {
     try {
-      if (this.context) {
+      if (this.context && (!this.context.browser || this.context.browser()?.isConnected())) {
         const dir = path.dirname(SESSION_FILE);
         await fs.mkdir(dir, { recursive: true });
         await this.context.storageState({ path: SESSION_FILE });
         logger.info(`Storage state exported to ${SESSION_FILE}`);
       }
     } catch (error) {
-      logger.error({ err: error }, 'Failed to export storage state');
+      // If the browser was closed or disconnected before/during export, handle gracefully
+      if (error?.message?.includes('Target page, context or browser has been closed') || 
+          error?.message?.includes('has been closed') ||
+          error?.name === 'TargetClosedError') {
+        logger.debug('Trình duyệt đã đóng trước khi xuất session (không ảnh hưởng dữ liệu).');
+      } else {
+        logger.warn({ err: error.message }, 'Không thể xuất file session lưu trữ');
+      }
     }
   }
 
   async closeBrowser() {
     if (this.context) {
       try {
-        await this.saveSession();
+        if (!this.context.browser || this.context.browser()?.isConnected()) {
+          await this.saveSession();
+        }
         await this.context.close();
       } catch (e) {
-        logger.warn('Context close error');
+        // Safe ignore if already closed
       }
       this.context = null;
       this.currentHeadless = null;
