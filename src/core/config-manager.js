@@ -25,6 +25,10 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
    - Khách sạn / Hotel / Resort / Homestay / Nhà nghỉ.
    - Bất động sản / Căn hộ / Phòng trọ / Cho thuê nhà đất.
    - Dịch vụ Sinh đẻ / Gói thai sản / Khám sản phụ khoa / Bệnh viện phụ sản / Chăm sóc mẹ và bé sau sinh / Tắm bé / Thông tắc tia sữa.
+   - Dịch vụ Quà tặng & Giỏ trái cây: Giỏ trái cây nhập khẩu, Giỏ hoa quả, Giỏ quà biếu, Hộp quà biếu tặng khai trương, tân gia, sinh nhật, đặt giỏ quà, lên giỏ quà, quà biếu khai trương.
+   - Dịch vụ Decor & Cưới hỏi: Trang trí gia tiên, Decor tiệc cưới, Rạp cưới, Mâm quả cưới hỏi Rồng - Phụng, Quả dạm ngõ, Cổng hoa cưới, Trang trí xe hoa, Hoa bàn gia tiên.
+   - Dịch vụ In ấn sự kiện: In thiệp mời khai trương/hội nghị, In phong bì thư, In kẹp file, In voucher, In thiệp cưới, xưởng in ấn phẩm.
+   - Dịch vụ Hoa sự kiện & Đào tạo: Kệ hoa khai trương, Giỏ hoa chúc mừng, Lẵng hoa, Hoa viếng/chia buồn, Hoa sáp, Hoa tiền, Đào tạo học viên cắm hoa, Dạy cắm hoa.
    - Dịch vụ Hoa khai trương / Kệ hoa / Giỏ hoa chúc mừng.
    - Dịch vụ Múa Lân khai trương / Đoàn lân / Lân sư rồng.
    - Nhà xe / Xe khách / Tuyến xe / Vé xe limousine.

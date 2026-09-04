@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead, checkCongratulatoryLead } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -129,6 +129,10 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
    - Cơ quan Nhà nước, Công an, Cảnh sát, Quân đội, UBND, Trường học, Bệnh viện công, Cơ quan hành chính.
    - Giao thông & Du lịch: Vận tải, Đường sắt, Đoàn tàu, Xe khách, Hàng không, Tour du lịch, Khách sạn, Homestay.
    - Bất động sản, Căn hộ, Nhà trọ, Dịch vụ sinh đẻ, Gói thai sản.
+   - Dịch vụ Quà tặng & Giỏ trái cây: Giỏ trái cây nhập khẩu, Giỏ hoa quả, Giỏ quà biếu, Hộp quà biếu tặng khai trương, tân gia, sinh nhật, đặt giỏ quà, lên giỏ quà, quà biếu khai trương.
+   - Dịch vụ Decor & Cưới hỏi: Trang trí gia tiên, Decor tiệc cưới, Rạp cưới, Mâm quả cưới hỏi Rồng - Phụng, Quả dạm ngõ, Cổng hoa cưới, Trang trí xe hoa, Hoa bàn gia tiên.
+   - Dịch vụ In ấn sự kiện: In thiệp mời khai trương/hội nghị, In phong bì thư, In kẹp file, In voucher, In thiệp cưới, xưởng in ấn phẩm.
+   - Dịch vụ Hoa sự kiện & Đào tạo: Kệ hoa khai trương, Giỏ hoa chúc mừng, Lẵng hoa, Hoa viếng/chia buồn, Hoa sáp, Hoa tiền, Đào tạo học viên cắm hoa, Dạy cắm hoa.
    - B2B & Phụ trợ: In bao bì, Thi công nội thất/setup quán, Bán xe đẩy bán hàng, Múa lân, Mâm cúng, Lắp đặt camera.
    - Chuỗi thương hiệu lớn (Highlands, Phúc Long, WinMart, KFC, Aeon...).
    - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ đi ăn tiệc chúc mừng khai trương (ví dụ: "Chúc 2 thầy ... khai trương hồng phát", "Chúc anh/chị/em/bạn khai trương", "Hôm nay đi ăn khai trương", chụp ảnh kỷ niệm, chúc mừng suông) mà KHÔNG PHẢI CHỦ CỬA HÀNG đăng bài giới thiệu quán của mình -> BẮT BUỘC ĐIỂM 0 (isQualified = false).
@@ -918,6 +922,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
         salesPitch: '',
         recommendedFeatures: '',
         reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`,
+        provider: 'local_nlp'
+      };
+    }
+
+    // -0.4. Event Gifts, Fruit Baskets, Florals, Decor & Printing Check (Highest Priority)
+    const giftEventCheck = checkEventGiftServiceLead({ authorName, content, phones });
+    if (giftEventCheck.isEventGiftService) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Dịch vụ phụ trợ / Giỏ trái cây / Hoa / Decor / In ấn sự kiện (Đã loại trừ)',
+        businessType: 'Dịch vụ phụ trợ / Quà tặng',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: `Dịch vụ phụ trợ sự kiện / Giỏ quà / Hoa / Decor / In ấn (${giftEventCheck.reason}), không phải cửa hàng F&B/Bán lẻ SMB mở mới.`,
         provider: 'local_nlp'
       };
     }

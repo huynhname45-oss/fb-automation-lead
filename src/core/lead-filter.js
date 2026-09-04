@@ -24,7 +24,8 @@ try {
  * Strips Vietnamese diacritics / accents
  */
 function removeAccents(str = '') {
-  return str
+  return String(str || '')
+    .normalize('NFKC')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
@@ -33,11 +34,13 @@ function removeAccents(str = '') {
 
 /**
  * Boundary-safe text cleaner for accurate keyword matching (strips all emojis, punctuation, symbols)
+ * Normalizes Unicode Mathematical Alphanumeric Symbols (e.g. bold, italic font styles) via NFKC
  */
 function cleanTextForMatching(text = '') {
   if (!text || typeof text !== 'string') return '';
+  const normalized = text.normalize('NFKC');
   // Replace anything that is not a letter, digit or whitespace with a space
-  return ` ${text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
+  return ` ${normalized.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 }
 
 const ACCENT_SENSITIVE_KEYWORDS = new Set([
@@ -144,7 +147,7 @@ export const CONGRATULATORY_PATTERNS = [
 ];
 
 export function checkCongratulatoryLead(post = {}) {
-  const content = `${post.content || ''}`;
+  const content = `${post.content || ''}`.normalize('NFKC');
   for (const regex of CONGRATULATORY_PATTERNS) {
     const m = content.match(regex);
     if (m) {
@@ -152,6 +155,43 @@ export function checkCongratulatoryLead(post = {}) {
     }
   }
   return { isCongratulatory: false };
+}
+
+// Patterns detecting B2B Supporting Services, Event Gifts, Fruit Gift Baskets, Florals, Wedding Decor, Printing
+export const EVENT_GIFT_SERVICES_PATTERNS = [
+  // 1. Giỏ trái cây, giỏ hoa quả, giỏ quà biếu, hộp quà trái cây, set quà trái cây, mâm quả
+  /(?:^|[\s,;:.!?-])(?:giỏ|gio|hộp|hop|set|khay|mâm|mam)\s+(?:quà|qua|trái\s*cây|trai\s*cay|hoa\s*quả|hoa\s*qua|quả|qua)(?:[\s,;:.!?-]|$)/iu,
+  /(?:^|[\s,;:.!?-])(?:đặt\s*giỏ|dat\s*gio|lên\s*giỏ|len\s*gio|mẫu\s*giỏ|mau\s*gio|lên\s*mẫu\s*giỏ|set\s*quà|món\s*quà\s*nhỏ)(?:[\s,;:.!?-]|$)/iu,
+  /(?:^|[\s,;:.!?-])(?:quà\s*biếu|qua\s*bieu|quà\s*tặng|qua\s*tang)\s+(?:khai\s*trương|khai\s*truong|tân\s*gia|tan\s*gia|sinh\s*nhật|sinh\s*nhat|thăm\s*hỏi|tham\s*hoi)/iu,
+  /(?:^|[\s,;:.!?-])(?:biếu|bieu|tặng|tang)\s+(?:bố\s*mẹ|ông\s*bà|đối\s*tác|khách\s*hàng|người\s*thân)[^\n.!?]{0,60}(?:khai\s*trương|khai\s*truong|tân\s*gia|sinh\s*nhật)/iu,
+  /(?:^|[\s,;:.!?-])(?:mâm\s*quả|mam\s*qua)\s+(?:cưới\s*hỏi|cuoi\s*hoi|rồng\s*phụng|rong\s*phung|dạm\s*ngõ|dam\s*ngo)?/iu,
+  /(?:^|[\s,;:.!?-])(?:quả\s*dạm\s*ngõ|qua\s*dam\s*ngo)/iu,
+
+  // 2. Decor, trang trí gia tiên, tiệc cưới, rạp cưới, cổng hoa cưới, hoa bàn gia tiên
+  /(?:^|[\s,;:.!?-])(?:decor|trang\s*trí|trang\s*tri)\s+(?:by\s+team|team|bàn\s+)?(?:gia\s*tiên|gia\s*tien|tiệc\s*cưới|tiec\s*cuoi|rạp\s*cưới|rap\s*cuoi|cổng\s*hoa|cong\s*hoa|xe\s*hoa)/iu,
+  /(?:^|[\s,;:.!?-])chuyên\s+trang\s+trí\s+(?:gia\s*tiên|tiệc\s*cưới|sinh\s*nhật|khai\s*trương)/iu,
+  /(?:^|[\s,;:.!?-])(?:bàn\s+gia\s+tiên|cổng\s+hoa\s+cưới|hoa\s+xe\s+cưới|hoa\s+cưới\s+cầm\s+tay)/iu,
+
+  // 3. Dịch vụ hoa: hoa khai trương, kệ hoa, lẵng hoa, giỏ hoa, hoa viếng, hoa sáp, đào tạo cắm hoa
+  /(?:^|[\s,;:.!?-])(?:hoa\s*khai\s*trương|hoa\s*khai\s*truong|kệ\s*hoa|ke\s*hoa|lẵng\s*hoa|lang\s*hoa|giỏ\s*hoa|gio\s*hoa|bó\s*hoa|bo\s*hoa)(?:[\s,;:.!?-]|$)/iu,
+  /(?:^|[\s,;:.!?-])(?:hoa\s*viếng|hoa\s*vieng|hoa\s*chia\s*buồn|hoa\s*chia\s*buon|hoa\s*sáp|hoa\s*sap|hoa\s*tiền|hoa\s*tien|hoa\s*hội\s*nghị|hoa\s*hoi\s*nghi)(?:[\s,;:.!?-]|$)/iu,
+  /(?:^|[\s,;:.!?-])(?:đào\s*tạo\s*học\s*viên|dao\s*tao\s*hoc\s*vien|dạy\s*cắm\s*hoa|day\s*cam\s*hoa|học\s*cắm\s*hoa|hoc\s*cam\s*hoa)/iu,
+  /(?:^|[\s,;:.!?-])(?:shop\s*hoa|tiệm\s*hoa|tiem\s*hoa)\s+(?:tươi|tuoi|sáp|sap)?(?:[\s,;:.!?-]|$)/iu,
+
+  // 4. In thiệp mời, phong bì, kẹp file, ấn phẩm sự kiện
+  /(?:^|[\s,;:.!?-])(?:in|in\s*ấn)\s+(?:thiệp\s*mời|thiep\s*moi|thiệp\s*cưới|thiep\s*cuoi|phong\s*bì|phong\s*bi|kẹp\s*file|kep\s*file|voucher|tờ\s*rơi|to\s*roi|ấn\s*phẩm|an\s*pham)/iu,
+  /(?:^|[\s,;:.!?-])in\s+thiệp\s+mời\s+(?:sự\s+kiện|khai\s+trương|hội\s+nghị)/iu
+];
+
+export function checkEventGiftServiceLead(post = {}) {
+  const rawText = `${post.authorName || ''} ${post.content || ''}`.normalize('NFKC');
+  for (const regex of EVENT_GIFT_SERVICES_PATTERNS) {
+    const m = rawText.match(regex);
+    if (m) {
+      return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${m[0].trim()}"` };
+    }
+  }
+  return { isEventGiftService: false };
 }
 
 /**
@@ -266,8 +306,18 @@ export class LeadFilter {
       }
     }
 
-    // 3. Unsupported Industry Check (Hotel, Resort, Real Estate, Hospitals...)
+    // 3. Unsupported Industry Check (Hotel, Resort, Real Estate, Hospitals, Gifts, Event Decor, Florals, Printing...)
     if (excludeUnsupported) {
+      const eventGiftCheck = checkEventGiftServiceLead(post);
+      if (eventGiftCheck.isEventGiftService) {
+        return {
+          qualified: false,
+          category: 'event_gift_service',
+          matchedTerm: eventGiftCheck.reason,
+          reason: `Dịch vụ phụ trợ / Giỏ quà / Hoa sự kiện / Decor / In ấn (${eventGiftCheck.reason}), không phải cơ sở kinh doanh SMB mở mới.`
+        };
+      }
+
       const matchedIndustry = findMatchedKeyword(combinedText, entities.unsupportedIndustries);
       if (matchedIndustry) {
         return {
