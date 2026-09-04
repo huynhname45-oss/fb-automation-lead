@@ -157,7 +157,21 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     if (provider === 'gemini') {
       const key = geminiKey || apiKey;
       if (!key) throw new Error('Chưa cấu hình Gemini API Key');
-      return await this._callGeminiAPI(key, systemPrompt, config.geminiModel);
+      try {
+        return await this._callGeminiAPI(key, systemPrompt, config.geminiModel);
+      } catch (geminiErr) {
+        const isRateLimit = geminiErr.message && (
+          geminiErr.message.includes('429') ||
+          geminiErr.message.includes('Rate Limit') ||
+          geminiErr.message.includes('RESOURCE_EXHAUSTED') ||
+          geminiErr.message.includes('quota')
+        );
+        if (isRateLimit && config.groqApiKey) {
+          logger.warn({ err: geminiErr.message }, '⚡ Gemini bị giới hạn tần suất (429 Rate Limit), tự động chuyển sang Groq LPU để không làm gián đoạn bóc tách lead...');
+          return await this._callGroqAPI(config.groqApiKey, systemPrompt, config.groqModel || 'qwen/qwen3.8-27b');
+        }
+        throw geminiErr;
+      }
     } else if (provider === 'openai') {
       const key = apiKey || geminiKey;
       if (!key) throw new Error('Chưa cấu hình OpenAI API Key');
@@ -425,6 +439,11 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
     const config = configManager.get();
     const activeModel = preferredModel || config.geminiModel;
 
+    const keys = (apiKey || '').split(/[,;\n\r]+/).map(k => k.trim()).filter(Boolean);
+    if (keys.length === 0) throw new Error('Vui lòng cung cấp Google Gemini API Key');
+
+    if (globalThis._geminiKeyIdx === undefined) globalThis._geminiKeyIdx = 0;
+
     const modelsToTry = [];
     if (activeModel) modelsToTry.push(activeModel);
 
@@ -447,65 +466,75 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
     }
     globalThis._lastGeminiCallTs = Date.now();
 
-    for (const model of modelsToTry) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    for (let k = 0; k < keys.length; k++) {
+      const currentKey = keys[(globalThis._geminiKeyIdx + k) % keys.length];
 
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 14000);
+      for (const model of modelsToTry) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
-        try {
-          const res = await fetch(url, {
-            method: 'POST',
-            signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: 0.1,
-                maxOutputTokens: 450
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 14000);
+
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              signal: controller.signal,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  responseMimeType: 'application/json',
+                  temperature: 0.1,
+                  maxOutputTokens: 450
+                }
+              })
+            });
+            clearTimeout(timer);
+
+            if (res.ok) {
+              globalThis._geminiKeyIdx = (globalThis._geminiKeyIdx + k) % keys.length;
+              const data = await res.json();
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (text) {
+                return this._parseJSONResponse(text, model);
               }
-            })
-          });
-          clearTimeout(timer);
+            } else {
+              const errJson = await res.json().catch(() => ({}));
+              const errMessage = errJson.error?.message || `Google Gemini API (${model}) trả về lỗi HTTP ${res.status}`;
+              
+              if (res.status === 429) {
+                lastError = new Error(`Google Gemini API chạm giới hạn tần suất (Rate Limit 429): ${errMessage}`);
+                if (keys.length > 1) {
+                  logger.warn(`⚠️ Gemini Key ${k + 1}/${keys.length} bị chạm 429, tự động chuyển sang Gemini Key tiếp theo...`);
+                  break;
+                }
+                if (attempt < 2) {
+                  logger.warn(`⚠️ Gemini API bị chạm Rate Limit 429. Đang đợi 2.5s rồi thử lại lần ${attempt + 1}...`);
+                  await new Promise(r => setTimeout(r, 2500));
+                  continue;
+                }
+                throw lastError;
+              }
 
-          if (res.ok) {
-            const data = await res.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (text) {
-              return this._parseJSONResponse(text, model);
+              lastError = new Error(errMessage);
+              if (res.status === 404 || errJson.error?.status === 'NOT_FOUND') {
+                break; // Model not available, try next model
+              }
+              if (res.status === 400 || res.status === 403) {
+                throw lastError;
+              }
             }
-          } else {
-            const errJson = await res.json().catch(() => ({}));
-            const errMessage = errJson.error?.message || `Google Gemini API (${model}) trả về lỗi HTTP ${res.status}`;
-            
-            if (res.status === 429) {
-              lastError = new Error(`Google Gemini API chạm giới hạn tần suất (Rate Limit 429): ${errMessage}`);
-              if (attempt < 2) {
-                logger.warn(`⚠️ Gemini API bị chạm Rate Limit 429. Đang đợi 2.5s rồi thử lại lần ${attempt + 1}...`);
-                await new Promise(r => setTimeout(r, 2500));
-                continue;
-              }
+          } catch (err) {
+            clearTimeout(timer);
+            lastError = err;
+            if (err.name === 'AbortError') {
+              lastError = new Error(`Quá thời gian chờ phản hồi từ Google Gemini (${model})`);
+            }
+            if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('API key not valid') || err.message.includes('PERMISSION_DENIED') || err.message.includes('Rate Limit 429'))) {
+              if (keys.length > 1 && err.message.includes('Rate Limit 429')) break;
               throw lastError;
             }
-
-            lastError = new Error(errMessage);
-            if (res.status === 404 || errJson.error?.status === 'NOT_FOUND') {
-              break; // Model not available, try next model
-            }
-            if (res.status === 400 || res.status === 403) {
-              throw lastError;
-            }
-          }
-        } catch (err) {
-          clearTimeout(timer);
-          lastError = err;
-          if (err.name === 'AbortError') {
-            lastError = new Error(`Quá thời gian chờ phản hồi từ Google Gemini (${model})`);
-          }
-          if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('API key not valid') || err.message.includes('PERMISSION_DENIED') || err.message.includes('Rate Limit 429'))) {
-            throw lastError;
           }
         }
       }
@@ -587,14 +616,14 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
     if (/(?:whisper|guard|safeguard|orpheus|audio|tts|embed)/i.test(n)) return -99999;
     if (n === 'groq/compound') return -99999; // known request_too_large error
 
-    // Top tier: GPT-OSS 120B (120B params - strongest open model)
-    if (n.includes('gpt-oss-120b')) return 10000;
-    // High tier: Qwen 3.8 27B (ultra fast + vision capable)
-    if (n.includes('qwen3.8-27b') || n.includes('qwen/qwen3.8-27b')) return 9500;
-    // Mid-high tier: GPT-OSS 20B
-    if (n.includes('gpt-oss-20b')) return 9000;
+    // Top tier for Vietnamese: Qwen 3.8 27B (fluent Vietnamese + vision capable + ultra fast 300ms)
+    if (n.includes('qwen3.8-27b') || n.includes('qwen/qwen3.8-27b')) return 10000;
     // Qwen 3.6 27B
-    if (n.includes('qwen3.6-27b') || n.includes('qwen/qwen3.6-27b')) return 8500;
+    if (n.includes('qwen3.6-27b') || n.includes('qwen/qwen3.6-27b')) return 9500;
+    // GPT-OSS 120B (120B params - strong open model)
+    if (n.includes('gpt-oss-120b')) return 9000;
+    // GPT-OSS 20B
+    if (n.includes('gpt-oss-20b')) return 8500;
     // Compound Mini
     if (n.includes('compound-mini')) return 8000;
     // Llama 3.3 / 3.1

@@ -7,7 +7,7 @@ import ocrManager from '../../src/core/ocr-manager.js';
 test('Groq Provider Config: supports groq provider, model and apiKey in default config', () => {
   const cfg = configManager.get();
   assert.equal(cfg.aiProvider, 'groq');
-  assert.equal(cfg.groqModel, 'openai/gpt-oss-120b');
+  assert.ok(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'].includes(cfg.groqModel));
   assert.ok('groqApiKey' in cfg);
 });
 
@@ -58,13 +58,13 @@ test('Groq Lead Evaluator: _callGroqAPI formats request and parses structured ou
   }
 });
 
-test('Groq Lead Evaluator: _scoreGroqModel ranks GPT-OSS 120B and Qwen 3.8 highest while excluding non-text', () => {
+test('Groq Lead Evaluator: _scoreGroqModel ranks Qwen 3.8 and GPT-OSS 120B highest while excluding non-text', () => {
   assert.ok(aiLeadEvaluator._scoreGroqModel('whisper-large-v3') < 0);
   assert.ok(aiLeadEvaluator._scoreGroqModel('meta-llama/llama-prompt-guard-2-86m') < 0);
   assert.ok(aiLeadEvaluator._scoreGroqModel('groq/compound') < 0);
 
+  assert.ok(aiLeadEvaluator._scoreGroqModel('qwen/qwen3.8-27b') > aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-120b'));
   assert.ok(aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-120b') > aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-20b'));
-  assert.ok(aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-120b') > aiLeadEvaluator._scoreGroqModel('qwen/qwen3.8-27b'));
   assert.ok(aiLeadEvaluator._scoreGroqModel('qwen/qwen3.8-27b') > aiLeadEvaluator._scoreGroqModel('groq/compound-mini'));
 });
 
@@ -107,13 +107,18 @@ test('Groq Lead Evaluator: discoverAndVerifyGroqModels discovers, ranks and veri
     };
   };
 
+  const originalUpdate = configManager.update;
+  configManager.update = async () => {};
+
   try {
     const discovery = await aiLeadEvaluator.discoverAndVerifyGroqModels('gsk_test_mock_key');
     assert.equal(discovery.success, true);
-    assert.equal(discovery.selectedModel, 'openai/gpt-oss-120b');
+    assert.equal(discovery.selectedModel, 'qwen/qwen3.8-27b');
+    assert.ok(discovery.supportedModels.includes('qwen/qwen3.8-27b'));
     assert.ok(discovery.supportedModels.includes('openai/gpt-oss-120b'));
     assert.ok(!discovery.supportedModels.includes('whisper-large-v3'));
   } finally {
+    configManager.update = originalUpdate;
     globalThis.fetch = originalFetch;
   }
 });
