@@ -6,7 +6,7 @@
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.8.0">
+    <link rel="stylesheet" href="css/style.css?v=2.9.0">
 </head>
 <body>
     <div class="app-container">
@@ -94,10 +94,10 @@
                             </div>
 
                             <!-- Cookie Login Card -->
-                            <div class="mt-4 p-4" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;">
+                            <div class="mt-4 p-4 cookie-login-card" style="border-radius: 12px;">
                                 <div class="headless-title d-flex align-center gap-2 mb-2">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="color: #6366f1;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
-                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: #fff;">Đăng nhập nhanh bằng Cookie Facebook (Không cần gõ tài khoản/mật khẩu)</h3>
+                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Đăng nhập nhanh bằng Cookie Facebook (Không cần gõ tài khoản/mật khẩu)</h3>
                                 </div>
                                 <p class="text-muted text-sm mb-3">Dán chuỗi Cookie Facebook (dạng <code>c_user=...; xs=...;</code> hoặc mảng/object JSON) để kích hoạt phiên làm việc tức thì:</p>
                                 
@@ -157,7 +157,7 @@
                                 
                                 <div class="filter-row mb-4">
                                     <div class="filter-col">
-                                        <span class="filter-label-inline font-semibold" style="color: #38bdf8;">Bài viết gần đây</span>
+                                        <span class="filter-label-inline font-semibold">Bài viết gần đây</span>
                                         <label class="toggle-container" title="Bài viết gần đây (Mặc định: tự động lọc bài viết trong vòng 24 giờ qua)">
                                             <input type="checkbox" id="filterRecentPosts" class="toggle-switch" checked>
                                             <span class="toggle-slider"></span>
@@ -165,7 +165,7 @@
                                     </div>
 
                                     <div class="filter-col">
-                                        <span class="filter-label-inline font-medium" style="color: #60a5fa;">📞 Chỉ lấy bài có SĐT</span>
+                                        <span class="filter-label-inline font-semibold">📞 Chỉ lấy bài có SĐT</span>
                                         <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
                                             <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
                                             <span class="toggle-slider"></span>
@@ -349,7 +349,7 @@
 
                                 <!-- AI Lead Qualification Card -->
                                 <div class="config-subcard-ai mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #c4b5fd;">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-ai">
                                         <span>✨</span> Cấu Hình Trí Tuệ Nhân Tạo AI (Groq Cloud / Google Gemini / OpenAI)
                                     </h3>
                                     <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Sử dụng AI siêu tốc (Khuyên dùng <strong>Groq Cloud 14.400 req/ngày</strong>) đọc hiểu bài viết, xác định quán mở mới, sinh câu mở lời tiếp cận (Sales Pitch) và tự động lọc dữ liệu.</p>
@@ -358,7 +358,7 @@
                                         <label class="rule-item-label" for="cfgAiEnabled">
                                             <input type="checkbox" id="cfgAiEnabled" class="custom-checkbox" style="margin-top: 3px;" checked>
                                             <div>
-                                                <div class="rule-item-title" style="color: #c4b5fd;">Kích hoạt AI Đánh giá & Chấm điểm Khách hàng Tiềm năng</div>
+                                                <div class="rule-item-title">Kích hoạt AI Đánh giá & Chấm điểm Khách hàng Tiềm năng</div>
                                                 <div class="rule-item-desc" style="margin-left: 0;">Tự động phân tích nội dung, chấm điểm độ tiềm năng (0 - 100) và viết câu mở lời riêng cho từng khách hàng.</div>
                                             </div>
                                         </label>
@@ -368,8 +368,8 @@
                                         <label class="field-label" id="cfgApiKeyLabel" for="cfgGeminiApiKey" style="font-weight: 600;">Groq API Key (Miễn phí 100%, 14.400 req/ngày - Khuyên dùng)</label>
                                         <input type="password" id="cfgGeminiApiKey" class="input input-styled" style="padding: 12px 16px; height: 46px; font-size: 0.95rem;" placeholder="Dán Groq API Key của bạn (gsk_...)">
                                         <div class="d-flex justify-between align-center mt-2 wrap-gap">
-                                            <span class="text-muted text-xs"><span id="cfgApiKeyHelpText">Chưa có API Key?</span> <a id="cfgApiKeyHelpLink" href="https://console.groq.com/keys" target="_blank" class="link text-xs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)</a></span>
-                                            <span id="cfgGeminiModelBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" title="Mô hình AI được hệ thống tự động kiểm tra và lựa chọn">⚡ Model: qwen/qwen3.8-27b</span>
+                                            <span class="text-muted text-xs"><span id="cfgApiKeyHelpText">Chưa có API Key?</span> <a id="cfgApiKeyHelpLink" href="https://console.groq.com/keys" target="_blank" class="link text-xs" style="text-decoration: underline; font-weight: 600;">👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)</a></span>
+                                            <span id="cfgGeminiModelBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; font-weight: 600;" title="Mô hình AI được hệ thống tự động kiểm tra và lựa chọn">⚡ Model: qwen/qwen3.8-27b</span>
                                         </div>
                                     </div>
 
@@ -414,7 +414,7 @@
 
                                 <!-- Lead Rule Filter Card -->
                                 <div class="config-subcard-rules mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #93c5fd;">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-rules">
                                         <span>🎯</span> Quy Tắc Loại Trừ Bắt Buộc (Lead Rule Filter)
                                     </h3>
                                     <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Các quy tắc loại trừ tự động trên Bảng tin để tiết kiệm thời gian quét.</p>
@@ -477,7 +477,7 @@
 
                                 <!-- Export Lead Template Config Card -->
                                 <div class="config-subcard-rules mb-4">
-                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #34d399;">
+                                    <h3 class="text-base font-bold mb-2 d-flex align-center gap-2 section-title-export">
                                         <span>📊</span> Cấu Hình Xuất File Excel (Mẫu Template Import Lead)
                                     </h3>
                                     <p class="text-sm text-muted mb-3" style="line-height: 1.6;">
@@ -485,15 +485,15 @@
                                     </p>
                                     <div class="grid grid-3 gap-3">
                                         <div class="form-group mb-0">
-                                            <label class="field-label text-xs" for="cfgExportProvinceCode" style="font-weight: 600; color: #f87171;">Mã Tỉnh/Thành phố (Bắt buộc)</label>
+                                            <label class="field-label text-xs" for="cfgExportProvinceCode" style="font-weight: 700; color: #dc2626;">Mã Tỉnh/Thành phố (Bắt buộc)</label>
                                             <input type="text" id="cfgExportProvinceCode" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="__export__.res_province_121_cf34d119">
                                         </div>
                                         <div class="form-group mb-0">
-                                            <label class="field-label text-xs" for="cfgExportProductGroup" style="font-weight: 600; color: #f87171;">Nhóm gói sản phẩm (Bắt buộc)</label>
+                                            <label class="field-label text-xs" for="cfgExportProductGroup" style="font-weight: 700; color: #dc2626;">Nhóm gói sản phẩm (Bắt buộc)</label>
                                             <input type="text" id="cfgExportProductGroup" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="RETAIL_PRO">
                                         </div>
                                         <div class="form-group mb-0">
-                                            <label class="field-label text-xs" for="cfgExportSalesRep" style="font-weight: 600; color: #f87171;">Nhân viên kinh doanh (Email)</label>
+                                            <label class="field-label text-xs" for="cfgExportSalesRep" style="font-weight: 700; color: #dc2626;">Nhân viên kinh doanh (Email)</label>
                                             <input type="text" id="cfgExportSalesRep" class="input input-styled" style="height: 38px; font-size: 0.85rem;" value="trucnt@sapo.vn">
                                         </div>
                                     </div>
@@ -518,6 +518,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.8.0"></script>
+    <script src="js/app.js?v=2.9.0"></script>
 </body>
 </html>
