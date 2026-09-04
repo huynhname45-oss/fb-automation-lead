@@ -6,7 +6,7 @@
     <title>FB Automation — Quản lý & Tìm kiếm Facebook</title>
     <meta name="description" content="Công cụ tự động hóa quản lý phiên và tìm kiếm bài viết công khai trên Facebook">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=2.9.2">
+    <link rel="stylesheet" href="css/style.css?v=2.9.3">
 </head>
 <body>
     <div class="app-container">
@@ -217,15 +217,18 @@
                     <div class="results-section" id="resultsSection">
                         <div class="card glass-card">
                             <div class="card-header">
-                                <!-- Dòng 1: Tiêu đề & Huy hiệu thống kê -->
+                                <!-- Dòng 1: Tiêu đề & Huy hiệu thống kê Realtime -->
                                 <div class="d-flex align-center gap-3 wrap-gap">
-                                    <h2>Kết quả Dữ liệu Bóc tách</h2>
+                                    <div class="d-flex align-center gap-2">
+                                        <h2>Kết quả Dữ liệu Bóc tách</h2>
+                                        <span class="badge-live-sync" title="Dữ liệu thống kê & bài viết tự động đồng bộ thời gian thực"><span class="live-dot"></span> Realtime</span>
+                                    </div>
                                     <div class="stat-badge-group d-flex align-center gap-2 wrap-gap">
-                                        <span class="stat-pill stat-pill-total" id="statPillTotal" title="Tổng số bài viết đã bóc tách và lưu">📊 Tổng: <strong>0</strong> bài</span>
-                                        <span class="stat-pill stat-pill-new" id="statPillNew" title="Số bài có trạng thái Mới tạo">🆕 <strong>0</strong> Mới</span>
-                                        <span class="stat-pill stat-pill-lead" id="statPillLead" title="Số bài có trạng thái Đã nhập lead">📥 <strong>0</strong> Lead</span>
-                                        <span class="stat-pill stat-pill-duplicate" id="statPillDuplicate" title="Số bài có trạng thái Trùng lead">⚠️ <strong>0</strong> Trùng</span>
-                                        <span class="stat-pill stat-pill-none" id="statPillNone" title="Số bài có trạng thái Không có nhu cầu">❌ <strong>0</strong> Bỏ</span>
+                                        <span class="stat-pill stat-pill-total" id="statPillTotal" role="button" tabindex="0" title="Bấm để xem toàn bộ danh sách bài viết">📊 Tổng: <strong>0</strong> bài</span>
+                                        <span class="stat-pill stat-pill-new" id="statPillNew" role="button" tabindex="0" title="Bấm để lọc nhanh bài Mới tạo">🆕 <strong>0</strong> Mới</span>
+                                        <span class="stat-pill stat-pill-lead" id="statPillLead" role="button" tabindex="0" title="Bấm để lọc nhanh bài Đã nhập lead">📥 <strong>0</strong> Lead</span>
+                                        <span class="stat-pill stat-pill-duplicate" id="statPillDuplicate" role="button" tabindex="0" title="Bấm để lọc nhanh bài Trùng lead">⚠️ <strong>0</strong> Trùng</span>
+                                        <span class="stat-pill stat-pill-none" id="statPillNone" role="button" tabindex="0" title="Bấm để lọc nhanh bài Không có nhu cầu">❌ <strong>0</strong> Bỏ</span>
                                     </div>
                                 </div>
 
@@ -533,6 +536,6 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.9.2"></script>
+    <script src="js/app.js?v=2.9.3"></script>
 </body>
 </html>

@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkSessionStatus();
     fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
+    startIdleSync();
 });
 
 /**
@@ -238,6 +239,50 @@ function initEventListeners() {
             renderTable();
         });
     }
+
+    // Gắn sự kiện Click-to-Filter cho 5 huy hiệu thống kê Realtime
+    function setupStatPillFilter(pillId, targetStatus) {
+        const pill = document.getElementById(pillId);
+        if (!pill) return;
+
+        const triggerFilter = () => {
+            const currentStatus = state.dateFilter.status || 'all';
+            let nextStatus = targetStatus;
+
+            // Bấm lại đúng pill đang active thì hủy lọc quay về 'all'
+            if (targetStatus !== 'all' && currentStatus === targetStatus) {
+                nextStatus = 'all';
+            }
+
+            state.dateFilter.status = nextStatus;
+            state.pagination.currentPage = 1;
+
+            if (filterStatusSelect) {
+                filterStatusSelect.value = nextStatus;
+            }
+
+            const btnReset = document.getElementById('btnResetDateFilter');
+            if (btnReset) {
+                btnReset.style.display = (nextStatus !== 'all' || (state.aiScoreFilter && state.aiScoreFilter !== 'all') || state.dateFilter.query || state.dateFilter.fromDate || state.dateFilter.toDate) ? 'inline-flex' : 'none';
+            }
+
+            renderTable();
+        };
+
+        pill.addEventListener('click', triggerFilter);
+        pill.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                triggerFilter();
+            }
+        });
+    }
+
+    setupStatPillFilter('statPillTotal', 'all');
+    setupStatPillFilter('statPillNew', 'Mới tạo');
+    setupStatPillFilter('statPillLead', 'Đã nhập lead');
+    setupStatPillFilter('statPillDuplicate', 'Trùng lead');
+    setupStatPillFilter('statPillNone', 'Không có nhu cầu');
 
     const filterAiScoreSelect = document.getElementById('filterAiScoreSelect');
     if (filterAiScoreSelect) {
@@ -872,7 +917,7 @@ async function handleStopSearch() {
 
 function startPollingSearch() {
     stopPollingSearch();
-    state.pollingInterval = setInterval(pollSearchProgress, 1500);
+    state.pollingInterval = setInterval(pollSearchProgress, 1000);
 }
 
 function stopPollingSearch() {
@@ -881,6 +926,53 @@ function stopPollingSearch() {
         state.pollingInterval = null;
     }
 }
+
+let _idleSyncInterval = null;
+
+/**
+ * Đồng bộ dữ liệu ngầm Realtime định kỳ khi hệ thống đang ở trạng thái nhàn rỗi (idle)
+ */
+function startIdleSync() {
+    if (_idleSyncInterval) clearInterval(_idleSyncInterval);
+    _idleSyncInterval = setInterval(async () => {
+        // Chỉ chạy khi không đang trong tiến trình tìm kiếm và tab trình duyệt đang mở
+        if (state.search.status === 'searching' || document.hidden) return;
+        try {
+            const res = await api('GET', '/api/search/results');
+            if (res && Array.isArray(res.results)) {
+                const newLength = res.results.length;
+                const oldLength = (state.search.results || []).length;
+
+                let hasDiff = newLength !== oldLength;
+                if (!hasDiff) {
+                    for (let i = 0; i < Math.min(newLength, 25); i++) {
+                        if (res.results[i]?.status !== state.search.results[i]?.status ||
+                            getItemKey(res.results[i]) !== getItemKey(state.search.results[i])) {
+                            hasDiff = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hasDiff) {
+                    state.search.results = res.results;
+                    updateStatPills();
+                    const kwInput = document.getElementById('filterKeywordInput');
+                    if (!kwInput || document.activeElement !== kwInput) {
+                        renderTable();
+                    }
+                }
+            }
+        } catch (e) {}
+    }, 4000);
+}
+
+// Khi người dùng quay lại tab trình duyệt, tự động nạp lại lịch sử dữ liệu mới nhất
+window.addEventListener('focus', () => {
+    if (state.search.status !== 'searching') {
+        fetchResultsHistory();
+    }
+});
 
 async function pollSearchProgress() {
     try {
@@ -1032,6 +1124,67 @@ function fetchResultsHistory() {
         .catch(() => {});
 }
 
+let _prevStatCounts = { total: -1, new: -1, lead: -1, duplicate: -1, none: -1 };
+
+/**
+ * Cập nhật số liệu thống kê Realtime & Trạng thái Active trên các huy hiệu (Stat Pills)
+ */
+function updateStatPills() {
+    const allStoredResults = state.search.results || [];
+    const statTotalCount = allStoredResults.length;
+    let statNewCount = 0;
+    let statLeadCount = 0;
+    let statDuplicateCount = 0;
+    let statNoneCount = 0;
+
+    allStoredResults.forEach(item => {
+        const s = item.status || 'Mới tạo';
+        if (s === 'Mới tạo') statNewCount++;
+        else if (s === 'Đã nhập lead') statLeadCount++;
+        else if (s === 'Trùng lead') statDuplicateCount++;
+        else if (s === 'Không có nhu cầu') statNoneCount++;
+        else statNewCount++;
+    });
+
+    const currentCounts = {
+        total: statTotalCount,
+        new: statNewCount,
+        lead: statLeadCount,
+        duplicate: statDuplicateCount,
+        none: statNoneCount
+    };
+
+    const currentFilterStatus = state.dateFilter.status || 'all';
+
+    function setPillUI(elId, count, labelHtml, countKey, isActive) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+
+        el.innerHTML = labelHtml;
+
+        if (isActive) {
+            el.classList.add('active');
+        } else {
+            el.classList.remove('active');
+        }
+
+        // Hiệu ứng nhịp đập (pulse) thời gian thực khi số liệu thay đổi
+        if (_prevStatCounts[countKey] !== -1 && _prevStatCounts[countKey] !== count) {
+            el.classList.remove('pill-pulse');
+            void el.offsetWidth; // Trigger reflow for animation restart
+            el.classList.add('pill-pulse');
+        }
+    }
+
+    setPillUI('statPillTotal', statTotalCount, `📊 Tổng: <strong>${statTotalCount}</strong> bài`, 'total', currentFilterStatus === 'all');
+    setPillUI('statPillNew', statNewCount, `🆕 <strong>${statNewCount}</strong> Mới`, 'new', currentFilterStatus === 'Mới tạo');
+    setPillUI('statPillLead', statLeadCount, `📥 <strong>${statLeadCount}</strong> Lead`, 'lead', currentFilterStatus === 'Đã nhập lead');
+    setPillUI('statPillDuplicate', statDuplicateCount, `⚠️ <strong>${statDuplicateCount}</strong> Trùng`, 'duplicate', currentFilterStatus === 'Trùng lead');
+    setPillUI('statPillNone', statNoneCount, `❌ <strong>${statNoneCount}</strong> Bỏ`, 'none', currentFilterStatus === 'Không có nhu cầu');
+
+    _prevStatCounts = currentCounts;
+}
+
 /**
  * Render Table with Pagination (10 Rows per Page) & Checkboxes & Date Filter
  */
@@ -1052,34 +1205,8 @@ function renderTable() {
     resultsSection.style.display = 'block';
     tbody.innerHTML = '';
 
-    // Update Stat Pills (Tổng số lượng data & Số lượng theo từng trạng thái)
-    const allStoredResults = state.search.results || [];
-    const statTotalCount = allStoredResults.length;
-    let statNewCount = 0;
-    let statLeadCount = 0;
-    let statDuplicateCount = 0;
-    let statNoneCount = 0;
-
-    allStoredResults.forEach(item => {
-        const s = item.status || 'Mới tạo';
-        if (s === 'Mới tạo') statNewCount++;
-        else if (s === 'Đã nhập lead') statLeadCount++;
-        else if (s === 'Trùng lead') statDuplicateCount++;
-        else if (s === 'Không có nhu cầu') statNoneCount++;
-        else statNewCount++;
-    });
-
-    const elPillTotal = document.getElementById('statPillTotal');
-    const elPillNew = document.getElementById('statPillNew');
-    const elPillLead = document.getElementById('statPillLead');
-    const elPillDuplicate = document.getElementById('statPillDuplicate');
-    const elPillNone = document.getElementById('statPillNone');
-
-    if (elPillTotal) elPillTotal.innerHTML = `📊 Tổng: <strong>${statTotalCount}</strong> bài`;
-    if (elPillNew) elPillNew.innerHTML = `🆕 <strong>${statNewCount}</strong> Mới`;
-    if (elPillLead) elPillLead.innerHTML = `📥 <strong>${statLeadCount}</strong> Lead`;
-    if (elPillDuplicate) elPillDuplicate.innerHTML = `⚠️ <strong>${statDuplicateCount}</strong> Trùng`;
-    if (elPillNone) elPillNone.innerHTML = `❌ <strong>${statNoneCount}</strong> Bỏ`;
+    // Cập nhật huy hiệu thống kê Realtime
+    updateStatPills();
 
     const data = getFilteredAndSortedResults();
     const totalItems = data.length;
@@ -1193,13 +1320,44 @@ function renderTable() {
         if (statusSelect) {
             statusSelect.addEventListener('change', async (e) => {
                 const newStatus = e.target.value;
+                const prevStatus = item.status || 'Mới tạo';
                 e.target.setAttribute('data-status', newStatus);
                 item.status = newStatus;
-                
+
+                // 1. Đồng bộ ngay lập tức vào mảng dữ liệu đang lưu trong bộ nhớ (state.search.results)
+                if (Array.isArray(state.search.results)) {
+                    const found = state.search.results.find(r => getItemKey(r) === key);
+                    if (found) found.status = newStatus;
+                }
+
+                // 2. Cập nhật số liệu thống kê realtime ngay lập tức trên các huy hiệu (pills)
+                updateStatPills();
+
+                // 3. Nếu đang áp dụng lọc theo trạng thái, lọc lại bảng ngay lập tức để danh sách hiển thị khớp thời gian thực
+                if (state.dateFilter.status && state.dateFilter.status !== 'all') {
+                    renderTable();
+                }
+
                 try {
-                    await api('POST', '/api/search/update-status', { key: key, status: newStatus });
+                    const res = await api('POST', '/api/search/update-status', { key: key, status: newStatus });
+                    if (res && Array.isArray(res.results)) {
+                        state.search.results = res.results;
+                        updateStatPills();
+                    }
                     showToast(`Đã cập nhật trạng thái: "${newStatus}"`, 'success');
                 } catch (err) {
+                    // Phục hồi lại trạng thái cũ nếu server báo lỗi
+                    item.status = prevStatus;
+                    if (Array.isArray(state.search.results)) {
+                        const found = state.search.results.find(r => getItemKey(r) === key);
+                        if (found) found.status = prevStatus;
+                    }
+                    e.target.value = prevStatus;
+                    e.target.setAttribute('data-status', prevStatus);
+                    updateStatPills();
+                    if (state.dateFilter.status && state.dateFilter.status !== 'all') {
+                        renderTable();
+                    }
                     showToast('Lỗi cập nhật trạng thái', 'error');
                 }
             });
