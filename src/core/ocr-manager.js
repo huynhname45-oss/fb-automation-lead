@@ -68,7 +68,7 @@ class OCRManager {
       contents: [{
         parts: [
           {
-            text: "Hãy đọc ảnh này và tìm tất cả số điện thoại (SĐT di động, hotline, đặt hàng, liên hệ) xuất hiện trên ảnh (biển hiệu, xe đẩy, bảng giá, menu, card visit, xe bán hàng). Chỉ trả về các số điện thoại tìm thấy (10 chữ số bắt đầu bằng 03, 05, 07, 08, 09 hoặc hotline), mỗi số trên 1 dòng. Nếu không có số điện thoại nào thì trả về 'KHONG_CO'."
+            text: "Hãy đọc ảnh này và tìm tất cả số điện thoại (SĐT di động, hotline, đặt hàng, liên hệ) xuất hiện trên ảnh (ảnh bìa, banner, biển hiệu, biển quảng cáo, xe đẩy, bảng giá, menu, card visit, xe bán hàng). Chỉ trả về các số điện thoại tìm thấy (10 chữ số bắt đầu bằng 03, 05, 07, 08, 09 hoặc hotline), mỗi số trên 1 dòng. Nếu không có số điện thoại nào thì trả về 'KHONG_CO'."
           },
           {
             inline_data: {
@@ -138,7 +138,7 @@ class OCRManager {
           messages: [{
             role: 'user',
             content: [
-              { type: 'text', text: "Trích xuất tất cả số điện thoại trên ảnh biển hiệu, xe bán hàng, menu này. Chỉ in danh sách các số điện thoại, mỗi số 1 dòng. Nếu không có in KHONG_CO." },
+              { type: 'text', text: "Trích xuất tất cả số điện thoại trên ảnh bìa, banner, biển hiệu, bảng quảng cáo, xe bán hàng, menu này. Chỉ in danh sách các số điện thoại, mỗi số 1 dòng. Nếu không có in KHONG_CO." },
               { type: 'image_url', image_url: { url: dataUrl } }
             ]
           }],

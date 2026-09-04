@@ -1704,7 +1704,70 @@ class SearchEngine extends EventEmitter {
             if (t.length > 5 && t.length < 500) bioText += '\n' + t;
           }
 
-          return { uid, bioText, contactLinks };
+          // F) Trích xuất Ảnh bìa (Cover Photo) và Ảnh đại diện (Avatar) của trang
+          let coverPhotoUrl = '';
+          const coverSelectors = [
+            'div[data-pagelet="ProfileCover"] img[src]',
+            'div[data-pagelet*="Cover"] img[src]',
+            'div[aria-label*="Ảnh bìa"] img[src]',
+            'div[aria-label*="Cover photo"] img[src]',
+            'div[aria-label*="Cover Photo"] img[src]',
+            'a[href*="/photo"][aria-label*="bìa"] img[src]',
+            'a[href*="/photo"][aria-label*="Cover"] img[src]',
+            'img[data-imgperflogname="profileCoverPhoto"]',
+            'div[role="banner"] img[src*="scontent"]',
+            'div[role="banner"] img[src*="fbcdn"]'
+          ];
+
+          for (const sel of coverSelectors) {
+            const el = document.querySelector(sel);
+            if (el) {
+              const s = el.src || el.getAttribute('src') || '';
+              if (s && (s.includes('scontent') || s.includes('fbcdn')) && !s.includes('emoji') && !s.includes('rsrc.php')) {
+                coverPhotoUrl = s;
+                break;
+              }
+            }
+          }
+
+          if (!coverPhotoUrl) {
+            const candidateImgs = Array.from(document.querySelectorAll('img[src*="scontent"], img[src*="fbcdn"]'));
+            for (const img of candidateImgs) {
+              const rect = img.getBoundingClientRect();
+              if (rect.top < 450 && rect.width >= 300 && rect.height >= 80 && (rect.width / rect.height) >= 1.3) {
+                const s = img.src || '';
+                if (s && !s.includes('emoji') && !s.includes('rsrc.php') && !s.includes('/static.xx/')) {
+                  coverPhotoUrl = s;
+                  break;
+                }
+              }
+            }
+          }
+
+          let avatarUrl = '';
+          const avatarSelectors = [
+            'div[data-pagelet="ProfileAvatar"] img[src]',
+            'div[data-pagelet*="Avatar"] img[src]',
+            'div[aria-label*="Ảnh đại diện"] img[src]',
+            'div[aria-label*="Profile picture"] img[src]',
+            'svg[aria-label*="Ảnh đại diện"] image',
+            'svg[aria-label*="Profile picture"] image',
+            'a[href*="/photo"][aria-label*="đại diện"] img[src]',
+            'a[href*="/photo"][aria-label*="Profile picture"] img[src]'
+          ];
+
+          for (const sel of avatarSelectors) {
+            const el = document.querySelector(sel);
+            if (el) {
+              const s = el.src || el.getAttribute('src') || el.getAttribute('xlink:href') || el.getAttribute('href') || '';
+              if (s && (s.includes('scontent') || s.includes('fbcdn')) && !s.includes('emoji') && !s.includes('rsrc.php')) {
+                avatarUrl = s;
+                break;
+              }
+            }
+          }
+
+          return { uid, bioText, contactLinks, coverPhotoUrl, avatarUrl };
         }, loggedInUid);
 
         if (profileData) {
@@ -1738,6 +1801,30 @@ class SearchEngine extends EventEmitter {
               confidence: 0.95,
               verified: true
             };
+          }
+
+          // G) Quét OCR trên Ảnh Bìa (Cover Photo) và Avatar của trang (Nơi hầu hết các quán/shop đặt SĐT hotline và địa chỉ)
+          const profileImages = [];
+          if (profileData.coverPhotoUrl) profileImages.push(profileData.coverPhotoUrl);
+          if (profileData.avatarUrl) profileImages.push(profileData.avatarUrl);
+
+          if (profileImages.length > 0) {
+            logger.info(`📸 [QUÉT ẢNH BÌA & AVATAR] Đang quét AI Vision / OCR trên Ảnh Bìa của [${targetAuthorName || 'Trang cá nhân'}]...`);
+            const coverPhones = await ocrManager.extractPhonesFromImageUrls(profileImages);
+            coverPhones.forEach(p => foundPhones.add(p));
+
+            if (foundPhones.size > 0) {
+              const phones = Array.from(foundPhones);
+              logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ Ảnh Bìa / Avatar của trang [${targetAuthorName || 'Tác giả'}]: [${phones.join(', ')}]`);
+              return {
+                phones,
+                location: detectedLoc,
+                locationResult,
+                source: 'profile_cover_ocr',
+                confidence: 0.95,
+                verified: true
+              };
+            }
           }
 
           // F) Nếu Bio chưa có SĐT: Cuộn nhẹ xuống xem 1-2 bài viết mới nhất trên tường chính chủ

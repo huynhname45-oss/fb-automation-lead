@@ -114,3 +114,9 @@ test('SEARCH-GROUP-004: Standard personal/page post without group works seamless
   assert.equal(meta.profileLink, 'https://www.facebook.com/trantam.kebab');
   assert.equal(meta.postLink, 'https://www.facebook.com/trantam.kebab/posts/pfbid02XYZ');
 });
+
+test('SEARCH-GROUP-005: Extract phone from shop cover photo on profile/page (e.g. Shi Tea 079.6666.428)', () => {
+  const recognizedCoverText = 'Shi Tea Trà sữa - Trà Trái Cây - Cà Phê 079.6666.428';
+  const phones = extractPhonesFromText(recognizedCoverText, { isOCR: true });
+  assert.ok(phones.includes('0796666428'), 'Phone 0796666428 must be extracted from cover photo OCR text');
+});
