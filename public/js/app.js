@@ -860,6 +860,7 @@ async function pollSearchProgress() {
 
         updateProgressUI(progress);
 
+        if (progress.status === 'idle' || progress.status === 'stopped') {
             const wasSearching = state.search.status === 'searching';
             stopPollingSearch();
             setSearchState('idle');
