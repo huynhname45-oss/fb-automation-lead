@@ -652,15 +652,26 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
     // 2. Sắp xếp thứ tự ưu tiên các model
     const rankedModels = [...contentModels].sort((a, b) => this._scoreGroqModel(b) - this._scoreGroqModel(a));
 
-    const testPrompt = customPrompt || `Bạn là chuyên gia thẩm định khách hàng tiềm năng cho phần mềm POS Sapo/KiotViet.
-Phân tích bài viết sau: "TƯNG BỪNG KHAI TRƯƠNG Quán Trà Sữa & Cà Phê Chi Nhánh 2 tại 45 Nguyễn Huệ! Giảm 50% menu. Hotline: 0912345678"
-Trả về định dạng JSON duy nhất:
+    const baseContext = (customPrompt && customPrompt.trim())
+      ? customPrompt.trim()
+      : (configManager.get().aiPromptContext || DEFAULT_AI_PROMPT_CONTEXT);
+
+    const testPrompt = `${baseContext}
+
+Dữ liệu kiểm tra:
+- Tác giả: "Trà Sữa Cây Si - Chi Nhánh 2"
+- Nội dung: "TƯNG BỪNG KHAI TRƯƠNG chi nhánh 2 tại 45 Nguyễn Huệ vào ngày mai! Giảm 50% toàn bộ menu trà sữa và trà trái cây. Kính mời quý khách ghé trải nghiệm! Hotline: 0912345678"
+
+Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 chuỗi JSON hợp lệ (JSON format object) theo cấu trúc sau (không thêm bất kỳ chữ nào ngoài JSON):
 {
   "score": 95,
+  "summary": "Khai trương quán trà sữa & cà phê chi nhánh 2",
+  "location": "TP. Hồ Chí Minh",
   "businessType": "F&B - Trà Sữa & Cà Phê",
-  "reason": "Quán mở chi nhánh mới cần máy in hóa đơn và phần mềm POS quản lý bàn",
-  "summary": "Khai trương chi nhánh 2",
-  "salesPitch": "Chúc mừng quán khai trương hồng phát! Bên em hỗ trợ giải pháp bán hàng Sapo in bill nhanh chóng."
+  "intent": "Khai trương",
+  "salesPitch": "Chúc mừng quán khai trương hồng phát! Bên em hỗ trợ giải pháp bán hàng Sapo in bill nhanh chóng.",
+  "recommendedFeatures": "Quản lý bàn, In bill",
+  "reason": "Quán mở chi nhánh mới cần máy in hóa đơn và phần mềm POS quản lý bàn"
 }`;
 
     let lastError = null;
@@ -728,6 +739,12 @@ Trả về định dạng JSON duy nhất:
 
     const modelsToTry = [...new Set(candidateModels)];
 
+    // Ensure prompt explicitly contains the word 'json' as required by Groq API
+    let promptContent = prompt;
+    if (!promptContent.toLowerCase().includes('json')) {
+      promptContent = `${promptContent}\n\nBẮT BUỘC: Hãy trả về kết quả dưới định dạng JSON object duy nhất (JSON format).`;
+    }
+
     let lastErr = null;
     for (const model of modelsToTry) {
       const controller = new AbortController();
@@ -742,7 +759,7 @@ Trả về định dạng JSON duy nhất:
           },
           body: JSON.stringify({
             model: model,
-            messages: [{ role: 'user', content: prompt }],
+            messages: [{ role: 'user', content: promptContent }],
             response_format: { type: 'json_object' },
             temperature: 0.1
           })
