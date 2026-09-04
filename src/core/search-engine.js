@@ -988,21 +988,21 @@ class SearchEngine extends EventEmitter {
             if (targetsToSearch.length > 0) {
               for (const targetUrl of targetsToSearch) {
                 const isTaggedPlace = targetUrl === post.taggedPlaceUrl;
-                const profileRes = await this._extractPhonesFromProfile(context, targetUrl, crawlDelay);
+                const profileRes = await this._extractPhonesFromProfile(context, targetUrl, crawlDelay, post.authorName);
                 if (profileRes && profileRes.phones && profileRes.phones.length > 0) {
                   phoneEvidence = mergePhoneEvidence(
                     phoneEvidence,
                     profileRes.phones,
                     isTaggedPlace ? 'tagged_page_bio' : (profileRes.source || 'profile_bio'),
-                    profileRes.confidence || 0.85,
-                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : 'Thông tin liên hệ trên trang của tác giả',
+                    profileRes.confidence || 0.9,
+                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : (profileRes.source?.includes('timeline') ? `Bài viết mới nhất trên tường [${post.authorName}]` : 'Thông tin liên hệ trên trang của tác giả'),
                     {
                       ...evidenceMetadata,
                       sourceUrl: targetUrl,
                       verified: true
                     }
                   );
-                  if (profileRes.location && profileRes.location !== '—' && detectedLocation === '—') {
+                  if (profileRes.location && profileRes.location !== '—' && (detectedLocation === '—' || profileRes.source?.includes('timeline'))) {
                     detectedLocation = profileRes.location;
                     locationResult = profileRes.locationResult || {
                       province: profileRes.location,
@@ -1392,7 +1392,7 @@ class SearchEngine extends EventEmitter {
     } catch (e) {}
   }
 
-  async _extractPhonesFromProfile(context, profileUrl, crawlDelay = 2000) {
+  async _extractPhonesFromProfile(context, profileUrl, crawlDelay = 2000, targetAuthorName = '') {
     if (this.isStopped || !profileUrl || !profileUrl.startsWith('http')) return { phones: [], location: '—' };
 
     let profilePage;
@@ -1492,6 +1492,12 @@ class SearchEngine extends EventEmitter {
           if (profileData.bioText) {
             const bioPhones = extractPhonesFromText(profileData.bioText, { isOCR: false });
             bioPhones.forEach(p => foundPhones.add(p));
+
+            const bioLoc = extractLocationDetailed({ content: profileData.bioText, authorName: targetAuthorName });
+            if (bioLoc && bioLoc.confidence >= 0.75 && !bioLoc.conflict && bioLoc.province !== '—') {
+              detectedLoc = bioLoc.province;
+              locationResult = bioLoc;
+            }
           }
           if (Array.isArray(profileData.contactLinks)) {
             for (const l of profileData.contactLinks) {
@@ -1510,6 +1516,82 @@ class SearchEngine extends EventEmitter {
               confidence: 0.95,
               verified: true
             };
+          }
+
+          // F) Nếu Bio chưa có SĐT: Cuộn nhẹ xuống xem 1-2 bài viết mới nhất trên tường chính chủ
+          try {
+            await profilePage.mouse.wheel(0, 600);
+            await delay(1200);
+            await this._expandSeeMore(profilePage);
+
+            const timelineData = await profilePage.evaluate(() => {
+              const articles = Array.from(document.querySelectorAll('div[role="feed"] div[role="article"], div[data-pagelet*="ProfileTimeline"] div[role="article"], div[role="main"] div[role="article"]')).slice(0, 3);
+              const texts = [];
+              const imgs = [];
+
+              for (const art of articles) {
+                const txt = (art.innerText || '').trim();
+                if (txt.length > 20) {
+                  texts.push(txt);
+                }
+                const imgEls = Array.from(art.querySelectorAll('img[src]'));
+                for (const img of imgEls) {
+                  const s = img.src || '';
+                  if (s && (s.includes('scontent') || s.includes('fbcdn')) && !s.includes('emoji') && !s.includes('rsrc.php')) {
+                    if (!imgs.includes(s)) imgs.push(s);
+                  }
+                }
+              }
+              return { texts, imgs: imgs.slice(0, 2) };
+            });
+
+            if (timelineData && timelineData.texts.length > 0) {
+              for (const postText of timelineData.texts) {
+                const pList = extractPhonesFromText(postText, { isOCR: false });
+                pList.forEach(p => foundPhones.add(p));
+
+                if (detectedLoc === '—') {
+                  const tlLoc = extractLocationDetailed({ content: postText, authorName: targetAuthorName });
+                  if (tlLoc && tlLoc.confidence >= 0.75 && !tlLoc.conflict && tlLoc.province !== '—') {
+                    detectedLoc = tlLoc.province;
+                    locationResult = tlLoc;
+                  }
+                }
+              }
+
+              if (foundPhones.size > 0) {
+                const phones = Array.from(foundPhones);
+                logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ bài viết mới nhất trên tường [${targetAuthorName || 'Tác giả'}]: [${phones.join(', ')}]`);
+                return {
+                  phones,
+                  location: detectedLoc,
+                  locationResult,
+                  source: 'profile_timeline',
+                  confidence: 0.95,
+                  verified: true
+                };
+              }
+
+              // Nếu chữ chưa có SĐT nhưng có ảnh: Quét AI Vision OCR trên ảnh bài viết mới nhất của quán
+              if (timelineData.imgs.length > 0) {
+                const ocrPhones = await ocrManager.extractPhonesFromImageUrls(timelineData.imgs);
+                ocrPhones.forEach(p => foundPhones.add(p));
+                if (foundPhones.size > 0) {
+                  const phones = Array.from(foundPhones);
+                  logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ ảnh trên tường [${targetAuthorName || 'Tác giả'}] qua AI Vision: [${phones.join(', ')}]`);
+                  return {
+                    phones,
+                    location: detectedLoc,
+                    locationResult,
+                    source: 'profile_timeline_ocr',
+                    confidence: 0.95,
+                    verified: true
+                  };
+                }
+              }
+            }
+          } catch (tlErr) {
+            logger.debug({ err: tlErr.message }, 'Lỗi khi đọc bài viết trên tường profile');
           }
         }
         return {
