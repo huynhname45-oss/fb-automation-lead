@@ -1,7 +1,8 @@
-﻿# Dependencies & Portable Binaries
+# Dependencies & Portable Binaries
 node_modules/
 browsers/
 node.exe
+cloudflared.exe
 *.zip
 
 # Runtime & User Data

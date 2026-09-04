@@ -1,13 +1,12 @@
-﻿@echo off
-chcp 65001 >nul 2>&1
-title FB Automation Tool - VPS Runner
+@echo off
+title FB Automation Tool - VPS / Local Runner
 color 0B
 cls
 
 cd /d "%~dp0"
 
 echo ==================================================
-echo   FB AUTOMATION TOOL - CHAY TREN VPS WINDOWS
+echo   FB AUTOMATION TOOL - CHAY TREN MAY / VPS
 echo ==================================================
 echo.
 
@@ -21,7 +20,7 @@ if exist "%~dp0node.exe" (
         set "NODE_CMD=node"
         echo [OK] Da tim thay Node.js he thong.
     ) else (
-        echo [LOI] Thieu file node.exe trong thu muc tool!
+        echo [LOI] Thieu Node.js! Vui long cai dat Node.js tren may.
         pause
         exit /b 1
     )
@@ -33,11 +32,11 @@ netsh advfirewall firewall add rule name="FB Automation Tool" dir=in action=allo
 
 echo.
 echo ==================================================
-echo   SERVER DANG CHAY TREN VPS!
+echo   SERVER DANG CHAY TREN MAY / VPS!
 echo ==================================================
 echo.
-echo   Truy cap truc tiep tren VPS:  http://localhost:3000
-echo   Truy cap tu may ca nhan/dt:   http://[IP_CUA_VPS]:3000
+echo   Truy cap truc tiep tren may:    http://localhost:3000
+echo   Truy cap tu may khac cung mang: http://[IP_MAY_TINH]:3000
 echo.
 echo   [GHI CHU] De DUNG tool, dong cua so nay hoac nhan Ctrl+C
 echo ==================================================
