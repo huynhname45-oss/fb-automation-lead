@@ -148,6 +148,8 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
   "location": "<Tên Tỉnh/Thành phố chuẩn phát hiện từ bài viết hoặc tên tác giả, ví dụ: Hà Nội, TP. Hồ Chí Minh, Đồng Nai... hoặc — nếu không rõ>",
   "businessType": "<Tên ngành nghề ngắn gọn, ví dụ: F&B - Cafe / Trà sữa, F&B - Quán ăn, Bán lẻ - Thời trang, Không phù hợp>",
   "intent": "<Mục đích bài đăng: Khai trương, Mở chi nhánh, Đang bán hàng, Tuyển dụng...>",
+  "salesPitch": "<1 câu gợi ý ngắn gọn mở lời tiếp cận cho nhân viên Sale bán phần mềm POS>",
+  "recommendedFeatures": "<Tính năng phần mềm POS nổi bật nên tư vấn>",
   "reason": "<1 câu ngắn gọn giải thích lý do đánh giá tiềm năng hoặc lý do loại bỏ>"
 }`;
 

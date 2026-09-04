@@ -157,3 +157,66 @@ test('Groq Vision OCR: _extractPhonesWithGroqVision extracts phone numbers using
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Groq Pipeline: evaluateLeadWithAI calls Groq during data crawling', async () => {
+  const originalFetch = globalThis.fetch;
+  let groqCalled = false;
+  let capturedModel = '';
+
+  globalThis.fetch = async (url, options) => {
+    if (url.includes('api.groq.com')) {
+      groqCalled = true;
+      const body = JSON.parse(options.body);
+      capturedModel = body.model;
+
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  score: 95,
+                  businessType: 'F&B - Trà Sữa',
+                  summary: 'Quán trà sữa khai trương',
+                  location: 'Đồng Nai',
+                  intent: 'Khai trương',
+                  salesPitch: 'Chào mừng khai trương quán mới!',
+                  recommendedFeatures: 'Quản lý bàn',
+                  reason: 'Quán mở mới cần POS'
+                })
+              }
+            }
+          ]
+        })
+      };
+    }
+    return originalFetch(url, options);
+  };
+
+  try {
+    const post = {
+      authorName: 'Trà Sữa Nhà Bông',
+      content: 'Tưng bừng khai trương quán trà sữa tại Biên Hòa Đồng Nai! Kính mời cả nhà ghé chơi.',
+      phones: ['0912345678']
+    };
+
+    const evalResult = await aiLeadEvaluator.evaluateLeadWithAI(post, {
+      aiEnabled: true,
+      aiProvider: 'groq',
+      groqApiKey: 'gsk_mock_test_key',
+      groqModel: 'openai/gpt-oss-120b'
+    });
+
+    assert.ok(groqCalled, 'Groq API must be called during crawl evaluation');
+    assert.equal(capturedModel, 'openai/gpt-oss-120b');
+    assert.equal(evalResult.isQualified, true);
+    assert.equal(evalResult.score, 95);
+    assert.equal(evalResult.businessType, 'F&B - Trà Sữa');
+    assert.equal(evalResult.salesPitch, 'Chào mừng khai trương quán mới!');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

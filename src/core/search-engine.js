@@ -1267,6 +1267,8 @@ class SearchEngine extends EventEmitter {
             businessType: aiEval.businessType,
             intent: aiEval.intent,
             aiReason: aiEval.reason,
+            salesPitch: aiEval.salesPitch || '',
+            recommendedFeatures: aiEval.recommendedFeatures || '',
             postLink: cleanPostUrl,
             profileLink: cleanProfileUrl,
             phones: phones,
