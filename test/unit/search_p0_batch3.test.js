@@ -171,3 +171,15 @@ test('resolveTimeResult strictly flags 1 day and > 24h as outside 24h window', a
   assert.equal(postHomNay.withinRequestedWindow, true);
   assert.equal(postHomNay.isWithin24h, true);
 });
+
+test('extractPhonesFromText: accurately extracts paired dotted phone numbers like 0909.04.04.50 without date collision', async () => {
+  const { extractPhonesFromText } = await import('../../src/core/phone-validator.js');
+  
+  const postSnippet = 'Quán cà phê LEO ARABICA tuyển dụng: 📞 Gọi trực tiếp 0909.04.04.50 (Ms. Diễm) - không trả lời tin nhắn';
+  const extracted = extractPhonesFromText(postSnippet);
+  assert.deepEqual(extracted, ['0909040450']);
+
+  const withDates = 'Khai trương ngày 20/11/2024 hotline: 0909.04.04.50 hoặc 0909-04-04-50';
+  const extracted2 = extractPhonesFromText(withDates);
+  assert.deepEqual(extracted2, ['0909040450']);
+});

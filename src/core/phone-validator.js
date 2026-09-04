@@ -371,8 +371,10 @@ export function extractPhonesFromText(text = '', options = { isOCR: false }) {
     .replace(/0([lI])(?=\d{8})/g, '01');
 
   // Step 3: Remove REAL calendar dates and timestamps (Day: 1-31, Month: 1-12)
+  // Protected with negative lookaround to prevent cutting phone numbers (e.g. 0909.04.04.50, 0988.12.34.56)
   clean = clean
-    .replace(/\b(?:0?[1-9]|[12]\d|3[01])[\/\-.](?:0?[1-9]|1[012])[\/\-.](?:19\d\d|20\d\d|\d{2})\b/g, ' ')
+    .replace(/(?<![\d.\-\/])(?:0?[1-9]|[12]\d|3[01])[\/\-.](?:0?[1-9]|1[012])[\/\-.](?:19\d\d|20\d\d)(?![\d.\-\/])/g, ' ')
+    .replace(/(?<![\d.\-\/])(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[012])\/\d{2}(?![\d.\-\/])/g, ' ')
     .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
     .replace(/\b\d{1,2}h\d{0,2}\b/gi, ' ')
     .replace(/\b\d+m\s*[xX*]\s*\d+m\b/g, ' ')
@@ -394,12 +396,19 @@ export function extractPhonesFromText(text = '', options = { isOCR: false }) {
     }
   }
 
+  // Tier 3: Formatted Vietnamese Numbers (dots, dashes, spaces, parentheses)
+  const generalPattern = /(?<![\w\d])(?:\+?84[\s.\-\(\)]*|0)[235789](?:[\s.\-\(\)]*\d){8,9}(?![\w\d])/gi;
+
   // Tier 1: Explicit labels (Hotline, Zalo, SĐT, LH, Call, Tel, Liên hệ, ĐT, CSKH, Tư vấn, Alo, Inbox, Đặt bàn, Ship, Gặp, Gọi...)
   const labelPattern = /(?:hotline|lh|sđt|sdt|đt|dt|zalo|tel|call|liên\s*hệ|phone|dđ|cskh|tư\s*vấn|alo|ib|inbox|liên\s*lạc|đặt\s*bàn|booking|ship|gọi|gặp|order)[\s:\.\-]*([^\n,;]{8,70})/gi;
   let lm;
   while ((lm = labelPattern.exec(clean)) !== null) {
     if (lm[1]) {
-      const candidates = lm[1].split(/[\/\-,;&|\s]+/);
+      const pMatches = lm[1].match(generalPattern) || [];
+      for (const m of pMatches) {
+        addCleanPhone(m);
+      }
+      const candidates = lm[1].split(/[,;&|\s]+/);
       for (const cand of candidates) {
         addCleanPhone(cand);
       }
@@ -414,7 +423,6 @@ export function extractPhonesFromText(text = '', options = { isOCR: false }) {
   }
 
   // Tier 3: Formatted Vietnamese Numbers (dots, dashes, spaces, parentheses)
-  const generalPattern = /(?<![\w\d])(?:\+?84[\s.\-\(\)]*|0)[235789](?:[\s.\-\(\)]*\d){8,9}(?![\w\d])/gi;
   const generalMatches = clean.match(generalPattern) || [];
   for (let match of generalMatches) {
     addCleanPhone(match);
