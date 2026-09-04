@@ -1026,44 +1026,44 @@ function showSearchCompletionModal(progress) {
     overlay.className = 'modal-overlay';
     overlay.id = 'searchCompletionModalOverlay';
     overlay.innerHTML = `
-      <div class="modal glass-panel" style="max-width: 480px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: fadeIn 0.25s ease-out;">
-        <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 14px;">
+      <div class="modal glass-panel" style="max-width: 480px; border-radius: 16px; border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0,0,0,0.25); animation: fadeIn 0.25s ease-out; background: var(--bg-card);">
+        <div class="modal-header" style="border-bottom: 1px solid var(--glass-border); padding-bottom: 14px; margin-bottom: 0;">
           <div style="display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 1.8rem;">🎉</span>
             <div>
-              <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #fff;">Hoàn Tất Quét Bài Viết</h3>
-              ${keyword ? `<p style="margin: 2px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Từ khóa: <strong style="color: #60a5fa;">"${escapeHtml(keyword)}"</strong></p>` : ''}
+              <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">Hoàn Tất Quét Bài Viết</h3>
+              ${keyword ? `<p style="margin: 3px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Từ khóa: <strong style="color: var(--color-primary, #2563eb); font-weight: 700;">"${escapeHtml(keyword)}"</strong></p>` : ''}
             </div>
           </div>
-          <button class="modal-close" id="btnCloseCompleteModal">&times;</button>
+          <button class="modal-close" id="btnCloseCompleteModal" style="color: var(--text-primary); font-size: 1.6rem; line-height: 1; cursor: pointer; padding: 0 4px;">&times;</button>
         </div>
-        <div class="modal-body" style="padding-top: 16px; margin-bottom: 20px;">
-          <div style="background: ${isExhausted ? 'rgba(245, 158, 11, 0.12)' : 'rgba(59, 130, 246, 0.12)'}; border-left: 4px solid ${isExhausted ? '#f59e0b' : '#3b82f6'}; padding: 12px 14px; border-radius: 8px; margin-bottom: 18px;">
-            <p style="margin: 0; font-size: 0.92rem; line-height: 1.45; color: #f1f5f9;">
-              ${isExhausted 
-                ? '⚡ <strong>Đã quét sạch toàn bộ bài viết trên Facebook!</strong><br><span style="font-size: 0.82rem; color: #cbd5e1;">Facebook không còn bài viết mới nào khác để cuộn thêm trong 24 giờ qua cho từ khóa này.</span>' 
-                : `🎯 <strong>Đã hoàn thành thu thập đủ ${accepted}/${total} lead mục tiêu!</strong>`}
-            </p>
+        <div class="modal-body" style="padding-top: 16px; margin-bottom: 16px;">
+          <div class="modal-completion-banner ${isExhausted ? 'exhausted' : 'target-reached'}">
+            ${isExhausted 
+              ? `<div class="banner-title">⚡ Đã quét sạch toàn bộ bài viết trên Facebook!</div>
+                 <span class="banner-desc">Facebook không còn bài viết mới nào khác để cuộn thêm trong 24 giờ qua cho từ khóa này.</span>` 
+              : `<div class="banner-title">🎯 Đã hoàn thành thu thập đủ ${accepted}/${total} lead mục tiêu!</div>
+                 <span class="banner-desc">Hệ thống đã bóc tách đầy đủ bài viết và số điện thoại theo chỉ tiêu đã đặt.</span>`}
           </div>
 
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 800; color: #34d399;">${accepted}</div>
-              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Lead được duyệt</div>
+          <div class="modal-stat-grid">
+            <div class="modal-stat-card modal-stat-card-green">
+              <div class="stat-number">${accepted}</div>
+              <div class="stat-label">Lead được duyệt</div>
             </div>
-            <div style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 800; color: #60a5fa;">${phones}</div>
-              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Có số điện thoại</div>
+            <div class="modal-stat-card modal-stat-card-blue">
+              <div class="stat-number">${phones}</div>
+              <div class="stat-label">Có số điện thoại</div>
             </div>
-            <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 10px; padding: 14px 8px; text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 800; color: #f87171;">${rejected}</div>
-              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Bài rác đã loại</div>
+            <div class="modal-stat-card modal-stat-card-red">
+              <div class="stat-number">${rejected}</div>
+              <div class="stat-label">Bài rác đã loại</div>
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; gap: 10px;">
-          <button class="btn btn-secondary" id="btnDismissCompleteModal">Xem Danh Sách Lead</button>
-          <button class="btn btn-primary" id="btnExportFromModal" style="background: #10b981; border-color: #10b981;">📊 Xuất File Excel</button>
+        <div class="modal-footer" style="border-top: 1px solid var(--glass-border); padding-top: 14px; gap: 10px;">
+          <button class="btn btn-secondary" id="btnDismissCompleteModal" style="font-weight: 600;">Xem Danh Sách Lead</button>
+          <button class="btn btn-primary" id="btnExportFromModal" style="background: #059669; border-color: #059669; font-weight: 700; color: #ffffff;">📊 Xuất File Excel</button>
         </div>
       </div>
     `;
@@ -1278,7 +1278,7 @@ function renderTable() {
         const summaryText = cleanPostTextForDisplay(item.summary || item.aiSummary || item.content || '');
         const fullContent = cleanPostTextForDisplay(item.content || item.summary || '');
         const summarySnippet = summaryText.length > 250 ? summaryText.substring(0, 250) + '...' : summaryText;
-        const summaryDisplay = `<div class="summary-cell text-sm font-normal" title="${escapeHtml(fullContent)}" style="line-height: 1.5; color: #f1f5f9;">${escapeHtml(summarySnippet || '—')}</div>`;
+        const summaryDisplay = `<div class="summary-cell text-sm font-normal" title="${escapeHtml(fullContent)}" style="line-height: 1.5; color: var(--text-primary);">${escapeHtml(summarySnippet || '—')}</div>`;
 
         const locationDisplay = (item.location && item.location !== '—')
             ? `<span class="location-pill" title="Địa điểm: ${escapeHtml(item.location)}">📍 ${escapeHtml(item.location)}</span>`
@@ -1800,20 +1800,20 @@ async function handleTestAiConnection() {
                 const resultData = res.result || {};
                 resultBox.innerHTML = `
                 <div class="ai-result-success-card" style="padding: 16px 20px;">
-                    <div class="ai-result-header" style="color: #10b981; margin-bottom: 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="ai-result-header" style="color: #059669; margin-bottom: 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; font-weight: 700;">
                         <span>✅</span> KẾT NỐI ${providerName.toUpperCase()} THÀNH CÔNG (${res.latencyMs}ms)
                     </div>
-                    <div style="font-size: 0.88rem; color: #f1f5f9; margin-bottom: 6px;">
-                        🚀 <strong>Model được sử dụng:</strong> <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.85rem; padding: 3px 8px;">${escapeHtml(selectedModel)}</span>
+                    <div style="font-size: 0.88rem; color: var(--text-primary); margin-bottom: 6px;">
+                        🚀 <strong>Model được sử dụng:</strong> <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #047857; font-size: 0.85rem; padding: 3px 8px; font-weight: 700;">${escapeHtml(selectedModel)}</span>
                     </div>
-                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px;">
                         📋 <strong>Mô hình:</strong> <code>${escapeHtml(supportedList)}</code>
                     </div>
-                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; font-size: 0.85rem;">
-                        <div style="color: #38bdf8; font-weight: 600; margin-bottom: 4px;">🧪 Kết quả thẩm định thử nghiệm:</div>
-                        <div style="color: #cbd5e1;">- Ngành nghề: <strong>${escapeHtml(resultData.businessType || 'F&B - Trà sữa')}</strong> (Điểm: <strong style="color: #10b981;">${resultData.score || 95}/100</strong>)</div>
-                        <div style="color: #cbd5e1;">- Tóm tắt: ${escapeHtml(resultData.summary || 'Khai trương quán mới')}</div>
-                        ${resultData.salesPitch ? `<div style="color: #a78bfa; margin-top: 4px;">- Gợi ý mở lời (Sales Pitch): <em>"${escapeHtml(resultData.salesPitch)}"</em></div>` : ''}
+                    <div style="background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px; font-size: 0.85rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                        <div style="color: #0284c7; font-weight: 700; margin-bottom: 4px;">🧪 Kết quả thẩm định thử nghiệm:</div>
+                        <div style="color: var(--text-primary); margin-bottom: 3px;">- Ngành nghề: <strong>${escapeHtml(resultData.businessType || 'F&B - Trà sữa')}</strong> (Điểm: <strong style="color: #059669;">${resultData.score || 95}/100</strong>)</div>
+                        <div style="color: var(--text-primary); margin-bottom: 3px;">- Tóm tắt: ${escapeHtml(resultData.summary || 'Khai trương quán mới')}</div>
+                        ${resultData.salesPitch ? `<div style="color: #7c3aed; margin-top: 4px; font-weight: 600;">- Gợi ý mở lời (Sales Pitch): <em>"${escapeHtml(resultData.salesPitch)}"</em></div>` : ''}
                     </div>
                 </div>`;
             }
@@ -1823,20 +1823,20 @@ async function handleTestAiConnection() {
     } catch (err) {
         const providerName = provider === 'groq' ? 'Groq Cloud' : (provider === 'gemini' ? 'Google Gemini' : provider.toUpperCase());
         showToast('❌ ' + (err.message || `Lỗi kết nối ${providerName} API`), 'error');
-        if (statusText) statusText.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ Thất bại: Không thể kết nối</span>`;
+        if (statusText) statusText.innerHTML = `<span style="color: #dc2626; font-weight: 700;">❌ Thất bại: Không thể kết nối</span>`;
         if (resultBox) {
             const helpLink = provider === 'groq'
-                ? '<a href="https://console.groq.com/keys" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Groq Console (console.groq.com/keys)</a>'
-                : '<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Google AI Studio (aistudio.google.com)</a>';
+                ? '<a href="https://console.groq.com/keys" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: 700;">Groq Console (console.groq.com/keys)</a>'
+                : '<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: 700;">Google AI Studio (aistudio.google.com)</a>';
             resultBox.innerHTML = `
             <div class="ai-result-error-card">
-                <div class="ai-result-header" style="color: #ef4444;">
+                <div class="ai-result-header" style="color: #dc2626; font-weight: 700;">
                     <span>⚠️</span> THÔNG BÁO TỪ ${providerName.toUpperCase()} API
                 </div>
-                <div class="ai-field-item" style="border-left: 3px solid #ef4444; color: #fca5a5; margin-bottom: 10px; font-size: 0.9rem;">
+                <div class="ai-field-item" style="border-left: 3px solid #dc2626; color: #991b1b; margin-bottom: 10px; font-size: 0.9rem; font-weight: 600;">
                     ${escapeHtml(err.message)}
                 </div>
-                <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5;">
+                <div style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5;">
                     👉 <strong>Hướng dẫn khắc phục:</strong> Hãy lấy API Key mới và miễn phí tại ${helpLink} rồi dán lại vào ô bên trên nhé!
                 </div>
             </div>`;
