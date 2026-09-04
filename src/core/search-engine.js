@@ -964,9 +964,9 @@ class SearchEngine extends EventEmitter {
                 phoneEvidence,
                 ocrPhones,
                 'image_ocr',
-                0.72,
-                'OCR từ ảnh bài viết',
-                { ...evidenceMetadata, verified: false }
+                0.9,
+                'OCR từ ảnh biển hiệu / xe bán hàng của quán',
+                { ...evidenceMetadata, verified: true }
               );
             }
           }
