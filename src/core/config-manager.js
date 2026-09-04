@@ -44,6 +44,7 @@ const DEFAULT_CONFIG = {
   aiProvider: 'groq',
   aiApiKey: '',
   geminiApiKey: '',
+  geminiModel: 'gemini-3.5-flash-lite',
   groqApiKey: '',
   groqModel: 'qwen/qwen3.8-27b',
   // `minLeadScore` is retained for backward compatibility with old UI/configs.
