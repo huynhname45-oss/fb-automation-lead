@@ -164,10 +164,15 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       const key = apiKey || geminiKey;
       if (!key) throw new Error('Chưa cấu hình DeepSeek API Key');
       return await this._callDeepSeekAPI(key, systemPrompt);
+    } else if (provider === 'groq') {
+      const key = (config.groqApiKey || apiKey || geminiKey || '').trim();
+      if (!key) throw new Error('Chưa cấu hình Groq API Key (Đăng ký miễn phí tại console.groq.com)');
+      return await this._callGroqAPI(key, systemPrompt, config.groqModel);
     } else if (provider === 'free_hybrid') {
       return await this._callFreeAIPipeline(systemPrompt);
     } else {
       if (config.allowProviderFallback) {
+        if (config.groqApiKey) return await this._callGroqAPI(config.groqApiKey, systemPrompt, config.groqModel);
         if (geminiKey) return await this._callGeminiAPI(geminiKey, systemPrompt);
         if (apiKey) return await this._callOpenAIAPI(apiKey, systemPrompt);
         return await this._callFreeAIPipeline(systemPrompt);
@@ -217,6 +222,8 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       result = await this._callOpenAIAPI(apiKey, systemPrompt);
     } else if (provider === 'deepseek') {
       result = await this._callDeepSeekAPI(apiKey, systemPrompt);
+    } else if (provider === 'groq') {
+      result = await this._callGroqAPI(apiKey, systemPrompt);
     } else {
       result = await this._callFreeAIPipeline(systemPrompt);
     }
@@ -559,6 +566,44 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content || '';
       return this._parseJSONResponse(text, 'deepseek');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Groq Cloud API Integration (100% Free, Ultra-Fast LPUs, 14,400 RPD, 30 RPM)
+   * Default Model: llama-3.3-70b-versatile
+   */
+  async _callGroqAPI(apiKey, prompt, customModel = '') {
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const model = customModel || 'llama-3.3-70b-versatile';
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: 'json_object' },
+          temperature: 0.1
+        })
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Groq API HTTP ${res.status}: ${errBody.substring(0, 150)}`);
+      }
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      return this._parseJSONResponse(text, 'groq');
     } finally {
       clearTimeout(timer);
     }

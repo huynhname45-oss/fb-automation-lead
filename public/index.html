@@ -344,26 +344,26 @@
                                 <!-- AI Lead Qualification Card -->
                                 <div class="config-subcard-ai mb-4">
                                     <h3 class="text-base font-bold mb-2 d-flex align-center gap-2" style="color: #c4b5fd;">
-                                        <span>✨</span> Google Gemini (AI Lead Scoring & Sales Pitch)
+                                        <span>✨</span> Cấu Hình Trí Tuệ Nhân Tạo AI (Groq Cloud / Google Gemini / OpenAI)
                                     </h3>
-                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Sử dụng Google Gemini AI đọc hiểu bài viết, xác định quán mở mới, sinh câu mở lời tiếp cận (Sales Pitch) và tự động loại trừ hoa/lân/xe khách/nhà thuốc/khách sạn/BĐS.</p>
+                                    <p class="text-sm text-muted mb-4" style="line-height: 1.6;">Sử dụng AI siêu tốc (Khuyên dùng <strong>Groq Cloud 14.400 req/ngày</strong>) đọc hiểu bài viết, xác định quán mở mới, sinh câu mở lời tiếp cận (Sales Pitch) và tự động lọc dữ liệu.</p>
 
                                     <div class="rule-item-box mb-4">
                                         <label class="rule-item-label" for="cfgAiEnabled">
                                             <input type="checkbox" id="cfgAiEnabled" class="custom-checkbox" style="margin-top: 3px;" checked>
                                             <div>
-                                                <div class="rule-item-title" style="color: #c4b5fd;">Kích hoạt Gemini AI Đánh giá & Chấm điểm Khách hàng Tiềm năng</div>
+                                                <div class="rule-item-title" style="color: #c4b5fd;">Kích hoạt AI Đánh giá & Chấm điểm Khách hàng Tiềm năng</div>
                                                 <div class="rule-item-desc" style="margin-left: 0;">Tự động phân tích nội dung, chấm điểm độ tiềm năng (0 - 100) và viết câu mở lời riêng cho từng khách hàng.</div>
                                             </div>
                                         </label>
                                     </div>
 
                                     <div class="form-group mb-4">
-                                        <label class="field-label" for="cfgGeminiApiKey" style="font-weight: 600;">Google Gemini API Key (Miễn phí 100%)</label>
-                                        <input type="password" id="cfgGeminiApiKey" class="input input-styled" style="padding: 12px 16px; height: 46px; font-size: 0.95rem;" placeholder="Dán Gemini API Key của bạn (AIzaSy...)">
+                                        <label class="field-label" id="cfgApiKeyLabel" for="cfgGeminiApiKey" style="font-weight: 600;">Groq API Key (Miễn phí 100%, 14.400 req/ngày - Khuyên dùng)</label>
+                                        <input type="password" id="cfgGeminiApiKey" class="input input-styled" style="padding: 12px 16px; height: 46px; font-size: 0.95rem;" placeholder="Dán Groq API Key của bạn (gsk_...)">
                                         <div class="d-flex justify-between align-center mt-2 wrap-gap">
-                                            <span class="text-muted text-xs">Chưa có API Key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link text-xs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">👉 Bấm vào đây để lấy Gemini API Key miễn phí từ Google</a></span>
-                                            <span id="cfgGeminiModelBadge" class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" title="Mô hình Gemini được hệ thống tự động kiểm tra và lựa chọn">⚡ Model: Tự động phát hiện</span>
+                                            <span class="text-muted text-xs"><span id="cfgApiKeyHelpText">Chưa có API Key?</span> <a id="cfgApiKeyHelpLink" href="https://console.groq.com/keys" target="_blank" class="link text-xs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)</a></span>
+                                            <span id="cfgGeminiModelBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" title="Mô hình AI được hệ thống tự động kiểm tra và lựa chọn">⚡ Model: Llama 3.3 70B</span>
                                         </div>
                                     </div>
 
@@ -371,7 +371,8 @@
                                         <div class="form-group">
                                             <label class="field-label" for="cfgAiProvider" style="font-weight: 600;">Mô hình AI sử dụng</label>
                                             <select id="cfgAiProvider" class="input input-styled" style="height: 46px;">
-                                                <option value="gemini">⚡ Google Gemini AI (Tự động chọn Model Siêu Tốc & Chuẩn Xác - Khuyên dùng)</option>
+                                                <option value="groq" selected>⚡ Groq Cloud (Llama 3.3 70B - 100% Free, Siêu Tốc 14.400 req/ngày - Khuyên dùng)</option>
+                                                <option value="gemini">⚡ Google Gemini AI (Tự động chọn Model Siêu Tốc & Chuẩn Xác)</option>
                                                 <option value="openai">🧠 OpenAI GPT-4o-mini</option>
                                                 <option value="deepseek">🚀 DeepSeek V3</option>
                                                 <option value="free_hybrid">⚡ Miễn phí Tốc độ cao (Free Hybrid AI)</option>

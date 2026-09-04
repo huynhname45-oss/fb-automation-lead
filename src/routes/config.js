@@ -15,10 +15,12 @@ const configSchema = z.object({
   requirePhoneOnly: z.boolean().optional(),
   excludeKeywords: z.string().optional(),
   aiEnabled: z.boolean().optional(),
-  aiProvider: z.enum(['free_hybrid', 'gemini', 'openai', 'deepseek']).optional(),
+  aiProvider: z.enum(['free_hybrid', 'gemini', 'openai', 'deepseek', 'groq']).optional(),
   aiApiKey: z.string().optional(),
   geminiApiKey: z.string().optional(),
   geminiModel: z.string().optional(),
+  groqApiKey: z.string().optional(),
+  groqModel: z.string().optional(),
   minLeadScore: z.number().int().min(0).max(100).optional(),
   acceptedLeadScore: z.number().int().min(0).max(100).optional(),
   reviewLeadScore: z.number().int().min(0).max(100).optional(),
@@ -91,14 +93,17 @@ router.post('/test-ai', async (req, res) => {
     const startTime = Date.now();
     const result = await aiLeadEvaluator.evaluateWithCustomPrompt(testPost, apiKey.trim(), provider, context);
     const latencyMs = Date.now() - startTime;
+    const modelName = provider === 'groq' ? 'llama-3.3-70b-versatile' : (provider === 'deepseek' ? 'deepseek-chat' : provider);
 
     return res.json({
       success: true,
       latencyMs,
-      selectedModel: provider,
-      supportedModels: [provider],
+      selectedModel: modelName,
+      supportedModels: [modelName],
       result,
-      message: `Kết nối thành công tới ${provider.toUpperCase()} (${latencyMs}ms)`
+      message: provider === 'groq'
+        ? `Kết nối thành công tới Groq Cloud (Llama 3.3 70B Versatile, ${latencyMs}ms - Siêu Tốc!)`
+        : `Kết nối thành công tới ${provider.toUpperCase()} (${latencyMs}ms)`
     });
   } catch (error) {
     return res.status(500).json({

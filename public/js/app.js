@@ -124,13 +124,22 @@ function initEventListeners() {
     const btnTestAiConnection = document.getElementById('btnTestAiConnection');
     if (btnTestAiConnection) btnTestAiConnection.addEventListener('click', handleTestAiConnection);
 
+    const selAiProvider = document.getElementById('cfgAiProvider');
+    if (selAiProvider) {
+        selAiProvider.addEventListener('change', (e) => {
+            updateAiProviderUI(e.target.value);
+        });
+    }
+
     const inputGeminiKey = document.getElementById('cfgGeminiApiKey');
     if (inputGeminiKey) {
         inputGeminiKey.addEventListener('paste', () => {
             setTimeout(() => {
                 const val = inputGeminiKey.value.trim();
-                if (val.length > 20) {
-                    showToast('Đã phát hiện Gemini API Key! Đang tự động kiểm tra kết nối & chọn model mạnh nhất...', 'info');
+                if (val.length > 15) {
+                    const currentProv = document.getElementById('cfgAiProvider')?.value || 'groq';
+                    const provLabel = currentProv === 'groq' ? 'Groq' : 'Gemini';
+                    showToast(`Đã phát hiện ${provLabel} API Key! Đang tự động kiểm tra kết nối...`, 'info');
                     handleTestAiConnection();
                 }
             }, 200);
@@ -1232,21 +1241,24 @@ async function fetchConfig() {
         const txtAiPromptContext = document.getElementById('cfgAiPromptContext');
 
         if (chkAiEnabled) chkAiEnabled.checked = config.aiEnabled !== false;
-        if (selAiProvider && config.aiProvider) selAiProvider.value = config.aiProvider;
-        if (inputGeminiApiKey) inputGeminiApiKey.value = config.geminiApiKey || config.aiApiKey || '';
+        const currentProvider = config.aiProvider || 'groq';
+        if (selAiProvider) selAiProvider.value = currentProvider;
+        updateAiProviderUI(currentProvider);
+
+        if (inputGeminiApiKey) {
+            if (currentProvider === 'groq') {
+                inputGeminiApiKey.value = config.groqApiKey || '';
+            } else if (currentProvider === 'gemini') {
+                inputGeminiApiKey.value = config.geminiApiKey || config.aiApiKey || '';
+            } else {
+                inputGeminiApiKey.value = config.aiApiKey || '';
+            }
+        }
+
         if (inputMinLeadScore && typeof (config.acceptedLeadScore ?? config.minLeadScore) === 'number') {
             inputMinLeadScore.value = config.acceptedLeadScore ?? config.minLeadScore;
         }
         if (txtAiPromptContext) txtAiPromptContext.value = config.aiPromptContext || DEFAULT_AI_PROMPT_CONTEXT;
-        if (config.geminiModel) {
-            const modelBadge = document.getElementById('cfgGeminiModelBadge');
-            if (modelBadge) {
-                modelBadge.textContent = `⚡ Model: ${config.geminiModel}`;
-                modelBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-                modelBadge.style.color = '#10b981';
-                modelBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-            }
-        }
 
         const inputExportProvince = document.getElementById('cfgExportProvinceCode');
         const inputExportProduct = document.getElementById('cfgExportProductGroup');
@@ -1283,6 +1295,103 @@ async function fetchConfig() {
     }
 }
 
+function updateAiProviderUI(provider) {
+    const lblApiKey = document.getElementById('cfgApiKeyLabel');
+    const inputApiKey = document.getElementById('cfgGeminiApiKey');
+    const linkHelp = document.getElementById('cfgApiKeyHelpLink');
+    const badgeModel = document.getElementById('cfgGeminiModelBadge');
+    const statusText = document.getElementById('testAiStatusText');
+
+    if (provider === 'groq') {
+        if (lblApiKey) lblApiKey.textContent = 'Groq API Key (Miễn phí 100%, 14.400 req/ngày - Khuyên dùng)';
+        if (inputApiKey) {
+            inputApiKey.placeholder = 'Dán Groq API Key của bạn (gsk_...)';
+            if (state.config?.groqApiKey) inputApiKey.value = state.config.groqApiKey;
+        }
+        if (linkHelp) {
+            linkHelp.href = 'https://console.groq.com/keys';
+            linkHelp.textContent = '👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)';
+        }
+        if (badgeModel) {
+            badgeModel.textContent = `⚡ Model: ${state.config?.groqModel || 'Llama 3.3 70B'}`;
+            badgeModel.style.background = 'rgba(16, 185, 129, 0.15)';
+            badgeModel.style.color = '#10b981';
+            badgeModel.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        }
+        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với Groq Cloud Llama 3.3 70B (Siêu Tốc).';
+    } else if (provider === 'gemini') {
+        if (lblApiKey) lblApiKey.textContent = 'Google Gemini API Key (Miễn phí)';
+        if (inputApiKey) {
+            inputApiKey.placeholder = 'Dán Gemini API Key của bạn (AIzaSy...)';
+            if (state.config?.geminiApiKey || state.config?.aiApiKey) {
+                inputApiKey.value = state.config.geminiApiKey || state.config.aiApiKey;
+            }
+        }
+        if (linkHelp) {
+            linkHelp.href = 'https://aistudio.google.com/app/apikey';
+            linkHelp.textContent = '👉 Bấm vào đây để lấy Gemini API Key miễn phí tại Google AI Studio';
+        }
+        if (badgeModel) {
+            badgeModel.textContent = `⚡ Model: ${state.config?.geminiModel || 'gemini-2.0-flash'}`;
+            badgeModel.style.background = 'rgba(16, 185, 129, 0.15)';
+            badgeModel.style.color = '#10b981';
+            badgeModel.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        }
+        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với Google Gemini AI mới nhất.';
+    } else if (provider === 'openai') {
+        if (lblApiKey) lblApiKey.textContent = 'OpenAI API Key (sk-...)';
+        if (inputApiKey) {
+            inputApiKey.placeholder = 'sk-...';
+            if (state.config?.aiApiKey) inputApiKey.value = state.config.aiApiKey;
+        }
+        if (linkHelp) {
+            linkHelp.href = 'https://platform.openai.com/api-keys';
+            linkHelp.textContent = '👉 Lấy OpenAI API Key tại platform.openai.com';
+        }
+        if (badgeModel) {
+            badgeModel.textContent = '⚡ Model: GPT-4o-mini';
+            badgeModel.style.background = 'rgba(59, 130, 246, 0.15)';
+            badgeModel.style.color = '#60a5fa';
+            badgeModel.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+        }
+        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với OpenAI GPT-4o-mini.';
+    } else if (provider === 'deepseek') {
+        if (lblApiKey) lblApiKey.textContent = 'DeepSeek API Key (sk-...)';
+        if (inputApiKey) {
+            inputApiKey.placeholder = 'sk-...';
+            if (state.config?.aiApiKey) inputApiKey.value = state.config.aiApiKey;
+        }
+        if (linkHelp) {
+            linkHelp.href = 'https://platform.deepseek.com/api_keys';
+            linkHelp.textContent = '👉 Lấy DeepSeek API Key tại platform.deepseek.com';
+        }
+        if (badgeModel) {
+            badgeModel.textContent = '⚡ Model: DeepSeek V3';
+            badgeModel.style.background = 'rgba(168, 85, 247, 0.15)';
+            badgeModel.style.color = '#c084fc';
+            badgeModel.style.borderColor = 'rgba(168, 85, 247, 0.4)';
+        }
+        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với DeepSeek V3.';
+    } else if (provider === 'free_hybrid') {
+        if (lblApiKey) lblApiKey.textContent = 'API Key (Không bắt buộc với Free Hybrid)';
+        if (inputApiKey) {
+            inputApiKey.placeholder = 'Không cần API Key (Hệ thống tự cân bằng)';
+            inputApiKey.value = '';
+        }
+        if (linkHelp) {
+            linkHelp.href = '#';
+            linkHelp.textContent = 'Không cần đăng ký API Key';
+        }
+        if (badgeModel) {
+            badgeModel.textContent = '⚡ Model: Free Hybrid AI';
+            badgeModel.style.background = 'rgba(234, 179, 8, 0.15)';
+            badgeModel.style.color = '#facc15';
+            badgeModel.style.borderColor = 'rgba(234, 179, 8, 0.4)';
+        }
+        if (statusText) statusText.textContent = 'Chế độ miễn phí tốc độ cao không cần key.';
+    }
+}
+
 async function handleSaveConfig(e) {
     e.preventDefault();
     const btnSave = document.getElementById('btnSaveConfig');
@@ -1299,14 +1408,17 @@ async function handleSaveConfig(e) {
     const requirePhoneOnly = document.getElementById('cfgRequirePhoneOnly')?.checked ?? false;
 
     const aiEnabledVal = document.getElementById('cfgAiEnabled')?.checked ?? true;
-    const aiProviderVal = document.getElementById('cfgAiProvider')?.value || 'gemini';
-    const geminiApiKeyVal = document.getElementById('cfgGeminiApiKey')?.value.trim() || '';
+    const aiProviderVal = document.getElementById('cfgAiProvider')?.value || 'groq';
+    const enteredApiKey = document.getElementById('cfgGeminiApiKey')?.value.trim() || '';
     const minLeadScoreVal = parseInt(document.getElementById('cfgMinLeadScore')?.value, 10) || 75;
     const aiPromptContextVal = document.getElementById('cfgAiPromptContext')?.value.trim() || DEFAULT_AI_PROMPT_CONTEXT;
 
     const exportProvinceCode = document.getElementById('cfgExportProvinceCode')?.value.trim() || '__export__.res_province_121_cf34d119';
     const exportProductGroup = document.getElementById('cfgExportProductGroup')?.value.trim() || 'RETAIL_PRO';
     const exportSalesRep = document.getElementById('cfgExportSalesRep')?.value.trim() || 'trucnt@sapo.vn';
+
+    const groqKey = aiProviderVal === 'groq' ? enteredApiKey : (state.config?.groqApiKey || '');
+    const geminiKey = aiProviderVal === 'gemini' ? enteredApiKey : (state.config?.geminiApiKey || '');
 
     const payload = {
         headless: headlessVal,
@@ -1319,9 +1431,11 @@ async function handleSaveConfig(e) {
         requirePhoneOnly: requirePhoneOnly,
         aiEnabled: aiEnabledVal,
         aiProvider: aiProviderVal,
-        aiApiKey: geminiApiKeyVal,
-        geminiApiKey: geminiApiKeyVal,
+        aiApiKey: enteredApiKey,
+        geminiApiKey: geminiKey,
         geminiModel: state.config?.geminiModel || 'gemini-2.0-flash',
+        groqApiKey: groqKey,
+        groqModel: state.config?.groqModel || 'llama-3.3-70b-versatile',
         minLeadScore: minLeadScoreVal,
         acceptedLeadScore: minLeadScoreVal,
         reviewLeadScore: state.config?.reviewLeadScore ?? 45,
@@ -1359,19 +1473,21 @@ async function handleTestAiConnection() {
     const resultBox = document.getElementById('testAiResultBox');
     const statusText = document.getElementById('testAiStatusText');
     const apiKey = (document.getElementById('cfgGeminiApiKey')?.value || '').trim();
-    const provider = document.getElementById('cfgAiProvider')?.value || 'gemini';
+    const provider = document.getElementById('cfgAiProvider')?.value || 'groq';
     const context = document.getElementById('cfgAiPromptContext')?.value.trim() || '';
 
+    const providerName = provider === 'groq' ? 'Groq Cloud' : (provider === 'gemini' ? 'Google Gemini' : provider.toUpperCase());
+
     if (!apiKey && provider !== 'free_hybrid') {
-        showToast('Vui lòng dán Google Gemini API Key vào ô trên trước khi kiểm tra!', 'warning');
+        showToast(`Vui lòng dán ${providerName} API Key vào ô trên trước khi kiểm tra!`, 'warning');
         return;
     }
 
     if (btnTest) setLoading(btnTest, true);
-    if (statusText) statusText.textContent = '⏳ Đang kiểm tra kết nối API Key & tự động tìm model mới nhất...';
+    if (statusText) statusText.textContent = `⏳ Đang kiểm tra kết nối ${providerName}...`;
     if (resultBox) {
         resultBox.style.display = 'block';
-        resultBox.innerHTML = '<div class="p-3 text-sm" style="color: #93c5fd;">⏳ Đang kết nối tới Google Gemini để kiểm tra kết nối và tìm model mới nhất... Vui lòng đợi trong giây lát!</div>';
+        resultBox.innerHTML = `<div class="p-3 text-sm" style="color: #93c5fd;">⏳ Đang kết nối tới ${providerName} để kiểm tra kết nối... Vui lòng đợi trong giây lát!</div>`;
     }
 
     try {
@@ -1382,9 +1498,14 @@ async function handleTestAiConnection() {
         });
 
         if (res.success) {
-            const selectedModel = res.selectedModel || res.result?.provider || 'gemini-2.0-flash';
-            state.config.geminiModel = selectedModel;
-            state.config.geminiApiKey = apiKey;
+            const selectedModel = res.selectedModel || res.result?.provider || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-2.0-flash');
+            if (provider === 'gemini') {
+                state.config.geminiModel = selectedModel;
+                state.config.geminiApiKey = apiKey;
+            } else if (provider === 'groq') {
+                state.config.groqModel = selectedModel;
+                state.config.groqApiKey = apiKey;
+            }
             state.config.aiApiKey = apiKey;
 
             const modelBadge = document.getElementById('cfgGeminiModelBadge');
@@ -1395,7 +1516,7 @@ async function handleTestAiConnection() {
                 modelBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
             }
 
-            showToast(`✅ Kết nối thành công! Đã tự động chọn model: ${selectedModel} (${res.latencyMs}ms)`, 'success');
+            showToast(`✅ Kết nối thành công! Model: ${selectedModel} (${res.latencyMs}ms)`, 'success');
             if (statusText) statusText.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ Kết nối thành công (${res.latencyMs}ms) — Đã chọn: ${selectedModel}</span>`;
             if (resultBox) {
                 const supportedList = Array.isArray(res.supportedModels) ? res.supportedModels.slice(0, 6).join(', ') : selectedModel;
@@ -1403,13 +1524,13 @@ async function handleTestAiConnection() {
                 resultBox.innerHTML = `
                 <div class="ai-result-success-card" style="padding: 16px 20px;">
                     <div class="ai-result-header" style="color: #10b981; margin-bottom: 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
-                        <span>✅</span> KẾT NỐI GOOGLE GEMINI THÀNH CÔNG (${res.latencyMs}ms)
+                        <span>✅</span> KẾT NỐI ${providerName.toUpperCase()} THÀNH CÔNG (${res.latencyMs}ms)
                     </div>
                     <div style="font-size: 0.88rem; color: #f1f5f9; margin-bottom: 6px;">
-                        🚀 <strong>Model mới nhất & mạnh nhất được chọn:</strong> <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.85rem; padding: 3px 8px;">${escapeHtml(selectedModel)}</span>
+                        🚀 <strong>Model được sử dụng:</strong> <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.85rem; padding: 3px 8px;">${escapeHtml(selectedModel)}</span>
                     </div>
                     <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">
-                        📋 <strong>Các model hỗ trợ khả dụng trong key:</strong> <code>${escapeHtml(supportedList)}</code>
+                        📋 <strong>Mô hình:</strong> <code>${escapeHtml(supportedList)}</code>
                     </div>
                     <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; font-size: 0.85rem;">
                         <div style="color: #38bdf8; font-weight: 600; margin-bottom: 4px;">🧪 Kết quả thẩm định thử nghiệm:</div>
@@ -1423,19 +1544,23 @@ async function handleTestAiConnection() {
             throw new Error(res.error || 'Lỗi kiểm tra AI');
         }
     } catch (err) {
-        showToast('❌ ' + (err.message || 'Lỗi kết nối Gemini API'), 'error');
+        const providerName = provider === 'groq' ? 'Groq Cloud' : (provider === 'gemini' ? 'Google Gemini' : provider.toUpperCase());
+        showToast('❌ ' + (err.message || `Lỗi kết nối ${providerName} API`), 'error');
         if (statusText) statusText.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ Thất bại: Không thể kết nối</span>`;
         if (resultBox) {
+            const helpLink = provider === 'groq'
+                ? '<a href="https://console.groq.com/keys" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Groq Console (console.groq.com/keys)</a>'
+                : '<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Google AI Studio (aistudio.google.com)</a>';
             resultBox.innerHTML = `
             <div class="ai-result-error-card">
                 <div class="ai-result-header" style="color: #ef4444;">
-                    <span>⚠️</span> THÔNG BÁO TỪ GOOGLE GEMINI API
+                    <span>⚠️</span> THÔNG BÁO TỪ ${providerName.toUpperCase()} API
                 </div>
                 <div class="ai-field-item" style="border-left: 3px solid #ef4444; color: #fca5a5; margin-bottom: 10px; font-size: 0.9rem;">
                     ${escapeHtml(err.message)}
                 </div>
                 <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5;">
-                    👉 <strong>Hướng dẫn khắc phục:</strong> Hãy lấy API Key mới và miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Google AI Studio (aistudio.google.com)</a> rồi dán lại vào ô bên trên nhé!
+                    👉 <strong>Hướng dẫn khắc phục:</strong> Hãy lấy API Key mới và miễn phí tại ${helpLink} rồi dán lại vào ô bên trên nhé!
                 </div>
             </div>`;
         }

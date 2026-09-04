@@ -41,9 +41,11 @@ const DEFAULT_CONFIG = {
   requirePhoneOnly: false,
   excludeKeywords: '',
   aiEnabled: true,
-  aiProvider: 'gemini',
+  aiProvider: 'groq',
   aiApiKey: '',
   geminiApiKey: '',
+  groqApiKey: '',
+  groqModel: 'llama-3.3-70b-versatile',
   // `minLeadScore` is retained for backward compatibility with old UI/configs.
   // New decisions use the explicit accepted/review thresholds below.
   minLeadScore: 75,

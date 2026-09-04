@@ -161,6 +161,56 @@ class OCRManager {
     }
   }
 
+  /**
+   * High-accuracy AI Vision OCR using Groq Cloud (Free, Llama 3.2 11B/90B Vision)
+   */
+  async _extractPhonesWithGroqVision(buffer, mimeType = 'image/jpeg') {
+    const config = configManager.get();
+    const apiKey = (config.groqApiKey || (config.aiProvider === 'groq' ? config.aiApiKey : '') || '').trim();
+    if (!apiKey) return null;
+
+    const base64Data = buffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.2-11b-vision-preview',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: "Trích xuất tất cả số điện thoại trên ảnh bìa, banner, biển hiệu, bảng quảng cáo, xe bán hàng, menu này. Chỉ in danh sách các số điện thoại (10 số bắt đầu 03, 05, 07, 08, 09), mỗi số 1 dòng. Nếu không có in KHONG_CO." },
+              { type: 'image_url', image_url: { url: dataUrl } }
+            ]
+          }],
+          temperature: 0.1
+        })
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      if (!text || text.includes('KHONG_CO')) return [];
+
+      return extractPhonesFromText(text, { isOCR: true });
+    } catch (err) {
+      logger.debug({ err: err.message }, 'Groq Vision OCR error');
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async extractPhonesFromImageUrl(imageUrl) {
     if (!imageUrl || typeof imageUrl !== 'string') return [];
     
@@ -196,13 +246,16 @@ class OCRManager {
       // Skip tiny images (< 4KB - likely avatars or spacers)
       if (buffer.length < 4000) return [];
 
-      // 1. TẦNG 1: Ưu tiên AI Vision OCR (Gemini Vision / OpenAI Vision) - Độ chính xác vượt trội trên biển hiệu & xe bán hàng
+      // 1. TẦNG 1: Ưu tiên AI Vision OCR (Groq Vision / Gemini Vision / OpenAI Vision) - Độ chính xác vượt trội trên biển hiệu & xe bán hàng
       const config = configManager.get();
       if (config.aiEnabled !== false) {
         let aiPhones = null;
-        if (config.geminiApiKey || (config.aiProvider === 'gemini' && config.aiApiKey)) {
+        if (config.groqApiKey || config.aiProvider === 'groq') {
+          aiPhones = await this._extractPhonesWithGroqVision(buffer, mimeType);
+        }
+        if (!aiPhones && (config.geminiApiKey || (config.aiProvider === 'gemini' && config.aiApiKey))) {
           aiPhones = await this._extractPhonesWithGeminiVision(buffer, mimeType);
-        } else if (config.apiKey || config.aiProvider === 'openai') {
+        } else if (!aiPhones && (config.apiKey || config.aiProvider === 'openai')) {
           aiPhones = await this._extractPhonesWithOpenAIVision(buffer, mimeType);
         }
 
