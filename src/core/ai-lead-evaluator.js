@@ -223,7 +223,13 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     } else if (provider === 'deepseek') {
       result = await this._callDeepSeekAPI(apiKey, systemPrompt);
     } else if (provider === 'groq') {
-      result = await this._callGroqAPI(apiKey, systemPrompt);
+      const discovery = await this.discoverAndVerifyGroqModels(apiKey, systemPrompt);
+      result = discovery.result;
+      if (result) {
+        result.selectedModel = discovery.selectedModel;
+        result.supportedModels = discovery.supportedModels;
+        result.latencyMs = discovery.latencyMs;
+      }
     } else {
       result = await this._callFreeAIPipeline(systemPrompt);
     }
@@ -572,41 +578,206 @@ Yêu cầu đầu ra: Chỉ trả về JSON duy nhất:
   }
 
   /**
+   * Helper function to score and rank Groq models by capability and speed
+   */
+  _scoreGroqModel(name = '') {
+    const n = name.toLowerCase();
+    if (/(?:whisper|guard|safeguard|orpheus|audio|tts|embed)/i.test(n)) return -99999;
+    if (n === 'groq/compound') return -99999; // known request_too_large error
+
+    // Top tier: GPT-OSS 120B (120B params - strongest open model)
+    if (n.includes('gpt-oss-120b')) return 10000;
+    // High tier: Qwen 3.8 27B (ultra fast + vision capable)
+    if (n.includes('qwen3.8-27b') || n.includes('qwen/qwen3.8-27b')) return 9500;
+    // Mid-high tier: GPT-OSS 20B
+    if (n.includes('gpt-oss-20b')) return 9000;
+    // Qwen 3.6 27B
+    if (n.includes('qwen3.6-27b') || n.includes('qwen/qwen3.6-27b')) return 8500;
+    // Compound Mini
+    if (n.includes('compound-mini')) return 8000;
+    // Llama 3.3 / 3.1
+    if (n.includes('llama-3.3-70b')) return 7500;
+    if (n.includes('llama-3.1-70b')) return 7000;
+    if (n.includes('llama-3.2-11b')) return 6500;
+    if (n.includes('llama-3.1-8b') || n.includes('llama-3.2-3b')) return 6000;
+    if (n.includes('allam')) return 4000;
+
+    return 1000;
+  }
+
+  /**
+   * Automatically discovers available Groq models, ranks them, and verifies live execution
+   */
+  async discoverAndVerifyGroqModels(apiKey, customPrompt = null) {
+    if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+      throw new Error('Vui lòng cung cấp Groq API Key!');
+    }
+    const cleanKey = apiKey.trim();
+
+    // 1. Lấy danh sách model khả dụng từ Groq
+    let listRes;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      listRes = await fetch('https://api.groq.com/openai/v1/models', {
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${cleanKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      clearTimeout(timer);
+    } catch (netErr) {
+      throw new Error(`Không thể kết nối đến máy chủ Groq Cloud: ${netErr.message}`);
+    }
+
+    if (!listRes.ok) {
+      const errJson = await listRes.json().catch(() => ({}));
+      const errCode = listRes.status;
+      const errMsg = errJson.error?.message || `Lỗi HTTP ${errCode}`;
+      if (errCode === 401 || errMsg.includes('Invalid API Key') || errMsg.includes('invalid_api_key')) {
+        throw new Error('Groq API Key không hợp lệ! Vui lòng kiểm tra lại API key từ https://console.groq.com/keys.');
+      }
+      throw new Error(`Groq API trả về lỗi ${errCode}: ${errMsg}`);
+    }
+
+    const data = await listRes.json();
+    const allModels = Array.isArray(data.data) ? data.data.map(m => m.id) : [];
+
+    const contentModels = allModels.filter(name => this._scoreGroqModel(name) > 0);
+    if (contentModels.length === 0) {
+      throw new Error('API Key hợp lệ nhưng không tìm thấy mô hình tương thích trên Groq Cloud!');
+    }
+
+    // 2. Sắp xếp thứ tự ưu tiên các model
+    const rankedModels = [...contentModels].sort((a, b) => this._scoreGroqModel(b) - this._scoreGroqModel(a));
+
+    const testPrompt = customPrompt || `Bạn là chuyên gia thẩm định khách hàng tiềm năng cho phần mềm POS Sapo/KiotViet.
+Phân tích bài viết sau: "TƯNG BỪNG KHAI TRƯƠNG Quán Trà Sữa & Cà Phê Chi Nhánh 2 tại 45 Nguyễn Huệ! Giảm 50% menu. Hotline: 0912345678"
+Trả về định dạng JSON duy nhất:
+{
+  "score": 95,
+  "businessType": "F&B - Trà Sữa & Cà Phê",
+  "reason": "Quán mở chi nhánh mới cần máy in hóa đơn và phần mềm POS quản lý bàn",
+  "summary": "Khai trương chi nhánh 2",
+  "salesPitch": "Chúc mừng quán khai trương hồng phát! Bên em hỗ trợ giải pháp bán hàng Sapo in bill nhanh chóng."
+}`;
+
+    let lastError = null;
+    let selectedModel = null;
+    let testResult = null;
+    let latencyMs = 0;
+
+    // 3. Thử nghiệm model mạnh nhất và tự động fallback
+    for (const model of rankedModels) {
+      const startTime = Date.now();
+      try {
+        testResult = await this._callGroqAPI(cleanKey, testPrompt, model);
+        latencyMs = Date.now() - startTime;
+        selectedModel = model;
+        break;
+      } catch (err) {
+        lastError = err;
+        logger.warn({ model, err: err.message }, 'Mô hình Groq thử nghiệm thất bại, đang chuyển sang model tiếp theo...');
+      }
+    }
+
+    if (!selectedModel || !testResult) {
+      throw new Error(`Không thể kích hoạt mô hình Groq nào khả dụng: ${lastError ? lastError.message : 'Lỗi không xác định'}`);
+    }
+
+    // 4. Lưu lại cấu hình model tốt nhất
+    try {
+      configManager.update({
+        groqModel: selectedModel,
+        groqApiKey: cleanKey,
+        aiProvider: 'groq'
+      }).catch(() => {});
+    } catch {
+      // Non-blocking
+    }
+
+    return {
+      success: true,
+      selectedModel,
+      supportedModels: rankedModels,
+      latencyMs,
+      result: testResult,
+      message: `Đã kết nối thành công tới Groq Cloud! Model mạnh nhất được chọn: ${selectedModel} (${latencyMs}ms - Siêu Tốc)`
+    };
+  }
+
+  /**
    * Groq Cloud API Integration (100% Free, Ultra-Fast LPUs, 14,400 RPD, 30 RPM)
-   * Default Model: llama-3.3-70b-versatile
+   * Tự động fallback model nếu gặp 404 hoặc model bị deprecate
    */
   async _callGroqAPI(apiKey, prompt, customModel = '') {
     const url = 'https://api.groq.com/openai/v1/chat/completions';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
-    const model = customModel || 'llama-3.3-70b-versatile';
+    const config = configManager.get();
+    
+    // Fallback candidates if specified model is 404 or deprecated
+    const candidateModels = [
+      customModel,
+      config.groqModel,
+      'openai/gpt-oss-120b',
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-20b',
+      'groq/compound-mini',
+      'llama-3.3-70b-versatile'
+    ].filter(Boolean);
 
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: [{ role: 'user', content: prompt }],
-          response_format: { type: 'json_object' },
-          temperature: 0.1
-        })
-      });
-      clearTimeout(timer);
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`Groq API HTTP ${res.status}: ${errBody.substring(0, 150)}`);
+    const modelsToTry = [...new Set(candidateModels)];
+
+    let lastErr = null;
+    for (const model of modelsToTry) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: 'user', content: prompt }],
+            response_format: { type: 'json_object' },
+            temperature: 0.1
+          })
+        });
+        clearTimeout(timer);
+
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          if (res.status === 404 || errBody.includes('does not exist') || errBody.includes('model_not_found')) {
+            logger.warn({ model, status: res.status }, 'Groq model 404, thử model tiếp theo...');
+            lastErr = new Error(`Groq API HTTP ${res.status}: ${errBody.substring(0, 150)}`);
+            continue;
+          }
+          throw new Error(`Groq API HTTP ${res.status}: ${errBody.substring(0, 150)}`);
+        }
+
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '';
+        return this._parseJSONResponse(text, 'groq');
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'AbortError') {
+          logger.warn({ model }, 'Groq request timed out, thử model tiếp theo...');
+          continue;
+        }
+        if (err.message && (err.message.includes('404') || err.message.includes('does not exist'))) {
+          continue;
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
       }
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content || '';
-      return this._parseJSONResponse(text, 'groq');
-    } finally {
-      clearTimeout(timer);
     }
+
+    throw lastErr || new Error('Không thể kết nối tới mô hình Groq khả dụng');
   }
 
   /**

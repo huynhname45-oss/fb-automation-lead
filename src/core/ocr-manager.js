@@ -172,43 +172,52 @@ class OCRManager {
     const base64Data = buffer.toString('base64');
     const dataUrl = `data:${mimeType};base64,${base64Data}`;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    const candidateVisionModels = ['qwen/qwen3.8-27b', 'llama-3.2-11b-vision-preview'];
 
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.2-11b-vision-preview',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: "Trích xuất tất cả số điện thoại trên ảnh bìa, banner, biển hiệu, bảng quảng cáo, xe bán hàng, menu này. Chỉ in danh sách các số điện thoại (10 số bắt đầu 03, 05, 07, 08, 09), mỗi số 1 dòng. Nếu không có in KHONG_CO." },
-              { type: 'image_url', image_url: { url: dataUrl } }
-            ]
-          }],
-          temperature: 0.1
-        })
-      });
-      clearTimeout(timer);
+    for (const visionModel of candidateVisionModels) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
 
-      if (!res.ok) return null;
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content || '';
-      if (!text || text.includes('KHONG_CO')) return [];
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: visionModel,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: "Trích xuất tất cả số điện thoại trên ảnh bìa, banner, biển hiệu, bảng quảng cáo, xe bán hàng, menu này. Chỉ in danh sách các số điện thoại (10 số bắt đầu 03, 05, 07, 08, 09), mỗi số 1 dòng. Nếu không có in KHONG_CO." },
+                { type: 'image_url', image_url: { url: dataUrl } }
+              ]
+            }],
+            temperature: 0.1
+          })
+        });
+        clearTimeout(timer);
 
-      return extractPhonesFromText(text, { isOCR: true });
-    } catch (err) {
-      logger.debug({ err: err.message }, 'Groq Vision OCR error');
-      return null;
-    } finally {
-      clearTimeout(timer);
+        if (!res.ok) {
+          logger.debug({ model: visionModel, status: res.status }, 'Groq Vision OCR model unavailable, trying next...');
+          continue;
+        }
+
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '';
+        if (!text || text.includes('KHONG_CO')) return [];
+
+        return extractPhonesFromText(text, { isOCR: true });
+      } catch (err) {
+        logger.debug({ err: err.message, model: visionModel }, 'Groq Vision OCR error');
+      } finally {
+        clearTimeout(timer);
+      }
     }
+
+    return null;
   }
 
   async extractPhonesFromImageUrl(imageUrl) {

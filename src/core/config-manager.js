@@ -45,7 +45,7 @@ const DEFAULT_CONFIG = {
   aiApiKey: '',
   geminiApiKey: '',
   groqApiKey: '',
-  groqModel: 'llama-3.3-70b-versatile',
+  groqModel: 'openai/gpt-oss-120b',
   // `minLeadScore` is retained for backward compatibility with old UI/configs.
   // New decisions use the explicit accepted/review thresholds below.
   minLeadScore: 75,

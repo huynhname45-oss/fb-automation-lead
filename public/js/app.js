@@ -1313,12 +1313,12 @@ function updateAiProviderUI(provider) {
             linkHelp.textContent = '👉 Bấm vào đây để lấy Groq API Key miễn phí (14.400 req/ngày)';
         }
         if (badgeModel) {
-            badgeModel.textContent = `⚡ Model: ${state.config?.groqModel || 'Llama 3.3 70B'}`;
+            badgeModel.textContent = `⚡ Model: ${state.config?.groqModel || 'openai/gpt-oss-120b'}`;
             badgeModel.style.background = 'rgba(16, 185, 129, 0.15)';
             badgeModel.style.color = '#10b981';
             badgeModel.style.borderColor = 'rgba(16, 185, 129, 0.4)';
         }
-        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với Groq Cloud Llama 3.3 70B (Siêu Tốc).';
+        if (statusText) statusText.textContent = 'Bấm để kiểm tra kết nối với Groq Cloud (Tự động phát hiện model mới nhất).';
     } else if (provider === 'gemini') {
         if (lblApiKey) lblApiKey.textContent = 'Google Gemini API Key (Miễn phí)';
         if (inputApiKey) {
@@ -1435,7 +1435,7 @@ async function handleSaveConfig(e) {
         geminiApiKey: geminiKey,
         geminiModel: state.config?.geminiModel || 'gemini-2.0-flash',
         groqApiKey: groqKey,
-        groqModel: state.config?.groqModel || 'llama-3.3-70b-versatile',
+        groqModel: state.config?.groqModel || 'openai/gpt-oss-120b',
         minLeadScore: minLeadScoreVal,
         acceptedLeadScore: minLeadScoreVal,
         reviewLeadScore: state.config?.reviewLeadScore ?? 45,

@@ -83,6 +83,18 @@ router.post('/test-ai', async (req, res) => {
       });
     }
 
+    if (provider === 'groq') {
+      const discovery = await aiLeadEvaluator.discoverAndVerifyGroqModels(apiKey.trim(), context);
+      return res.json({
+        success: true,
+        selectedModel: discovery.selectedModel,
+        supportedModels: discovery.supportedModels,
+        latencyMs: discovery.latencyMs,
+        result: discovery.result,
+        message: discovery.message
+      });
+    }
+
     // Other providers
     const testPost = {
       authorName: 'Trà Sữa Cây Si - Chi Nhánh 2',
@@ -93,7 +105,7 @@ router.post('/test-ai', async (req, res) => {
     const startTime = Date.now();
     const result = await aiLeadEvaluator.evaluateWithCustomPrompt(testPost, apiKey.trim(), provider, context);
     const latencyMs = Date.now() - startTime;
-    const modelName = provider === 'groq' ? 'llama-3.3-70b-versatile' : (provider === 'deepseek' ? 'deepseek-chat' : provider);
+    const modelName = provider === 'deepseek' ? 'deepseek-chat' : provider;
 
     return res.json({
       success: true,
@@ -101,9 +113,7 @@ router.post('/test-ai', async (req, res) => {
       selectedModel: modelName,
       supportedModels: [modelName],
       result,
-      message: provider === 'groq'
-        ? `Kết nối thành công tới Groq Cloud (Llama 3.3 70B Versatile, ${latencyMs}ms - Siêu Tốc!)`
-        : `Kết nối thành công tới ${provider.toUpperCase()} (${latencyMs}ms)`
+      message: `Kết nối thành công tới ${provider.toUpperCase()} (${latencyMs}ms)`
     });
   } catch (error) {
     return res.status(500).json({

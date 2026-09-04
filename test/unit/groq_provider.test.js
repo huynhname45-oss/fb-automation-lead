@@ -7,7 +7,7 @@ import ocrManager from '../../src/core/ocr-manager.js';
 test('Groq Provider Config: supports groq provider, model and apiKey in default config', () => {
   const cfg = configManager.get();
   assert.equal(cfg.aiProvider, 'groq');
-  assert.equal(cfg.groqModel, 'llama-3.3-70b-versatile');
+  assert.equal(cfg.groqModel, 'openai/gpt-oss-120b');
   assert.ok('groqApiKey' in cfg);
 });
 
@@ -43,11 +43,11 @@ test('Groq Lead Evaluator: _callGroqAPI formats request and parses structured ou
   };
 
   try {
-    const result = await aiLeadEvaluator._callGroqAPI('gsk_test_key_12345', 'Kiểm tra quán mới khai trương');
+    const result = await aiLeadEvaluator._callGroqAPI('gsk_test_key_12345', 'Kiểm tra quán mới khai trương', 'openai/gpt-oss-120b');
     
     assert.equal(interceptedUrl, 'https://api.groq.com/openai/v1/chat/completions');
     assert.equal(interceptedHeaders['Authorization'], 'Bearer gsk_test_key_12345');
-    assert.equal(interceptedBody.model, 'llama-3.3-70b-versatile');
+    assert.equal(interceptedBody.model, 'openai/gpt-oss-120b');
     assert.equal(interceptedBody.response_format?.type, 'json_object');
     
     assert.equal(result.score, 92);
@@ -58,14 +58,35 @@ test('Groq Lead Evaluator: _callGroqAPI formats request and parses structured ou
   }
 });
 
-test('Groq Lead Evaluator: evaluateWithCustomPrompt dispatches to Groq when provider is groq', async () => {
+test('Groq Lead Evaluator: _scoreGroqModel ranks GPT-OSS 120B and Qwen 3.8 highest while excluding non-text', () => {
+  assert.ok(aiLeadEvaluator._scoreGroqModel('whisper-large-v3') < 0);
+  assert.ok(aiLeadEvaluator._scoreGroqModel('meta-llama/llama-prompt-guard-2-86m') < 0);
+  assert.ok(aiLeadEvaluator._scoreGroqModel('groq/compound') < 0);
+
+  assert.ok(aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-120b') > aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-20b'));
+  assert.ok(aiLeadEvaluator._scoreGroqModel('openai/gpt-oss-120b') > aiLeadEvaluator._scoreGroqModel('qwen/qwen3.8-27b'));
+  assert.ok(aiLeadEvaluator._scoreGroqModel('qwen/qwen3.8-27b') > aiLeadEvaluator._scoreGroqModel('groq/compound-mini'));
+});
+
+test('Groq Lead Evaluator: discoverAndVerifyGroqModels discovers, ranks and verifies strongest model', async () => {
   const originalFetch = globalThis.fetch;
-  let interceptedModel = '';
 
   globalThis.fetch = async (url, options) => {
-    const body = JSON.parse(options.body);
-    interceptedModel = body.model;
-
+    if (url.endsWith('/models')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            { id: 'whisper-large-v3' },
+            { id: 'openai/gpt-oss-20b' },
+            { id: 'openai/gpt-oss-120b' },
+            { id: 'qwen/qwen3.8-27b' }
+          ]
+        })
+      };
+    }
+    // chat completions
     return {
       ok: true,
       status: 200,
@@ -74,10 +95,10 @@ test('Groq Lead Evaluator: evaluateWithCustomPrompt dispatches to Groq when prov
           {
             message: {
               content: JSON.stringify({
-                score: 88,
-                businessType: 'Trà Sữa',
-                reason: 'Khai trương quán trà sữa',
-                salesPitch: 'Chào quán mới khai trương'
+                score: 95,
+                businessType: 'F&B',
+                summary: 'Khai trương',
+                salesPitch: 'Chào mừng'
               })
             }
           }
@@ -87,22 +108,17 @@ test('Groq Lead Evaluator: evaluateWithCustomPrompt dispatches to Groq when prov
   };
 
   try {
-    const post = {
-      authorName: 'Trà Sữa Nhà Làm',
-      content: 'Mai em chính thức khai trương quán trà sữa, mời cả nhà ghé ủng hộ!',
-      phones: ['0901234567']
-    };
-
-    const res = await aiLeadEvaluator.evaluateWithCustomPrompt(post, 'gsk_sample_key', 'groq', 'Ngữ cảnh thẩm định');
-    assert.equal(interceptedModel, 'llama-3.3-70b-versatile');
-    assert.equal(res.score, 88);
-    assert.equal(res.businessType, 'Trà Sữa');
+    const discovery = await aiLeadEvaluator.discoverAndVerifyGroqModels('gsk_test_mock_key');
+    assert.equal(discovery.success, true);
+    assert.equal(discovery.selectedModel, 'openai/gpt-oss-120b');
+    assert.ok(discovery.supportedModels.includes('openai/gpt-oss-120b'));
+    assert.ok(!discovery.supportedModels.includes('whisper-large-v3'));
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('Groq Vision OCR: _extractPhonesWithGroqVision extracts phone numbers from image data', async () => {
+test('Groq Vision OCR: _extractPhonesWithGroqVision extracts phone numbers using available vision model', async () => {
   const originalFetch = globalThis.fetch;
   let visionCalled = false;
   let capturedModel = '';
@@ -135,7 +151,7 @@ test('Groq Vision OCR: _extractPhonesWithGroqVision extracts phone numbers from 
     const phones = await ocrManager._extractPhonesWithGroqVision(fakeBuffer, 'image/jpeg');
     
     assert.ok(visionCalled);
-    assert.equal(capturedModel, 'llama-3.2-11b-vision-preview');
+    assert.equal(capturedModel, 'qwen/qwen3.8-27b');
     assert.ok(phones.some(p => p.includes('0796666428') || p.includes('079.6666.428')));
   } finally {
     globalThis.fetch = originalFetch;
