@@ -43,11 +43,32 @@ function cleanTextForMatching(text = '') {
   return ` ${normalized.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 }
 
-const ACCENT_SENSITIVE_KEYWORDS = new Set([
+export const VIETNAMESE_DIACRITICS_REGEX = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+export const ACCENT_SENSITIVE_KEYWORDS = new Set([
   'khai trường',
   'mùa khai trường',
   'đơn khai trường',
-  'ngày hội khai trường'
+  'ngày hội khai trường',
+  'con cưng',
+  'concung',
+  'căn hộ',
+  'can ho',
+  'lên giỏ',
+  'len gio',
+  'vá vỏ',
+  'va vo',
+  'vá xe',
+  'va xe',
+  'tắm bé',
+  'tam be',
+  'an cư',
+  'an cu',
+  'an sinh',
+  'tiệc cưới',
+  'cầm đồ',
+  'cam do',
+  'sinh thường'
 ]);
 
 /**
@@ -55,6 +76,7 @@ const ACCENT_SENSITIVE_KEYWORDS = new Set([
  */
 function findMatchedKeyword(textClean, keywords = []) {
   if (!textClean || !Array.isArray(keywords)) return null;
+  const isAccented = VIETNAMESE_DIACRITICS_REGEX.test(textClean);
   const textNoAccent = cleanTextForMatching(removeAccents(textClean));
 
   for (const kw of keywords) {
@@ -66,8 +88,11 @@ function findMatchedKeyword(textClean, keywords = []) {
       return kw;
     }
 
-    // 2. Unaccented match (skip if keyword collides with positive business terms like "khai trương")
-    if (!ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
+    // 2. Unaccented match (skip if text is already accented or keyword is accent-sensitive)
+    const kwHasAccents = VIETNAMESE_DIACRITICS_REGEX.test(kwTrim);
+    const allowUnaccented = (!kwHasAccents || !isAccented) && !ACCENT_SENSITIVE_KEYWORDS.has(kwTrim);
+
+    if (allowUnaccented) {
       const kwNoAccent = ` ${removeAccents(kwTrim)} `;
       if (textNoAccent.includes(kwNoAccent)) {
         return kw;
@@ -138,12 +163,18 @@ export function findMatchedNegativeEntity(authorName = '', content = '', keyword
   const contentNoAccent = cleanTextForMatching(removeAccents(contentClean));
   const authorNoAccent = cleanTextForMatching(removeAccents(authorClean));
 
+  const isAccentedAuthor = VIETNAMESE_DIACRITICS_REGEX.test(authorName);
+  const isAccentedContent = VIETNAMESE_DIACRITICS_REGEX.test(content);
+
   // 1. Author match (100% priority, no landmark bypass)
   for (const kw of keywords) {
     const kwTrim = kw.toLowerCase().trim();
     const kwClean = ` ${kwTrim} `;
     if (authorClean.includes(kwClean)) return { term: kw, inAuthor: true };
-    if (!ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
+
+    const kwHasAccents = VIETNAMESE_DIACRITICS_REGEX.test(kwTrim);
+    const allowUnaccentedAuthor = (!kwHasAccents || !isAccentedAuthor) && !ACCENT_SENSITIVE_KEYWORDS.has(kwTrim);
+    if (allowUnaccentedAuthor) {
       const kwNoAccent = ` ${removeAccents(kwTrim)} `;
       if (authorNoAccent.includes(kwNoAccent)) return { term: kw, inAuthor: true };
     }
@@ -155,9 +186,13 @@ export function findMatchedNegativeEntity(authorName = '', content = '', keyword
     const kwClean = ` ${kwTrim} `;
     let hasMatch = contentClean.includes(kwClean);
 
-    if (!hasMatch && !ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
-      const kwNoAccent = ` ${removeAccents(kwTrim)} `;
-      hasMatch = contentNoAccent.includes(kwNoAccent);
+    if (!hasMatch) {
+      const kwHasAccents = VIETNAMESE_DIACRITICS_REGEX.test(kwTrim);
+      const allowUnaccentedContent = (!kwHasAccents || !isAccentedContent) && !ACCENT_SENSITIVE_KEYWORDS.has(kwTrim);
+      if (allowUnaccentedContent) {
+        const kwNoAccent = ` ${removeAccents(kwTrim)} `;
+        hasMatch = contentNoAccent.includes(kwNoAccent);
+      }
     }
 
     if (hasMatch) {

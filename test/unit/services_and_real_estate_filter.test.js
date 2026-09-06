@@ -158,3 +158,54 @@ test('Directional landmarks and Tiệm Trà Sunrise acceptance', () => {
   assert.equal(unaccentedLead.qualified, true, 'Unaccented khai truong must not be rejected as khai trường');
 });
 
+test('Phonetic and diacritic collision protection (Hiên hải sản quán, bà con cùng, và vợ, cần họ, lên giờ, tấm bé)', () => {
+  const filterConfig = {
+    excludeUnsupportedIndustries: true,
+    excludeEnterpriseChains: true,
+    excludePosCompetitors: true,
+    requireMobilePhoneOnly: true
+  };
+
+  // 1. Hiên hải sản quán (contains "bà con cùng" which previously collided with "con cưng")
+  const hienPost = {
+    authorName: 'Hiên hải sản quán',
+    content: 'CHỈ CÒN VÀI NGÀY NỮA!! HIÊN HẢI SẢN QUÁN CHÍNH THỨC CÓ MẶT. Quý bà con cùng Hiên đếm ngược từng ngày đến khai trương nhé!',
+    phones: ['0909123456']
+  };
+  const hienRes = leadFilter.evaluateLead(hienPost, filterConfig);
+  assert.equal(hienRes.qualified, true, `Hiên hải sản quán must be qualified, got: ${JSON.stringify(hienRes)}`);
+
+  // 2. "và vợ tôi phụ việc" must not collide with "vá vỏ"
+  const vaVoPost = {
+    authorName: 'Quán Cơm Mẹ Nấu',
+    content: 'Quán sắp khai trương, có hai vợ chồng và vợ tôi phụ việc',
+    phones: ['0912345678']
+  };
+  assert.equal(leadFilter.evaluateLead(vaVoPost, filterConfig).qualified, true);
+
+  // 3. "cần họ đến chung vui" must not collide with "căn hộ"
+  const canHoPost = {
+    authorName: 'Lẩu Nướng 99',
+    content: 'Quán khai trương cần họ đến chung vui ủng hộ',
+    phones: ['0912345678']
+  };
+  assert.equal(leadFilter.evaluateLead(canHoPost, filterConfig).qualified, true);
+
+  // 4. "lên giờ khai trương" must not collide with "lên giỏ"
+  const lenGioPost = {
+    authorName: 'Bia Tươi Phố Cổ',
+    content: 'Quán lên giờ khai trương đón khách',
+    phones: ['0912345678']
+  };
+  assert.equal(leadFilter.evaluateLead(lenGioPost, filterConfig).qualified, true);
+
+  // 5. "từ lúc tấm bé" must not collide with "tắm bé"
+  const tamBePost = {
+    authorName: 'Cafe Kỷ Niệm',
+    content: 'Từ lúc tấm bé tôi đã ước mơ mở quán cà phê này, hôm nay khai trương',
+    phones: ['0912345678']
+  };
+  assert.equal(leadFilter.evaluateLead(tamBePost, filterConfig).qualified, true);
+});
+
+
