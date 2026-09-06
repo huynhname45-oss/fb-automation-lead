@@ -676,21 +676,21 @@ class SearchEngine extends EventEmitter {
         throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
       }
 
-      // 2. Select Posts (Bài viết) Tab in sidebar (if present) to ensure dedicated posts stream
-      await this._applyPostsTab(page);
-      await delay(1000);
+      // 2. Select All (Tất cả) Tab in sidebar to expand sub-filters (Bài viết mới đây, Ngày đăng)
+      await this._applyAllTab(page);
+      await delay(1500);
 
       // 3. Toggle "Bài viết mới đây" (Recent Posts)
       const enableRecent = filters.recentPosts !== false;
       if (enableRecent) {
-        logger.info('2. Kích hoạt bộ lọc: Bật nút gạt "Bài viết mới đây" (Recent posts)...');
+        logger.info('3. Kích hoạt bộ lọc: Bật nút gạt "Bài viết mới đây" (Recent posts)...');
         await this._applyRecentPostsToggle(page, true);
         await delay(1500);
       }
 
       // 4. Select "Ngày đăng" (Date Posted - Year)
       if (filters.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '') {
-        logger.info(`3. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
+        logger.info(`4. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
         await this._applyDateFilter(page, filters.datePosted);
         await delay(1500);
       }
@@ -2135,64 +2135,117 @@ class SearchEngine extends EventEmitter {
 
   async _applyAllTab(page) {
     try {
-      logger.info('📌 Đang chọn mục "Tất cả" trên thanh bộ lọc tìm kiếm...');
+      logger.info('📌 Đang kiểm tra và chọn mục "Tất cả" trên thanh bộ lọc tìm kiếm...');
+      await delay(1000);
+
+      // 1. Check if sub-filters are already visible
+      const isAlreadyExpanded = await page.evaluate(() => {
+        const textNodes = Array.from(document.querySelectorAll('span, div, label, p'));
+        return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Ngày đăng|Date posted)/i.test((el.innerText || el.textContent || '').trim()));
+      }).catch(() => false);
+
+      if (isAlreadyExpanded) {
+        logger.info('✔ Bộ lọc "Tất cả" đã được mở sẵn (sub-filters đã hiển thị).');
+        return true;
+      }
+
+      let clicked = false;
+
       // Strategy 1: Find sidebar item with text "Tất cả" or "All"
       const allTabLocators = [
-        page.locator('div[role="navigation"] a, div[role="navigation"] div[role="button"], div[role="listitem"]').filter({ hasText: /^Tất cả$|^All$/i }),
+        page.locator('div[role="navigation"], div[aria-label*="Bộ lọc"], div[aria-label*="Filters"], div[data-pagelet*="LeftRail"]').locator('a, div[role="button"], div[role="listitem"], div[role="tab"]').filter({ hasText: /^Tất cả$|^All$/i }),
         page.getByRole('link', { name: /^Tất cả$|^All$/i }),
         page.getByRole('tab', { name: /^Tất cả$|^All$/i }),
+        page.getByRole('button', { name: /^Tất cả$|^All$/i }),
+        page.locator('div[role="listitem"]').filter({ hasText: /^Tất cả$|^All$/i }),
         page.getByText(/^Tất cả$|^All$/i)
       ];
 
       for (const loc of allTabLocators) {
-        if (await loc.count() > 0) {
-          const first = loc.first();
-          if (await first.isVisible()) {
-            await first.click({ force: true });
-            logger.info('✔ Đã click mục "Tất cả" (Playwright locator)');
-            await delay(1000);
-            return true;
+        try {
+          if (await loc.count() > 0) {
+            const first = loc.first();
+            if (await first.isVisible()) {
+              const box = await first.boundingBox();
+              if (box) {
+                await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+              } else {
+                await first.click({ force: true });
+              }
+              logger.info('✔ Đã click mục "Tất cả" (Playwright locator)');
+              clicked = true;
+              break;
+            }
           }
+        } catch (locErr) {}
+      }
+
+      // Strategy 2: DOM evaluate with dispatchEvent + mouse events
+      if (!clicked) {
+        clicked = await page.evaluate(() => {
+          const allEls = Array.from(document.querySelectorAll('a, div[role="button"], div[role="listitem"], div[role="tab"], span, div'));
+          for (const el of allEls) {
+            const txt = (el.innerText || el.textContent || '').trim();
+            if (/^(?:Tất cả|All)$/i.test(txt) || txt.startsWith('Tất cả\n') || txt.startsWith('All\n')) {
+              const target = el.closest('a') || el.closest('div[role="button"]') || el.closest('div[role="listitem"]') || el.closest('div[role="tab"]') || el;
+              target.scrollIntoView?.({ block: 'center' });
+              target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+              target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              if (target.click) target.click();
+              return true;
+            }
+          }
+          return false;
+        }).catch(() => false);
+
+        if (clicked) {
+          logger.info('✔ Đã click mục "Tất cả" (DOM dispatchEvent)');
         }
       }
 
-      // Strategy 2: DOM evaluate with dispatchEvent
-      const clicked = await page.evaluate(() => {
-        const candidates = Array.from(document.querySelectorAll('a[href*="/search/top"], div[role="listitem"], div[role="button"], div[role="tab"], span'));
-        for (const el of candidates) {
-          const txt = el.textContent.trim();
-          if (/^(Tất cả|All)$/i.test(txt) || txt.startsWith('Tất cả\n') || txt.startsWith('All\n')) {
-            const target = el.closest('a') || el.closest('div[role="button"]') || el.closest('div[role="listitem"]') || el;
-            target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      // Strategy 3: Fallback to "Bài viết" / "Posts" if "Tất cả" was not found
+      if (!clicked) {
+        logger.info('ℹ️ Không thấy "Tất cả", thử tìm mục "Bài viết"...');
+        const postsClicked = await this._applyPostsTab(page);
+        if (postsClicked) return true;
+      }
+
+      // Wait up to 5s for sub-filters to render
+      logger.info('⏳ Đang chờ Facebook mở rộng các tùy chọn bộ lọc con ("Bài viết mới đây", "Ngày đăng")...');
+      for (let i = 0; i < 6; i++) {
+        await delay(800);
+        try {
+          const subFilterReady = await page.evaluate(() => {
+            const textNodes = Array.from(document.querySelectorAll('span, div, label, p'));
+            return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Ngày đăng|Date posted)/i.test((el.innerText || el.textContent || '').trim()));
+          });
+          if (subFilterReady) {
+            logger.info('✔ Các mục bộ lọc con đã hiển thị thành công!');
             return true;
           }
-        }
-        return false;
-      });
-
-      if (clicked) {
-        logger.info('✔ Đã click mục "Tất cả" (DOM dispatchEvent)');
-        await delay(1000);
-        return true;
+        } catch (e) {}
       }
+
+      logger.info('ℹ️ Đã hoàn tất bước chọn "Tất cả".');
+      return true;
     } catch (e) {
       logger.warn({ err: e }, 'Không thể click mục Tất cả');
+      return false;
     }
-    return false;
   }
 
   async _applyRecentPostsToggle(page, shouldEnable = true) {
     try {
       logger.info('🔘 Đang tìm và kích hoạt nút gạt "Bài viết mới đây"...');
-      await delay(1200);
+      await delay(1000);
 
       // Strategy 1: Check if already matching
       const isAlreadyOn = await page.evaluate(() => {
         const labels = Array.from(document.querySelectorAll('span, div, label, p'));
         for (const label of labels) {
-          if (!/^(Bài viết mới đây|Bài viết mới nhất|Recent posts|Gần đây)$/i.test(label.textContent.trim())) continue;
+          const txt = (label.innerText || label.textContent || '').trim();
+          if (!/(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Gần đây)/i.test(txt)) continue;
           let cur = label;
           for (let i = 0; i < 6 && cur; i++, cur = cur.parentElement) {
             const sw = cur.matches?.('div[role="checkbox"], div[role="switch"], input[type="checkbox"], div[aria-checked]')
@@ -2202,7 +2255,7 @@ class SearchEngine extends EventEmitter {
           }
         }
         return null;
-      });
+      }).catch(() => null);
 
       if (isAlreadyOn === shouldEnable) {
         logger.info(`✔ Nút gạt "Bài viết mới đây" đã ở trạng thái ${shouldEnable}.`);
@@ -2210,23 +2263,29 @@ class SearchEngine extends EventEmitter {
       }
 
       // Strategy 2: Click via Playwright locator on the row / switch
-      const toggleRow = page.locator('div, label').filter({ hasText: /^(Bài viết mới đây|Bài viết mới nhất|Recent posts)$/i }).first();
+      const toggleRow = page.locator('div, label').filter({ hasText: /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts)/i }).first();
+      let clicked = false;
       if (await toggleRow.count() > 0 && await toggleRow.isVisible()) {
         const switchLoc = toggleRow.locator('div[role="checkbox"], div[role="switch"], input[type="checkbox"]').first();
-        if (await switchLoc.count() > 0) {
-          await switchLoc.click({ force: true });
+        const targetToClick = (await switchLoc.count() > 0 && await switchLoc.isVisible()) ? switchLoc : toggleRow;
+        const box = await targetToClick.boundingBox();
+        if (box) {
+          await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         } else {
-          await toggleRow.click({ force: true });
+          await targetToClick.click({ force: true });
         }
         logger.info('✔ Đã click nút gạt "Bài viết mới đây" (Playwright locator)');
-        await delay(1200);
-      } else {
-        // Strategy 3: DOM evaluate click + dispatchEvent
-        const clicked = await page.evaluate((targetState) => {
+        clicked = true;
+        await delay(1500);
+      }
+
+      // Strategy 3: DOM evaluate click + dispatchEvent
+      if (!clicked) {
+        clicked = await page.evaluate((targetState) => {
           const candidateLabels = Array.from(document.querySelectorAll('span, div, label, p'));
           for (const label of candidateLabels) {
-            const txt = label.textContent.trim();
-            if (/^(Bài viết mới đây|Bài viết mới nhất|Recent posts|Gần đây)$/i.test(txt)) {
+            const txt = (label.innerText || label.textContent || '').trim();
+            if (/(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Gần đây)/i.test(txt)) {
               let sw = null;
               let cur = label;
               for (let i = 0; i < 6; i++) {
@@ -2238,44 +2297,23 @@ class SearchEngine extends EventEmitter {
                 cur = cur.parentElement;
               }
               const clickTarget = sw || cur || label;
-              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-              clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              clickTarget.scrollIntoView?.({ block: 'center' });
+              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+              clickTarget.click();
               return true;
             }
           }
           return false;
-        }, shouldEnable);
+        }, shouldEnable).catch(() => false);
 
         if (clicked) {
           logger.info('✔ Đã click nút gạt "Bài viết mới đây" (DOM dispatchEvent)');
-          await delay(1200);
+          await delay(1500);
         }
       }
 
-      // Verification
-      const verifiedState = await page.evaluate(() => {
-        const labels = Array.from(document.querySelectorAll('span, div, label, p'));
-        for (const label of labels) {
-          if (!/^(Bài viết mới đây|Bài viết mới nhất|Recent posts|Gần đây)$/i.test(label.textContent.trim())) continue;
-          let cur = label;
-          for (let i = 0; i < 6 && cur; i++, cur = cur.parentElement) {
-            const sw = cur.matches?.('div[role="checkbox"], div[role="switch"], input[type="checkbox"], div[aria-checked]')
-              ? cur
-              : cur.querySelector?.('div[role="checkbox"], div[role="switch"], input[type="checkbox"], div[aria-checked]');
-            if (sw) return sw.getAttribute('aria-checked') === 'true' || sw.checked === true;
-          }
-        }
-        return null;
-      });
-
-      if (verifiedState === shouldEnable) {
-        logger.info(`✔ Đã xác minh bộ lọc Facebook "Bài viết mới đây" = ${shouldEnable}.`);
-        return true;
-      } else {
-        logger.info(`ℹ️ Đã thực hiện thao tác bật "Bài viết mới đây". Pipeline tiếp tục.`);
-        return true;
-      }
+      return true;
     } catch (e) {
       logger.warn({ err: e }, 'Lỗi thao tác nút gạt Bài viết mới đây');
       return false;
@@ -2289,77 +2327,119 @@ class SearchEngine extends EventEmitter {
     try {
       await delay(1000);
 
-      // 1. Check if year is ALREADY selected (e.g. badge pill "2026" or radio is checked)
+      // 1. Check if year is ALREADY selected
       const alreadySelected = await page.evaluate((targetYear) => {
-        const textNodes = Array.from(document.querySelectorAll('span, div, label, [role="button"]'));
+        const textNodes = Array.from(document.querySelectorAll('span, div, label, [role="button"], [role="radio"]'));
         return textNodes.some(el => {
-          const txt = el.textContent.trim();
+          const txt = (el.innerText || el.textContent || '').trim();
           return (txt === targetYear || txt === `Năm ${targetYear}` || txt.includes(`${targetYear}`)) &&
                  (el.closest('[aria-checked="true"]') || el.classList.toString().includes('selected') || el.querySelector('i, svg'));
         });
-      }, String(yearStr));
+      }, String(yearStr)).catch(() => false);
 
       if (alreadySelected) {
         logger.info(`✔ Bộ lọc Năm ${yearStr} đã được chọn từ trước.`);
         return true;
       }
 
-      // 2. Click "Ngày đăng" / "Date posted" accordion/dropdown to expand options
-      logger.info(`🔍 Đang click mở mục "Ngày đăng"...`);
-      const dateHeaderLoc = page.locator('div[role="button"], div[aria-expanded], span, label')
-        .filter({ hasText: /^Ngày đăng$|^Date posted$/i })
+      // 2. Check if year options are already open/visible
+      const yearRegex = new RegExp(`^(?:Năm\\s*)?${yearStr}$`, 'i');
+      let yearOption = page.locator('div[role="radio"], div[role="button"], div[role="menuitemradio"], span, label')
+        .filter({ hasText: yearRegex })
         .first();
 
-      let opened = false;
-      if (await dateHeaderLoc.count() > 0 && await dateHeaderLoc.isVisible()) {
-        await dateHeaderLoc.click({ force: true });
-        opened = true;
-      } else {
-        opened = await page.evaluate(() => {
-          const elements = Array.from(document.querySelectorAll('span, div[role="button"], div[aria-expanded], label'));
-          for (const el of elements) {
-            const txt = el.textContent.trim();
-            if (/^(Ngày đăng|Date posted)$/i.test(txt) || txt.startsWith('Ngày đăng\n') || txt.startsWith('Date posted\n')) {
-              const btn = el.closest('div[role="button"]') || el.closest('div[aria-expanded]') || el;
-              btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-              btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-              btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              return true;
+      let isYearVisible = false;
+      try {
+        isYearVisible = (await yearOption.count() > 0) && (await yearOption.isVisible());
+      } catch (e) {}
+
+      // If not yet visible, click "Ngày đăng" / "Date posted" to expand
+      if (!isYearVisible) {
+        logger.info(`🔍 Đang click mở mục "Ngày đăng"...`);
+        const dateHeaderLocators = [
+          page.locator('div[role="button"], div[aria-expanded], span, label').filter({ hasText: /^(?:Ngày đăng|Date posted)$/i }),
+          page.getByRole('button', { name: /Ngày đăng|Date posted/i }),
+          page.getByText(/^(?:Ngày đăng|Date posted)$/i)
+        ];
+
+        let opened = false;
+        for (const loc of dateHeaderLocators) {
+          try {
+            if (await loc.count() > 0 && await loc.first().isVisible()) {
+              const box = await loc.first().boundingBox();
+              if (box) {
+                await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+              } else {
+                await loc.first().click({ force: true });
+              }
+              opened = true;
+              logger.info('✔ Đã click mở danh sách Ngày đăng (Playwright locator)');
+              break;
             }
+          } catch (e) {}
+        }
+
+        if (!opened) {
+          opened = await page.evaluate(() => {
+            const elements = Array.from(document.querySelectorAll('span, div[role="button"], div[aria-expanded], label'));
+            for (const el of elements) {
+              const txt = (el.innerText || el.textContent || '').trim();
+              if (/^(Ngày đăng|Date posted)$/i.test(txt) || txt.startsWith('Ngày đăng\n') || txt.startsWith('Date posted\n')) {
+                const btn = el.closest('div[role="button"]') || el.closest('div[aria-expanded]') || el;
+                btn.scrollIntoView?.({ block: 'center' });
+                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                btn.click();
+                return true;
+              }
+            }
+            return false;
+          }).catch(() => false);
+
+          if (opened) {
+            logger.info('✔ Đã click mở danh sách Ngày đăng (DOM dispatchEvent)');
           }
-          return false;
-        });
+        }
+
+        logger.info('⏳ Chờ 1.5s để menu Ngày đăng mở...');
+        await delay(1500);
       }
 
-      logger.info(`✔ Đã click mở danh sách Năm (opened=${opened}). Chờ 1.5s để menu mở...`);
-      await delay(1500);
-
       // 3. Click the target Year (e.g. "2026" / "Năm 2026")
-      const yearRegex = new RegExp(`^(?:Năm\\s*)?${yearStr}$`, 'i');
-      const yearLocator = page.locator('div[role="radio"], div[role="button"], div[role="menuitemradio"], span, label')
+      yearOption = page.locator('div[role="radio"], div[role="button"], div[role="menuitemradio"], span, label')
         .filter({ hasText: yearRegex })
         .first();
 
       let selected = false;
-      if (await yearLocator.count() > 0 && await yearLocator.isVisible()) {
-        await yearLocator.click({ force: true });
-        selected = true;
-        logger.info(`✔ Đã click chọn Năm ${yearStr} (Playwright locator)`);
-      } else {
+      try {
+        if (await yearOption.count() > 0 && await yearOption.isVisible()) {
+          const box = await yearOption.boundingBox();
+          if (box) {
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+          } else {
+            await yearOption.click({ force: true });
+          }
+          selected = true;
+          logger.info(`✔ Đã click chọn Năm ${yearStr} (Playwright locator)`);
+        }
+      } catch (e) {}
+
+      if (!selected) {
         selected = await page.evaluate((targetYear) => {
           const candidates = Array.from(document.querySelectorAll('span, div[role="radio"], div[role="button"], div[role="menuitemradio"], label'));
           for (const el of candidates) {
-            const txt = el.textContent.trim();
+            const txt = (el.innerText || el.textContent || '').trim();
             if (txt === targetYear || txt === `Năm ${targetYear}` || txt === `Year ${targetYear}`) {
               const clickTarget = el.closest('div[role="radio"]') || el.closest('div[role="button"]') || el.closest('label') || el;
-              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-              clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              clickTarget.scrollIntoView?.({ block: 'center' });
+              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+              clickTarget.click();
               return true;
             }
           }
           return false;
-        }, String(yearStr));
+        }, String(yearStr)).catch(() => false);
 
         if (selected) {
           logger.info(`✔ Đã click chọn Năm ${yearStr} (DOM dispatchEvent)`);
