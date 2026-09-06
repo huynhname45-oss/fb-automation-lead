@@ -26,17 +26,17 @@ if exist "%~dp0node.exe" (
     )
 )
 
-:: 2. Open Windows Firewall for Port 3000
-echo [KIEM TRA] Dang mo cong 3000 tren Windows Firewall...
-netsh advfirewall firewall add rule name="FB Automation Tool" dir=in action=allow protocol=TCP localport=3000 >nul 2>&1
+:: 2. Open Windows Firewall for Port 3001
+echo [KIEM TRA] Dang mo cong 3001 tren Windows Firewall...
+netsh advfirewall firewall add rule name="FB Automation Tool" dir=in action=allow protocol=TCP localport=3001 >nul 2>&1
 
 echo.
 echo ==================================================
 echo   SERVER DANG CHAY TREN MAY / VPS!
 echo ==================================================
 echo.
-echo   Truy cap truc tiep tren may:    http://localhost:3000
-echo   Truy cap tu may khac cung mang: http://[IP_MAY_TINH]:3000
+echo   Truy cap truc tiep tren may:    http://localhost:3001
+echo   Truy cap tu may khac cung mang: http://[IP_MAY_TINH]:3001
 echo.
 echo   [GHI CHU] De DUNG tool, dong cua so nay hoac nhan Ctrl+C
 echo ==================================================

@@ -32,6 +32,6 @@ echo   (Luu y: Can chay file ChayTool.bat song song de server hoat dong)
 echo =========================================================================
 echo.
 
-"%~dp0cloudflared.exe" tunnel --url http://localhost:3000
+"%~dp0cloudflared.exe" tunnel --url http://localhost:3001
 
 pause
