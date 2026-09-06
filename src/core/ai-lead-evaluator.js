@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, isLandmarkContext } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -962,13 +962,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       return { isQualified: false, score: 15, summary: 'Dịch vụ nhà xe / Vận tải hành khách', businessType: 'Vận tải / Xe khách', intent: 'Dịch vụ Vận tải', salesPitch: '', recommendedFeatures: '', reason: 'Nhà xe / Dịch vụ xe khách vận tải hành khách.', provider: 'local_nlp' };
     }
     if (/nhà thuốc|tiệm thuốc tây|quầy thuốc|dược phẩm/i.test(textLower)) {
-      return { isQualified: false, score: 15, summary: 'Tiệm thuốc tây / Quầy bán dược phẩm', businessType: 'Dược phẩm / Nhà thuốc', intent: 'Nhà thuốc', salesPitch: '', recommendedFeatures: '', reason: 'Tiệm thuốc tây / Quầy thuốc (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      const matchedTerm = (textLower.match(/nhà thuốc|tiệm thuốc tây|quầy thuốc|dược phẩm/i) || [])[0] || '';
+      if (!isLandmarkContext(content, matchedTerm)) {
+        return { isQualified: false, score: 15, summary: 'Tiệm thuốc tây / Quầy bán dược phẩm', businessType: 'Dược phẩm / Nhà thuốc', intent: 'Nhà thuốc', salesPitch: '', recommendedFeatures: '', reason: 'Tiệm thuốc tây / Quầy thuốc (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      }
     }
     if (/khách sạn|hotel|resort|homestay|nhà nghỉ|motel|villa/i.test(textLower)) {
-      return { isQualified: false, score: 15, summary: 'Cơ sở lưu trú / Khách sạn / Homestay / Resort', businessType: 'Khách sạn / Lưu trú', intent: 'Lưu trú / Hotel', salesPitch: '', recommendedFeatures: '', reason: 'Khách sạn / Resort / Homestay (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      const matchedTerm = (textLower.match(/khách sạn|hotel|resort|homestay|nhà nghỉ|motel|villa/i) || [])[0] || '';
+      if (!isLandmarkContext(content, matchedTerm)) {
+        return { isQualified: false, score: 15, summary: 'Cơ sở lưu trú / Khách sạn / Homestay / Resort', businessType: 'Khách sạn / Lưu trú', intent: 'Lưu trú / Hotel', salesPitch: '', recommendedFeatures: '', reason: 'Khách sạn / Resort / Homestay (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      }
     }
     if (/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu.test(textLower)) {
-      return { isQualified: false, score: 0, summary: 'Khai trương tòa nhà / Sa bàn / Bất động sản (Đã loại trừ)', businessType: 'Bất động sản / Tòa nhà', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Khai trương tòa nhà, sa bàn, dự án bất động sản, căn hộ, văn phòng (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      const matchedTerm = (textLower.match(/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu) || [])[0] || '';
+      if (!isLandmarkContext(content, matchedTerm)) {
+        return { isQualified: false, score: 0, summary: 'Khai trương tòa nhà / Sa bàn / Bất động sản (Đã loại trừ)', businessType: 'Bất động sản / Tòa nhà', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Khai trương tòa nhà, sa bàn, dự án bất động sản, căn hộ, văn phòng (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+      }
     }
     if (/(?:gara|garage|sửa\s*xe|tiệm\s*sửa\s*xe|sửa\s*xe\s*máy|rửa\s*xe|tiệm\s*rửa\s*xe|chăm\s*sóc\s*xe|detailing|cứu\s*hộ\s*xe|cứu\s*hộ\s*giao\s*thông|vá\s*vỏ|vá\s*xe|thay\s*nhớt)/iu.test(textLower)) {
       return { isQualified: false, score: 0, summary: 'Dịch vụ sửa xe / Gara / Rửa xe (Đã loại trừ)', businessType: 'Dịch vụ Sửa xe / Gara', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ sửa xe, gara, rửa xe (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };

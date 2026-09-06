@@ -78,6 +78,99 @@ function findMatchedKeyword(textClean, keywords = []) {
 }
 
 /**
+ * Regex identifying directional / address landmark prepositions in Vietnamese.
+ * Used to avoid false-rejecting SMB posts that merely mention a landmark in their address line
+ * (e.g. "Ngay Nhà thuốc Long Châu – đối diện Chung cư Sky9", "cạnh Vinmart", "gần bệnh viện...").
+ */
+export const LANDMARK_PREFIX_REGEX = /(?:địa\s*chỉ|đ\/c|dc|address|vị\s*trí|vi\s*tri|toạ\s*độ|tại|tai|ở|o|ngay|ngay\s*cổng|ngay\s*chân|đối\s*diện|doi\s*dien|doi\s*dien\s*cong|đối\s*diện\s*cổng|gần|gan|gần\s*cổng|gan\s*cong|cạnh|canh|kế\s*bên|ke\s*ben|kế|ke|sát\s*bên|sat\s*ben|sát|sat|cách|cach|sau\s*lưng|sau\s*lung|sau|trước\s*mặt|truoc\s*mat|trước|truoc|bên\s*hông|ben\s*hong|bên\s*cạnh|ben\s*canh|hướng\s*đi|huong\s*di|hướng\s*về|huong\s*ve|đoạn|doan|ngã\s*[345ba|tư|tu|năm|nam]|nga\s*[345ba|tu|nam]|vòng\s*xoay|vong\s*xoay|bùng\s*binh|bung\s*binh|chân\s*cầu|chan\s*cau|dưới\s*chân|duoi\s*chan|shophouse|tầng\s*trệt|tang\s*tret|khu\s*đô\s*thị|khu\s*do\s*thi|chung\s*cư|chung\s*cu|toà\s*nhà|tòa\s*nhà|toa\s*nha)\s*(?:của|ở|tại|phía|bên)?\s*(?:nhà\s*thuốc|siêu\s*thị|cửa\s*hàng|chi\s*nhánh|toà\s*nhà|tòa\s*nhà|toa\s*nha|chung\s*cư|chung\s*cu|dự\s*án|du\s*an|khu\s*đô\s*thị|khu\s*do\s*thi|trung\s*tâm|tttm|chợ|bệnh\s*viện|trường|cổng)?\s*$/i;
+
+/**
+ * Checks if ALL occurrences of a matched keyword in post content appear inside a directional landmark context.
+ * If yes, the keyword is only serving as an address landmark / location indicator, NOT the business being opened.
+ */
+export function isLandmarkContext(content = '', matchedKeyword = '') {
+  if (!content || !matchedKeyword) return false;
+
+  const contentLower = content.toLowerCase();
+  const kwLower = matchedKeyword.toLowerCase().trim();
+  const contentNoAccent = removeAccents(contentLower);
+  const kwNoAccent = removeAccents(kwLower);
+
+  let searchIdx = 0;
+  let matchesCount = 0;
+  let landmarkMatches = 0;
+
+  while (searchIdx < contentNoAccent.length) {
+    const idx = contentNoAccent.indexOf(kwNoAccent, searchIdx);
+    if (idx === -1) break;
+
+    const charBefore = idx > 0 ? contentNoAccent[idx - 1] : ' ';
+    const charAfter = idx + kwNoAccent.length < contentNoAccent.length ? contentNoAccent[idx + kwNoAccent.length] : ' ';
+    const isWordBoundary = !/[a-z0-9]/i.test(charBefore) && !/[a-z0-9]/i.test(charAfter);
+
+    if (isWordBoundary) {
+      matchesCount++;
+      const startPre = Math.max(0, idx - 80);
+      const preText = content.substring(startPre, idx).trim();
+      const preTextNoAccent = removeAccents(preText);
+
+      if (LANDMARK_PREFIX_REGEX.test(preText) || LANDMARK_PREFIX_REGEX.test(preTextNoAccent)) {
+        landmarkMatches++;
+      }
+    }
+
+    searchIdx = idx + kwNoAccent.length;
+  }
+
+  return matchesCount > 0 && matchesCount === landmarkMatches;
+}
+
+/**
+ * Robust Negative Entity Matcher with Directional Landmark Awareness.
+ * 1. Checks authorName: If matched, 100% rejected (author represents the entity).
+ * 2. Checks content: If matched, verifies whether it is merely an address landmark.
+ */
+export function findMatchedNegativeEntity(authorName = '', content = '', keywords = []) {
+  if (!Array.isArray(keywords) || keywords.length === 0) return null;
+
+  const authorClean = cleanTextForMatching(authorName);
+  const contentClean = cleanTextForMatching(content);
+  const contentNoAccent = cleanTextForMatching(removeAccents(contentClean));
+  const authorNoAccent = cleanTextForMatching(removeAccents(authorClean));
+
+  // 1. Author match (100% priority, no landmark bypass)
+  for (const kw of keywords) {
+    const kwTrim = kw.toLowerCase().trim();
+    const kwClean = ` ${kwTrim} `;
+    if (authorClean.includes(kwClean)) return { term: kw, inAuthor: true };
+    if (!ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
+      const kwNoAccent = ` ${removeAccents(kwTrim)} `;
+      if (authorNoAccent.includes(kwNoAccent)) return { term: kw, inAuthor: true };
+    }
+  }
+
+  // 2. Content match (with landmark bypass)
+  for (const kw of keywords) {
+    const kwTrim = kw.toLowerCase().trim();
+    const kwClean = ` ${kwTrim} `;
+    let hasMatch = contentClean.includes(kwClean);
+
+    if (!hasMatch && !ACCENT_SENSITIVE_KEYWORDS.has(kwTrim)) {
+      const kwNoAccent = ` ${removeAccents(kwTrim)} `;
+      hasMatch = contentNoAccent.includes(kwNoAccent);
+    }
+
+    if (hasMatch) {
+      if (!isLandmarkContext(content, kwTrim)) {
+        return { term: kw, inAuthor: false };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Valid Vietnamese Personal Mobile Number Check (10 digits starting with 03, 05, 07, 08, 09)
  */
 export function isPersonalMobilePhone(phone = '') {
@@ -292,26 +385,26 @@ export class LeadFilter {
 
     // 1. Enterprise / Large Chain Check (Highest Priority)
     if (excludeEnterprise) {
-      const matchedChain = findMatchedKeyword(combinedText, entities.enterpriseChains);
+      const matchedChain = findMatchedNegativeEntity(post.authorName, post.content, entities.enterpriseChains);
       if (matchedChain) {
         return {
           qualified: false,
           category: 'enterprise_chain',
-          matchedTerm: matchedChain,
-          reason: `Chuỗi lớn / Doanh nghiệp quy mô lớn: "${matchedChain}"`
+          matchedTerm: matchedChain.term,
+          reason: `Chuỗi lớn / Doanh nghiệp quy mô lớn: "${matchedChain.term}"`
         };
       }
     }
 
     // 2. POS Software Competitor & Sale Seeding Check
     if (excludeCompetitors) {
-      const matchedCompetitor = findMatchedKeyword(combinedText, entities.posCompetitors);
+      const matchedCompetitor = findMatchedNegativeEntity(post.authorName, post.content, entities.posCompetitors);
       if (matchedCompetitor) {
         return {
           qualified: false,
           category: 'pos_competitor',
-          matchedTerm: matchedCompetitor,
-          reason: `Đối thủ phần mềm POS / Bài bán hàng đối thủ: "${matchedCompetitor}"`
+          matchedTerm: matchedCompetitor.term,
+          reason: `Đối thủ phần mềm POS / Bài bán hàng đối thủ: "${matchedCompetitor.term}"`
         };
       }
     }
@@ -328,25 +421,25 @@ export class LeadFilter {
         };
       }
 
-      const matchedIndustry = findMatchedKeyword(combinedText, entities.unsupportedIndustries);
+      const matchedIndustry = findMatchedNegativeEntity(post.authorName, post.content, entities.unsupportedIndustries);
       if (matchedIndustry) {
         return {
           qualified: false,
           category: 'unsupported_industry',
-          matchedTerm: matchedIndustry,
-          reason: `Ngành hàng không phù hợp với POS SMB: "${matchedIndustry}"`
+          matchedTerm: matchedIndustry.term,
+          reason: `Ngành hàng không phù hợp với POS SMB: "${matchedIndustry.term}"`
         };
       }
     }
 
     // 4. Spam / Scam / MLM / Online Jobs Check
-    const matchedSpam = findMatchedKeyword(combinedText, entities.spamKeywords);
+    const matchedSpam = findMatchedNegativeEntity(post.authorName, post.content, entities.spamKeywords);
     if (matchedSpam) {
       return {
         qualified: false,
         category: 'spam_job',
-        matchedTerm: matchedSpam,
-        reason: `Bài tuyển dụng đa cấp / việc làm online: "${matchedSpam}"`
+        matchedTerm: matchedSpam.term,
+        reason: `Bài tuyển dụng đa cấp / việc làm online: "${matchedSpam.term}"`
       };
     }
 

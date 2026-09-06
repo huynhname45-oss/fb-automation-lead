@@ -125,3 +125,36 @@ test('Strictly reject real estate, building openings, sa ban, and unsupported se
   const resLeadRes = leadFilter.evaluateLead(restaurantPost, filterConfig);
   assert.equal(resLeadRes.qualified, true, 'Seafood/snail restaurant must be accepted');
 });
+
+test('Directional landmarks and Tiệm Trà Sunrise acceptance', () => {
+  const filterConfig = {
+    excludeUnsupportedIndustries: true,
+    excludeEnterpriseChains: true,
+    excludePosCompetitors: true,
+    requireMobilePhoneOnly: true
+  };
+
+  // 1. User sample post: Tiệm Trà Sunrise (https://web.facebook.com/share/p/1GeDC6HCL6/)
+  const sunrisePost = {
+    authorName: 'Mymy Sun',
+    content: `11/9 NÀY – TIỆM TRÀ SUNRISE CHÍNH THỨC KHAI TRƯƠNG! Sau bao ngày chuẩn bị, cuối cùng Tiệm Trà Sunrise cũng sắp được gặp mọi người rồi  Trà trái cây tươi – pha mới từng ly TƯƠI VỊ QUẢ, SÁNG VỊ TRÀ Nhiều món trà trái cây tươi mát, thơm ngon, dễ uống DEAL KHAI TRƯƠNG TRONG 3 NGÀY ĐỒNG GIÁ CHỈ 25K TẶNG THÊM BÁNH TRÁNG Thời gian: 11/9 – 13/9/2026 Mở cửa: 8:00 – 22:00 Địa chỉ: 92 Đường số 1, KDC Phú Hữu, Quận 9 Ngay Nhà thuốc Long Châu – đối diện Chung cư Sky9 Hotline: 0768 947 627 Một chiếc tiệm nhỏ, rất nhiều tâm huyết và đặc biệt là rất mong được đón những vị khách đầu tiên trong ngày khai trương!Hẹn mọi người 11/9 ghé Sunrise nha! #TiemTraSunrise #KhaiTruong #Quan9 #PhuHuu #Sky9 #TraTraiCay #25K #KhaiTruong119`,
+    phones: ['0768947627']
+  };
+
+  const evalRes = leadFilter.evaluateLead(sunrisePost, filterConfig);
+  assert.equal(evalRes.qualified, true, `Tiệm Trà Sunrise must be QUALIFIED, got: ${JSON.stringify(evalRes)}`);
+
+  const nlpRes = aiLeadEvaluator._localNLPEvaluate(sunrisePost.authorName, sunrisePost.content, sunrisePost.phones);
+  assert.equal(nlpRes.isQualified, true, 'Tiệm Trà Sunrise must be accepted by Local NLP');
+  assert.ok(nlpRes.score >= 80, `Score should be >= 80, got: ${nlpRes.score}`);
+
+  // 2. Unaccented #KhaiTruong or khai truong must NOT collide with "khai trường" (school opening)
+  const unaccentedPost = {
+    authorName: 'Trà Sữa Mới',
+    content: 'Tung bung khai truong quan tra sua moi giam gia 50% #khaitruong hotline 0901234567',
+    phones: ['0901234567']
+  };
+  const unaccentedLead = leadFilter.evaluateLead(unaccentedPost, filterConfig);
+  assert.equal(unaccentedLead.qualified, true, 'Unaccented khai truong must not be rejected as khai trường');
+});
+
