@@ -115,7 +115,7 @@ export function hasOnlyTollFreeNumbers(phones = []) {
 }
 
 // Prefix requires word boundary and whitespace (strictly avoids matching "mở", "phở", "cởi", etc.)
-const LOC_PREFIX = '(?:^|[\\s,;:!?\\(\\[])(?:ở|tại|bên|khu vực|sống tại|đến từ|về từ|located in|lives in|address)[\\s:\\.-]+(?:nước|thành phố|tp|tiểu bang|khu vực|bên)?\\s*';
+const LOC_PREFIX = '(?:^|[\\s,;:!?\\(\\[])(?:ở|tại|bên|khu\\s*vực|sống\\s*tại|đến\\s*từ|về\\s*từ|located\\s*in|lives\\s*in|address|cụ\\s*thể|nước|quốc\\s*gia)[\\s:\\.-]*(?:nước\\s+(?:láng\\s*giềng|bạn)?|thành\\s*phố|tp|tiểu\\s*bang|khu\\s*vực|bên)?\\s*';
 
 // Patterns detecting foreign countries / overseas businesses & diaspora
 export const FOREIGN_PATTERNS = [
@@ -129,11 +129,14 @@ export const FOREIGN_PATTERNS = [
   new RegExp(`${LOC_PREFIX}(?:châu âu|nước đức|germany|berlin|nước anh|vương quốc anh|london|nước pháp|paris|nước nga|ba lan|cộng hòa séc|ch séc|czech|uk)\\b`, 'i'),
   new RegExp(`${LOC_PREFIX}(?:singapore|malaysia|thái lan|bangkok|campuchia|phnom penh|nước lào|philippines)\\b`, 'i'),
 
+  // Direct cities & specific overseas countries that never collide with Vietnamese pronouns
+  /\b(?:thái\s*lan|bangkok|chiang\s*mai|phnom\s*penh|siem\s*reap|campuchia|vientiane|viêng\s*chăn|kuala\s*lumpur|singapore|taipei|taichung|kaohsiung|đài\s*bắc|đài\s*trung|đài\s*nam|cao\s*hùng|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|seoul|busan|incheon|california|houston|sydney|melbourne|brisbane|vancouver|toronto)\b/i,
+
   // Đối tượng / thị trường / cộng đồng nước ngoài
   /\b(?:du học sinh|xklđ|xuất khẩu lao động|tu nghiệp sinh|tokutei|định cư|kiều bào|việt kiều)\s+(?:nhật|hàn|đài|mỹ|úc|canada|âu|đức|anh)/i,
   /\b(?:ship toàn đài loan|ship toàn nhật|ship toàn hàn|ship us|order us|order uk|ship quốc tế)\b/i,
   /\b(?:tân đài tệ|đài tệ|tiền đài)\b/i,
-  /\b\d+\s*(?:man|sen|won|ntd|aud|cad)\b/i
+  /(?:\b\d+[\d,.]*\s*(?:baht|bath|usd|dollar|đô|euro|eur|sgd|rmb|cny|tệ|jpy|yen|yên|krw|won|ntd|tân\s*đài\s*tệ|aud|cad|khr|riel|lak|kip|rub|bảng\s*anh|gbp|man|sen)\b|\$\s*\d+)/i
 ];
 
 // Patterns detecting celebratory / guest / attendee congratulatory posts (NOT the business owner)
@@ -215,11 +218,18 @@ export function checkForeignLead(post = {}) {
   for (const regex of FOREIGN_PATTERNS) {
     const m = rawText.match(regex);
     if (m) {
-      // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan"
-      if (/(?:bò|thịt|nho|táo|cam|sữa|trà sữa|mỹ phẩm|đồ|hàng|tiêu chuẩn|phong cách)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(m[0])) {
+      // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan", "lẩu thái", "trà thái"
+      const matched = m[0].trim();
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|đồ|hàng|tiêu\s*chuẩn|phong\s*cách)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(matched)) {
         continue;
       }
-      return { isForeign: true, reason: `Địa điểm / Thị trường nước ngoài: "${m[0].trim()}"` };
+      if (/(?:lẩu|trà|nem|gỏi|súp|món|ẩm\s*thực|chua\s*cay|chuẩn\s*vị|hương\s*vị)\s+thái(?:\s*lan)?/i.test(rawText)) {
+        const cleanedOfThaiDish = rawText.replace(/(?:lẩu|trà|nem|gỏi|súp|món|ẩm\s*thực|chua\s*cay|chuẩn\s*vị|hương\s*vị)\s+thái(?:\s*lan)?/gi, '');
+        if (!/(?:ở|tại|nước)\s+thái\s*lan|bangkok|\bbaht\b|\bbath\b/i.test(cleanedOfThaiDish)) {
+          continue;
+        }
+      }
+      return { isForeign: true, reason: `Địa điểm / Thị trường nước ngoài: "${matched}"` };
     }
   }
 

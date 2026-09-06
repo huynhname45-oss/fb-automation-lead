@@ -662,9 +662,9 @@ class SearchEngine extends EventEmitter {
       const pages = context.pages();
       page = pages.length > 0 ? pages[0] : await context.newPage();
 
-      // 1. Navigate to Search Page (Use /search/top/ which contains the full "Tất cả" sidebar filters: "Bài viết mới đây", "Ngày đăng")
-      const searchUrl = `https://www.facebook.com/search/top/?q=${encodeURIComponent(keyword)}`;
-      logger.info(`1. Đang mở trang tìm kiếm Facebook: ${searchUrl}`);
+      // 1. Navigate to Posts Search Page (Use /search/posts/ for full infinite-scroll feed of posts)
+      const searchUrl = `https://www.facebook.com/search/posts/?q=${encodeURIComponent(keyword)}`;
+      logger.info(`1. Đang mở trang tìm kiếm Bài viết Facebook: ${searchUrl}`);
       const navRes = await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await delay(crawlDelay);
 
@@ -676,8 +676,8 @@ class SearchEngine extends EventEmitter {
         throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
       }
 
-      // 2. Select All (Tất cả) Tab in sidebar (if present) to display sub-filters
-      await this._applyAllTab(page);
+      // 2. Select Posts (Bài viết) Tab in sidebar (if present) to ensure dedicated posts stream
+      await this._applyPostsTab(page);
       await delay(1000);
 
       // 3. Toggle "Bài viết mới đây" (Recent Posts)

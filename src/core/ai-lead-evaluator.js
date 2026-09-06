@@ -119,24 +119,27 @@ export class AILeadEvaluator {
 Mục tiêu của bạn là phân tích bài viết Facebook để xác định xem người đăng có phải là CHỦ CỬA HÀNG / QUÁN ĐỘC LẬP (SMB) đang chuẩn bị khai trương hoặc đang kinh doanh cần phần mềm bán hàng hay không.
 
 QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
-1. ĐIỂM CAO (80 - 100 điểm) - KHÁCH MỤC TIÊU (F&B / BÁN LẺ SMB):
+1. ĐIỂM CAO (80 - 100 điểm) - KHÁCH MỤC TIÊU HỢP LỆ (F&B / BÁN LẺ / BIDA / KARAOKE):
    - Các quán F&B: quán cafe, trà sữa, quán ăn, quán cơm, bún, phở, lẩu nướng, quán nhậu, tiệm bánh, ăn vặt, sinh tố, chè...
    - Các cửa hàng bán lẻ độc lập: shop thời trang, mỹ phẩm, tạp hóa, siêu thị mini, mẹ & bé, pet shop, phụ kiện, đồ gia dụng...
-   - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, ĐANG KINH DOANH (Cần máy in bill, phần mềm bán hàng, quản lý bàn/kho).
+   - DỊCH VỤ DUY NHẤT ĐƯỢC CHẤP NHẬN: CLB BIDA (Billiards / Bi-a) và Quán KARAOKE (Cần phần mềm tính tiền giờ chơi theo bàn/phòng và order đồ uống).
+   - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, ĐANG KINH DOANH (Cần máy in bill, phần mềm bán hàng, quản lý bàn/kho/giờ).
 
-2. ĐIỂM THẤP (0 - 20 điểm) - BẮT BUỘC LOẠI BỎ (isQualified = false):
-   - Dịch vụ làm đẹp / chăm sóc cá nhân: Spa, Thẩm mỹ viện, Tiệm Nail, Triệt lông, Massage, Gội đầu dưỡng sinh, Salon tóc.
-   - Cơ quan Nhà nước, Công an, Cảnh sát, Quân đội, UBND, Trường học, Bệnh viện công, Cơ quan hành chính.
-   - Giao thông & Du lịch: Vận tải, Đường sắt, Đoàn tàu, Xe khách, Hàng không, Tour du lịch, Khách sạn, Homestay.
-   - Bất động sản, Căn hộ, Nhà trọ, Dịch vụ sinh đẻ, Gói thai sản.
-   - Dịch vụ Quà tặng & Giỏ trái cây: Giỏ trái cây nhập khẩu, Giỏ hoa quả, Giỏ quà biếu, Hộp quà biếu tặng khai trương, tân gia, sinh nhật, đặt giỏ quà, lên giỏ quà, quà biếu khai trương.
-   - Dịch vụ Decor & Cưới hỏi: Trang trí gia tiên, Decor tiệc cưới, Rạp cưới, Mâm quả cưới hỏi Rồng - Phụng, Quả dạm ngõ, Cổng hoa cưới, Trang trí xe hoa, Hoa bàn gia tiên.
-   - Dịch vụ In ấn sự kiện: In thiệp mời khai trương/hội nghị, In phong bì thư, In kẹp file, In voucher, In thiệp cưới, xưởng in ấn phẩm.
-   - Dịch vụ Hoa sự kiện & Đào tạo: Kệ hoa khai trương, Giỏ hoa chúc mừng, Lẵng hoa, Hoa viếng/chia buồn, Hoa sáp, Hoa tiền, Đào tạo học viên cắm hoa, Dạy cắm hoa.
-   - B2B & Phụ trợ: In bao bì, Thi công nội thất/setup quán, Bán xe đẩy bán hàng, Múa lân, Mâm cúng, Lắp đặt camera.
-   - Chuỗi thương hiệu lớn (Highlands, Phúc Long, WinMart, KFC, Aeon...).
-   - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ đi ăn tiệc chúc mừng khai trương (ví dụ: "Chúc 2 thầy ... khai trương hồng phát", "Chúc anh/chị/em/bạn khai trương", "Hôm nay đi ăn khai trương", chụp ảnh kỷ niệm, chúc mừng suông) mà KHÔNG PHẢI CHỦ CỬA HÀNG đăng bài giới thiệu quán của mình -> BẮT BUỘC ĐIỂM 0 (isQualified = false).
-   - Bài viết rác, chỉ có ảnh gia đình, meme, đời sống cá nhân không kinh doanh.`;
+2. ĐIỂM 0 (0 - 15 điểm) - BẮT BUỘC LOẠI BỎ (isQualified = false):
+   - KHÁCH HÀNG / BÀI VIẾT Ở NƯỚC NGOÀI (Thái Lan, Bangkok, Nhật, Hàn, Đài Loan, Mỹ, Úc, Canada... các bài viết tin tức xã hội, an sinh, người vô gia cư, chính sách nước ngoài).
+   - KHAI TRƯƠNG TÒA NHÀ, SA BÀN, DỰ ÁN BẤT ĐỘNG SẢN, CAO ỐC, ĐẠI ĐÔ THỊ, VINHOMES, NOVALAND, MASTERISE, SUN GROUP, VĂN PHÒNG CHO THUÊ.
+   - TẤT CẢ CÁC NGÀNH DỊCH VỤ CÒN LẠI (TRỪ BIDA VÀ KARAOKE):
+     + Dịch vụ làm đẹp: Spa, Thẩm mỹ viện, Tiệm Nail, Triệt lông, Massage, Gội đầu dưỡng sinh, Cắt tóc, Salon tóc, Barbershop.
+     + Dịch vụ kỹ thuật & sửa chữa: Gara ô tô, Sửa xe máy, Rửa xe, Chăm sóc xe, Sửa điện thoại, Sửa điện lạnh, Lắp camera, Thi công nội thất, Biển quảng cáo.
+     + Dịch vụ tiện ích & vệ sinh: Giặt là, Giặt ủi, Giặt sấy, Vệ sinh công nghiệp, Dọn nhà.
+     + Dịch vụ lưu trú: Khách sạn, Resort, Homestay, Nhà nghỉ, Motel.
+     + Dịch vụ giao thông: Nhà xe, Xe khách, Tuyến xe, Tàu hỏa, Đường sắt, Du lịch, Tour, Vé máy bay.
+     + Dịch vụ tài chính & pháp lý: Cầm đồ, Vay vốn, Công chứng, Luật sư.
+     + Dịch vụ y tế & thú y: Phòng khám, Nha khoa, Nhà thuốc, Dịch vụ sinh đẻ, Gói thai sản, Phòng khám thú y, Spa thú cưng.
+     + Dịch vụ giáo dục: Trường học, Lễ khai giảng, Khai trường năm học, Trung tâm tiếng Anh, Luyện thi, Phòng Gym, Yoga.
+     + Dịch vụ sự kiện & quà tặng: Giỏ trái cây, Giỏ hoa quả, Giỏ quà biếu, Hoa khai trương, Kệ hoa, Decor tiệc cưới/gia tiên, In thiệp mời, Múa lân.
+   - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ đi ăn mừng khai trương.
+   - Bài viết rác, ảnh gia đình, meme, đời sống cá nhân không kinh doanh.`;
 
     const systemPrompt = `${contextInstruction}
 
@@ -943,6 +946,7 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     }
 
     const textLower = `${authorName} ${content}`.toLowerCase();
+    const cleanPadded = ` ${textLower.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 
     // 0. Explicit Negative Service & Unsupported Sector Check
     if (/đường sắt|duong sat|tàu hỏa|tau hoa|đoàn tàu|toa tàu|ga tàu|vận tải đường sắt|du lịch|tour du lịch|lữ hành|vé máy bay|hàng không|sân bay|du thuyền|tàu thủy|chi nhánh vận tải|tập đoàn đường sắt|tổng công ty đường sắt|tập đoàn quốc gia|ủy ban|ubnd|sở văn hóa|sở du lịch|sở giao thông/i.test(textLower)) {
@@ -963,8 +967,32 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     if (/khách sạn|hotel|resort|homestay|nhà nghỉ|motel|villa/i.test(textLower)) {
       return { isQualified: false, score: 15, summary: 'Cơ sở lưu trú / Khách sạn / Homestay / Resort', businessType: 'Khách sạn / Lưu trú', intent: 'Lưu trú / Hotel', salesPitch: '', recommendedFeatures: '', reason: 'Khách sạn / Resort / Homestay (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
     }
-    if (/bất động sản|nhà đất|bđs|phòng trọ|căn hộ|cho thuê phòng|cho thuê nhà/i.test(textLower)) {
-      return { isQualified: false, score: 15, summary: 'Dịch vụ Bất động sản / Cho thuê nhà trọ, căn hộ', businessType: 'Bất động sản', intent: 'Bất động sản / Nhà trọ', salesPitch: '', recommendedFeatures: '', reason: 'Bất động sản / Căn hộ / Phòng trọ (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+    if (/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Khai trương tòa nhà / Sa bàn / Bất động sản (Đã loại trừ)', businessType: 'Bất động sản / Tòa nhà', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Khai trương tòa nhà, sa bàn, dự án bất động sản, căn hộ, văn phòng (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
+    }
+    if (/(?:gara|garage|sửa\s*xe|tiệm\s*sửa\s*xe|sửa\s*xe\s*máy|rửa\s*xe|tiệm\s*rửa\s*xe|chăm\s*sóc\s*xe|detailing|cứu\s*hộ\s*xe|cứu\s*hộ\s*giao\s*thông|vá\s*vỏ|vá\s*xe|thay\s*nhớt)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ sửa xe / Gara / Rửa xe (Đã loại trừ)', businessType: 'Dịch vụ Sửa xe / Gara', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ sửa xe, gara, rửa xe (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:sửa\s*điện\s*thoại|ép\s*kính|sửa\s*máy\s*tính|sửa\s*laptop|sửa\s*chữa\s*điện\s*lạnh|sửa\s*điều\s*hòa|lắp\s*điều\s*hòa|lắp\s*đặt\s*camera|thợ\s*điện|thợ\s*nước|nhôm\s*kính|xưởng\s*mộc|thi\s*công\s*nội\s*thất|làm\s*biển\s*quảng\s*cáo|bảng\s*hiệu\s*quảng\s*cáo)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ kỹ thuật / Sửa chữa / Nội thất / Quảng cáo (Đã loại trừ)', businessType: 'Dịch vụ Kỹ thuật / Sửa chữa', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ sửa chữa kỹ thuật, nội thất, quảng cáo (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:giặt\s*là|giặt\s*ủi|giặt\s*sấy|tiệm\s*giặt|vệ\s*sinh\s*công\s*nghiệp|dọn\s*nhà|dọn\s*dẹp\s*vệ\s*sinh|chuyển\s*nhà\s*trọn\s*gói|hút\s*hầm\s*cầu|thông\s*cống)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ giặt là / Vệ sinh / Dọn nhà (Đã loại trừ)', businessType: 'Dịch vụ Tiện ích / Giặt là', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ giặt là, vệ sinh (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:cắt\s*tóc|tiệm\s*cắt\s*tóc|salon\s*tóc|hair\s*salon|barber|barbershop|tiệm\s*tóc|uốn\s*tóc|nhuộm\s*tóc)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ cắt tóc / Salon tóc / Barbershop (Đã loại trừ)', businessType: 'Dịch vụ Tóc / Barber', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ cắt tóc, salon tóc, barbershop (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:cầm\s*đồ|tiệm\s*cầm\s*đồ|cho\s*vay|vay\s*vốn|đáo\s*hạn|văn\s*phòng\s*công\s*chứng|công\s*chứng|luật\s*sư|tư\s*vấn\s*luật|kế\s*toán\s*thuế)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ tài chính / Cầm đồ / Pháp lý (Đã loại trừ)', businessType: 'Dịch vụ Tài chính / Pháp lý', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ tài chính, cầm đồ, pháp lý (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:phòng\s*khám\s*thú\s*y|thú\s*y|bác\s*sĩ\s*thú\s*y|spa\s*thú\s*cưng|cắt\s*tỉa\s*lông\s*(?:chó|mèo))/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ thú y / Spa thú cưng (Đã loại trừ)', businessType: 'Dịch vụ Thú y / Thú cưng', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ chăm sóc thú cưng, thú y (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:phòng\s*gym|tập\s*gym|yoga|dance\s*studio|lớp\s*nhảy|hồ\s*bơi|bể\s*bơi)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Dịch vụ Thể hình / Gym / Yoga (Đã loại trừ)', businessType: 'Dịch vụ Thể hình / Gym', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành dịch vụ thể hình, gym, yoga (Đã loại trừ theo quy tắc chỉ nhận Bida/Karaoke).', provider: 'local_nlp' };
+    }
+    if (/(?:người\s*vô\s*gia\s*cư|chính\s*sách\s*an\s*sinh|tạm\s*trú|nhà\s*tình\s*thương|viện\s*dưỡng\s*lão|trại\s*trẻ\s*mồ\s*côi|an\s*sinh\s*xã\s*hội|phó\s*thống\s*đốc|thị\s*trưởng)/iu.test(textLower)) {
+      return { isQualified: false, score: 0, summary: 'Tin tức xã hội / An sinh / Phi kinh doanh (Đã loại trừ)', businessType: 'Phi thương mại / Xã hội', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Bài viết tin tức xã hội, an sinh, phi kinh doanh thương mại.', provider: 'local_nlp' };
     }
     if (/dịch vụ sinh|sinh đẻ|sinh con|gói sinh|thai sản|khoa sản|phụ sản|khám thai|sinh mổ|sinh thường|tắm bé|thông tắc tia sữa|thông tia sữa/i.test(textLower)) {
       return { isQualified: false, score: 15, summary: 'Dịch vụ Y tế / Gói thai sản và sinh nở', businessType: 'Y tế / Dịch vụ Sinh đẻ', intent: 'Dịch vụ Thai sản / Sinh nở', salesPitch: '', recommendedFeatures: '', reason: 'Dịch vụ y tế sinh đẻ / Gói thai sản (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
@@ -1013,18 +1041,19 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
 
     // 4. Identify Business Category
     let businessType = 'Bán lẻ / Dịch vụ SMB';
-    if (/cafe|cà phê|coffee|trà sữa|milktea|trà trái cây|quán nước|sinh tố|chè/i.test(textLower)) {
+    const hasFBKeyword = /(?:quán\s+ăn|nhà\s+hàng|bánh\s+mì|ăn\s+vặt|quán\s+nhậu|hải\s+sản|quán\s+ốc|tiệm\s+ốc)/i.test(textLower) ||
+      [' bún ', ' phở ', ' cơm ', ' lẩu ', ' nướng ', ' bbq ', ' ốc ', ' bia '].some(kw => cleanPadded.includes(kw));
+
+    if (/\b(?:bida|billiard|billiards|bi-a|karaoke|hát\s*cho\s*nhau\s*nghe)\b/i.test(textLower)) {
+      businessType = 'Dịch vụ Giải trí - Bida / Karaoke';
+    } else if (/cafe|cà phê|coffee|trà sữa|milktea|trà trái cây|quán nước|sinh tố|chè/i.test(textLower)) {
       businessType = 'F&B - Cafe / Trà sữa';
-    } else if (/quán ăn|nhà hàng|bún|phở|cơm|lẩu|nướng|bbq|bánh mì|ăn vặt|quán nhậu|ốc/i.test(textLower)) {
+    } else if (hasFBKeyword) {
       businessType = 'F&B - Quán ăn / Nhà hàng';
     } else if (/quần áo|thời trang|váy|đầm|shop|giày|túi xách|phụ kiện|unisex|boutique/i.test(textLower)) {
       businessType = 'Thời trang / Phụ kiện';
     } else if (/tạp hóa|siêu thị|bách hóa|tiện lợi|mini mart|mart/i.test(textLower)) {
       businessType = 'Tạp hóa / Siêu thị mini';
-    } else if (/spa|nail|móng|mi|salon|gội đầu|massage|thẩm mỹ/i.test(textLower)) {
-      businessType = 'Spa / Nail / Salon';
-    } else if (/bida|billiard|bi-a|gym|fitness/i.test(textLower)) {
-      businessType = 'Bida / Thể thao';
     } else if (/mỹ phẩm|son|skincare|nước hoa/i.test(textLower)) {
       businessType = 'Mỹ phẩm / Làm đẹp';
     } else if (/mẹ và bé|bỉm sữa|đồ chơi|sơ sinh/i.test(textLower)) {
@@ -1052,7 +1081,11 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       intent = 'Khai trương cửa hàng mới';
       reason = `${businessType} chuẩn bị khai trương / mở cửa, nhu cầu cao về phần mềm bán hàng và in hóa đơn.`;
       salesPitch = `Chào anh/chị, em thấy quán mình chuẩn bị khai trương, bên em đang có gói hỗ trợ máy in bill và phần mềm order bàn/quét mã cho quán mới mở...`;
-      recommendedFeatures = businessType.includes('F&B') ? 'In bill bếp, Quản lý định lượng & Order QR' : 'In tem mã vạch & Quản lý tồn kho';
+      recommendedFeatures = businessType.includes('F&B') 
+        ? 'In bill bếp, Quản lý định lượng & Order QR' 
+        : (businessType.includes('Bida') || businessType.includes('Karaoke'))
+          ? 'Tính tiền giờ theo bàn/phòng & Order đồ uống'
+          : 'In tem mã vạch & Quản lý tồn kho';
     } else if (isHiring) {
       score = 75;
       intent = 'Tuyển dụng thu ngân / bán hàng';
