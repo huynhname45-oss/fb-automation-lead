@@ -4,6 +4,8 @@ import dayjs from 'dayjs';
 import { extractLocationDetailed } from './location-extractor.js';
 
 const postSchema = z.object({
+  key: z.string().optional(),
+  id: z.string().optional(),
   authorName: z.string().min(1),
   location: z.string().default('—'),
   content: z.string(),
@@ -145,6 +147,8 @@ export function processResults(rawPosts) {
       const suppliedLocationIsTrusted = post.location && post.location !== '—' &&
         (typeof post.locationConfidence !== 'number' || post.locationConfidence >= 0.75);
       const cleaned = {
+        key: post.key || post.id || undefined,
+        id: post.id || post.key || undefined,
         authorName: cleanText(post.authorName),
         location: suppliedLocationIsTrusted ? post.location : trustedFallbackLocation,
         content: cleanedContent,

@@ -1,9 +1,9 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { exportToExcel, DEFAULT_IMPORT_CONFIG } from '../../src/core/excel-exporter.js';
+import { exportToExcel, exportToExcelBuffer, DEFAULT_IMPORT_CONFIG } from '../../src/core/excel-exporter.js';
 
 test('Export to Excel: output format matches template_import_lead.xlsx exactly', async () => {
   const samplePosts = [
@@ -90,4 +90,33 @@ test('Export to Excel: output format matches template_import_lead.xlsx exactly',
   } finally {
     await fs.unlink(exportedPath).catch(() => {});
   }
+});
+
+test('Export to Excel Buffer: streams binary workbook in RAM without saving to server disk', async () => {
+  const samplePosts = [
+    { authorName: 'Quán Cafe Client Mac', verifiedPhones: ['0912345678'] }
+  ];
+
+  const buffer = await exportToExcelBuffer(samplePosts, {
+    provinceCode: 'TEST_PROVINCE',
+    productGroup: 'TEST_GROUP',
+    salesRep: 'mac_user@company.com'
+  });
+
+  assert.ok(Buffer.isBuffer(buffer) || buffer instanceof Uint8Array, 'Must return binary buffer');
+  assert.ok(buffer.length > 1000, 'Excel buffer must have valid non-empty size');
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer);
+
+  const dataSheet = wb.getWorksheet('Nhập dữ liệu');
+  assert.ok(dataSheet, 'Must contain "Nhập dữ liệu" worksheet');
+  assert.equal(dataSheet.rowCount, 2, 'Header row + 1 data row');
+
+  const row2 = dataSheet.getRow(2).values.slice(1);
+  assert.equal(row2[0], 'Quán Cafe Client Mac');
+  assert.equal(row2[1], '0912345678');
+  assert.equal(row2[4], 'TEST_PROVINCE');
+  assert.equal(row2[7], 'TEST_GROUP');
+  assert.equal(row2[14], 'mac_user@company.com');
 });

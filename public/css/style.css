@@ -2121,4 +2121,13 @@ body {
   color: #94a3b8;
 }
 
+#btnSelectClientFolder.connected {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+  font-weight: 600;
+}
 
+#btnSelectClientFolder:hover {
+  background: var(--bg-card-hover);
+}

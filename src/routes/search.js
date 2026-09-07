@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import searchEngine from '../core/search-engine.js';
 import sessionManager from '../core/session-manager.js';
-import historyManager from '../core/history-manager.js';
+import { getCanonicalPostKey } from '../core/history-manager.js';
 import logger from '../core/logger.js';
 
 const router = express.Router();
@@ -21,7 +21,8 @@ const searchRequestSchema = z.object({
 router.post('/start', async (req, res) => {
   try {
     const sessionStatus = sessionManager.getStatus();
-    if (sessionStatus.status !== 'active') {
+    const hasClientCookie = !!(req.body?.cookie && typeof req.body.cookie === 'string' && req.body.cookie.trim().length > 10);
+    if (sessionStatus.status !== 'active' && !hasClientCookie) {
       return res.status(401).json({
         error: 'Chưa đăng nhập Facebook! Vui lòng vào mục "Session Manager" để đăng nhập hoặc dán Cookie trước khi tìm kiếm.',
         requireLogin: true
@@ -29,12 +30,19 @@ router.post('/start', async (req, res) => {
     }
 
     const parsed = searchRequestSchema.parse(req.body);
-    
+    const clientId = (req.body?.clientId && typeof req.body.clientId === 'string' && req.body.clientId.trim())
+      ? req.body.clientId.trim()
+      : 'default';
+
+    if (hasClientCookie) parsed.filters.cookie = req.body.cookie.trim();
+    if (Array.isArray(req.body.existingKeys)) parsed.filters.existingKeys = req.body.existingKeys;
+    parsed.filters.isClientIsolated = clientId !== 'default';
+
     // Start search asynchronously so we can return response immediately
-    searchEngine.search(parsed.keyword, parsed.filters, parsed.maxPosts)
-      .catch(err => logger.error({ err }, 'Background search failed'));
+    searchEngine.search(parsed.keyword, parsed.filters, parsed.maxPosts, clientId)
+      .catch(err => logger.error({ err, clientId }, 'Background search failed'));
       
-    res.json({ message: 'Search started', status: searchEngine.getProgress() });
+    res.json({ message: 'Search started', status: searchEngine.getProgress(clientId) });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation error', details: error.errors });
@@ -46,99 +54,59 @@ router.post('/start', async (req, res) => {
 
 
 router.get('/status', (req, res) => {
-  res.json(searchEngine.getProgress());
+  const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
+  res.json(searchEngine.getProgress(clientId));
 });
 
 router.get('/results', async (req, res) => {
   try {
-    const history = await historyManager.getHistory();
-
-    // During active search, merge live results (in-RAM) with persisted history
-    // so newly found posts appear immediately in the UI table
-    if (searchEngine.status === 'searching' && searchEngine.results.length > 0) {
-      const { getCanonicalPostKey } = await import('../core/history-manager.js');
-      const existingKeys = new Set(history.map(getCanonicalPostKey));
-      const liveResults = [];
-
-      for (const post of searchEngine.results) {
-        const key = getCanonicalPostKey(post);
-        if (!existingKeys.has(key)) {
-          existingKeys.add(key);
-          liveResults.push({
-            ...post,
-            status: post.status || 'Mới tạo',
-            createdAt: post.createdAt || new Date().toISOString(),
-            _live: true  // Mark as live (not yet persisted)
-          });
-        }
-      }
-
-      const merged = [...liveResults, ...history];
-      return res.json({ count: merged.length, results: merged });
-    }
-
-    res.json({ 
-      count: history.length,
-      results: history 
-    });
+    const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
+    const results = searchEngine.getResults(clientId);
+    return res.json({ count: results.length, results });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 router.post('/clear-history', async (req, res) => {
-  await historyManager.clearHistory();
+  const clientId = (req.body?.clientId && typeof req.body.clientId === 'string') ? req.body.clientId.trim() : null;
+  if (clientId && searchEngine.clientTasks.has(clientId)) {
+    searchEngine.clientTasks.get(clientId).results = [];
+  }
   searchEngine.results = [];
-  res.json({ message: 'History cleared', count: 0, results: [] });
+  res.json({ message: 'Cleared in-memory task', count: 0, results: [] });
 });
 
 router.post('/delete-selected', async (req, res) => {
   try {
-    const { keys } = req.body || {};
+    const { keys, clientId } = req.body || {};
     const keyList = Array.isArray(keys) ? keys : (keys ? [keys] : []);
     const keySet = new Set(keyList.map(k => String(k).toLowerCase().trim()));
 
-    // Filter in-memory searchEngine results
-    if (searchEngine.results && searchEngine.results.length > 0) {
-      searchEngine.results = searchEngine.results.filter(post => {
-        const k = getCanonicalPostKey(post);
-        return !keySet.has(k);
-      });
+    if (clientId && searchEngine.clientTasks.has(clientId)) {
+      const task = searchEngine.clientTasks.get(clientId);
+      task.results = (task.results || []).filter(post => !keySet.has(getCanonicalPostKey(post)));
     }
 
-    const updatedHistory = await historyManager.deletePostsByKeys(keyList);
-    res.json({ message: 'Deleted selected items from history', count: updatedHistory.length, results: updatedHistory });
+    if (searchEngine.results && searchEngine.results.length > 0) {
+      searchEngine.results = searchEngine.results.filter(post => !keySet.has(getCanonicalPostKey(post)));
+    }
+
+    res.json({ message: 'Deleted from in-memory task', count: 0, results: [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 router.post('/update-status', async (req, res) => {
-  try {
-    const { key, status } = req.body || {};
-    if (!key || !status) {
-      return res.status(400).json({ error: 'Missing key or status parameter' });
-    }
-    const updatedHistory = await historyManager.updatePostStatus(key, status);
-    res.json({ message: 'Status updated', results: updatedHistory });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  // Server is purely stateless logic worker. Status is persisted in Client IndexedDB.
+  res.json({ message: 'Status updated on client' });
 });
 
 router.post('/stop', async (req, res) => {
-  // Save any results found so far before stopping
-  if (searchEngine.results.length > 0) {
-    try {
-      const { processResults } = await import('../core/data-processor.js');
-      const processed = processResults(searchEngine.results);
-      await historyManager.addPosts(processed);
-    } catch (e) {
-      logger.warn({ err: e.message }, 'Failed to save results on stop');
-    }
-  }
-  await searchEngine.stop();
-  res.json({ message: 'Search stopped', status: searchEngine.getProgress() });
+  const clientId = (req.body?.clientId && typeof req.body.clientId === 'string') ? req.body.clientId.trim() : 'default';
+  await searchEngine.stop(clientId);
+  res.json({ message: 'Search stopped', status: searchEngine.getProgress(clientId) });
 });
 
 export default router;

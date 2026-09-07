@@ -3,7 +3,7 @@ import browserManager from './browser-manager.js';
 import configManager from './config-manager.js';
 import logger from './logger.js';
 import { processResults, generateExcerpt, generateSummary } from './data-processor.js';
-import historyManager from './history-manager.js';
+import { getCanonicalPostKey } from './history-manager.js';
 import { extractPhonesFromText, mergePhoneEvidence, mergePhoneEvidenceCollections } from './phone-validator.js';
 import { extractLocationDetailed } from './location-extractor.js';
 import leadFilter from './lead-filter.js';
@@ -615,9 +615,28 @@ class SearchEngine extends EventEmitter {
     this.results = [];
     this.currentKeyword = '';
     this.finishedReason = null;
+    this.clientTasks = new Map();
   }
 
-  async search(keyword, filters = {}, maxPosts = null) {
+  async search(keyword, filters = {}, maxPosts = null, clientId = 'default') {
+    const isClientIsolated = filters.isClientIsolated || (clientId && clientId !== 'default');
+    const targetAccepted = normalizeTargetAccepted(maxPosts, configManager.get('maxPosts') || 50);
+
+    const task = {
+      clientId,
+      status: 'searching',
+      keyword,
+      finishedReason: null,
+      found: 0,
+      acceptedCount: 0,
+      reviewCount: 0,
+      rejectedCount: 0,
+      total: targetAccepted,
+      isStopped: false,
+      results: []
+    };
+    this.clientTasks.set(clientId, task);
+
     this.status = 'searching';
     this.currentKeyword = keyword;
     this.finishedReason = null;
@@ -628,7 +647,6 @@ class SearchEngine extends EventEmitter {
 
     const isHeadless = !!configManager.get('headless');
     const crawlDelay = parseInt(configManager.get('crawlDelay'), 10) || 2000;
-    const targetAccepted = normalizeTargetAccepted(maxPosts, configManager.get('maxPosts') || 50);
 
     const rawExcludes = filters.excludeKeywords || [];
     const excludeKeywords = (Array.isArray(rawExcludes) ? rawExcludes : String(rawExcludes).split(/[,，]+/))
@@ -638,7 +656,7 @@ class SearchEngine extends EventEmitter {
     this.total = targetAccepted;
     this.isStopped = false;
     this.results = [];
-    this.emit('progress', this.getProgress());
+    this.emit('progress', this.getProgress(clientId));
 
     logger.info(`⚙️ [ÁP DỤNG CẤU HÌNH] Chế độ Headless: ${isHeadless ? 'BẬT (Chạy ngầm)' : 'TẮT (Hiện trình duyệt)'} | Thời gian chờ: ${crawlDelay}ms | Số bài cần bóc tách: ${targetAccepted}`);
     if (excludeKeywords.length > 0) {
@@ -659,6 +677,20 @@ class SearchEngine extends EventEmitter {
 
     try {
       const context = await browserManager.launch(isHeadless);
+
+      if (filters.cookie) {
+        try {
+          const { parseCookieInput } = await import('./session-manager.js');
+          const formatted = parseCookieInput(filters.cookie);
+          if (formatted.length > 0) {
+            await context.addCookies(formatted);
+            logger.info(`🍪 [CLIENT COOKIE] Đã nạp ${formatted.length} cookie từ máy Client vào phiên cào Playwright.`);
+          }
+        } catch (e) {
+          logger.warn({ err: e }, 'Lỗi nạp cookie từ máy client');
+        }
+      }
+
       const pages = context.pages();
       page = pages.length > 0 ? pages[0] : await context.newPage();
 
@@ -696,6 +728,13 @@ class SearchEngine extends EventEmitter {
       }
 
       const processedPostKeys = new Set();
+      if (Array.isArray(filters.existingKeys) && filters.existingKeys.length > 0) {
+        filters.existingKeys.forEach(k => {
+          if (k) processedPostKeys.add(String(k).trim());
+        });
+        logger.info(`ℹ️ [ĐỒNG BỘ CLIENT] Đã nạp ${filters.existingKeys.length} bài viết đã lưu từ máy Client để chống cào trùng.`);
+      }
+
       const acceptedAuthorIndex = new Map();
       let scrollAttempts = 0;
       let noNewPostsCount = 0;
@@ -969,21 +1008,16 @@ class SearchEngine extends EventEmitter {
           if (!post.authorName || !post.postLink) continue;
 
           // Unique Post Key Check
+          const canonicalKey = getCanonicalPostKey(post);
           const postKey = `${post.authorName}_${post.content.substring(0, 60)}`;
-          if (processedPostKeys.has(postKey)) continue;
+          if (processedPostKeys.has(postKey) || (canonicalKey && processedPostKeys.has(canonicalKey))) continue;
           processedPostKeys.add(postKey);
+          if (canonicalKey) processedPostKeys.add(canonicalKey);
           foundNewCandidateInThisBatch = true;
 
           // Resolve a stable author key. Multiple posts from the same author are
           // aggregated later instead of being discarded before enrichment.
           const authorKey = getCanonicalAuthorKey(post);
-
-          // History Deduplication Check
-          const isAlreadyInHistory = await historyManager.hasPost(post);
-          if (isAlreadyInHistory) {
-            logger.info(`ℹ️ [ĐÃ CÓ TRONG KẾT QUẢ/LỊCH SỬ] Bỏ qua bài của [${post.authorName}] vì đã được lưu trước đó (tránh trùng lặp lead).`);
-            continue;
-          }
 
           // Quick Exclude Keywords Check on feed preview
           if (excludeKeywords.length > 0) {
@@ -1254,8 +1288,11 @@ class SearchEngine extends EventEmitter {
 
           logger.info(`🤖 [AI DUYỆT LEAD - ${aiEval.score}/100] [${post.authorName}] | Ngành: ${aiEval.businessType} | Mục đích: ${aiEval.intent}`);
 
+          const itemKey = getCanonicalPostKey({ postLink: cleanPostUrl, authorName: post.authorName, content: fullPostContent });
           // Lưu bài viết đã được AI duyệt vào danh sách kết quả
           const cleanPostObj = {
+            key: itemKey,
+            id: itemKey,
             authorName: post.authorName,
             authorKey,
             location: detectedLocation,
@@ -1327,10 +1364,13 @@ class SearchEngine extends EventEmitter {
           } else {
             acceptedAuthorIndex.set(authorKey, this.results.length);
             this.results.push(cleanPostObj);
+            task.results.push(cleanPostObj);
             this.acceptedCount++;
+            task.acceptedCount++;
           }
           this.found = this.acceptedCount;
-          this.emit('progress', this.getProgress());
+          task.found = this.acceptedCount;
+          this.emit('progress', this.getProgress(clientId));
 
           const phoneLogStr = phones.length > 0 ? `SĐT: [${phones.join(', ')}]` : `[CHƯA CÓ SĐT - NHẮN TIN FB]`;
           logger.info(`⚡ [THÀNH CÔNG] [${this.found}/${targetAccepted}] ${phoneLogStr} | Điểm: ${aiEval.score}/100 | Ngành: ${aiEval.businessType} | Tác giả: ${post.authorName}`);
@@ -1348,7 +1388,7 @@ class SearchEngine extends EventEmitter {
         // =========================================================================
         // BƯỚC 4: CUỘN TRANG TIẾP TỤC CHO ĐẾN KHI ĐỦ BÀI (SEARCH-P0-001)
         // =========================================================================
-        if (this.acceptedCount < targetAccepted && !this.isStopped) {
+        if (this.acceptedCount < targetAccepted && !this.isStopped && !task.isStopped) {
           scrollAttempts++;
           await this._smoothScrollDown(page, 2500);
           await delay(crawlDelay);
@@ -1356,41 +1396,35 @@ class SearchEngine extends EventEmitter {
       }
 
       const processedResults = processResults(this.results);
-      await historyManager.addPosts(processedResults);
       
-      if (this.acceptedCount < targetAccepted && !this.isStopped) {
+      if (this.acceptedCount < targetAccepted && !this.isStopped && !task.isStopped) {
         this.finishedReason = 'all_posts_exhausted';
+        task.finishedReason = 'all_posts_exhausted';
         logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${this.acceptedCount}/${targetAccepted} bài đạt chuẩn).`);
-      } else if (!this.isStopped) {
+      } else if (!this.isStopped && !task.isStopped) {
         this.finishedReason = 'target_reached';
+        task.finishedReason = 'target_reached';
       } else {
         this.finishedReason = 'user_stopped';
+        task.finishedReason = 'user_stopped';
       }
 
-      logger.info(`🎉 HOÀN TẤT! ${this.acceptedCount}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã lưu ${processedResults.length} bản ghi.`);
+      logger.info(`🎉 HOÀN TẤT! ${this.acceptedCount}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã thu thập ${task.results.length} bản ghi cho máy bạn.`);
 
-      this.status = this.isStopped ? 'stopped' : 'idle';
-      this.emit('progress', this.getProgress());
+      this.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
+      task.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
+      this.emit('progress', this.getProgress(clientId));
       
-      return processedResults;
+      return task.results.length > 0 ? task.results : processedResults;
 
     } catch (error) {
       logger.error({ err: error }, 'Search failed');
 
-      if (this.results.length > 0) {
-        try {
-          const processedResults = processResults(this.results);
-          await historyManager.addPosts(processedResults);
-          logger.info(`💾 Đã lưu ${processedResults.length} bài viết đã thu thập trước khi dừng do lỗi.`);
-        } catch (saveErr) {
-          logger.warn({ err: saveErr }, 'Failed to save partial results on error');
-        }
-      }
-
       throw error;
     } finally {
+      task.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
       this.status = this.isStopped ? 'stopped' : 'idle';
-      this.emit('progress', this.getProgress());
+      this.emit('progress', this.getProgress(clientId));
       try {
         await browserManager.closeBrowser();
         logger.info('🔒 Đã đóng trình duyệt Chromium.');
@@ -2037,11 +2071,16 @@ class SearchEngine extends EventEmitter {
     }
   }
 
-  async stop() {
+  async stop(clientId = 'default') {
+    if (clientId && clientId !== 'default' && this.clientTasks.has(clientId)) {
+      const task = this.clientTasks.get(clientId);
+      task.isStopped = true;
+      task.status = 'stopped';
+    }
     this.isStopped = true;
     this.status = 'stopped';
-    this.emit('progress', this.getProgress());
-    logger.info('⏹ Đã nhận lệnh dừng tìm kiếm. Đang đóng trình duyệt Chromium...');
+    this.emit('progress', this.getProgress(clientId));
+    logger.info(`⏹ Đã nhận lệnh dừng tìm kiếm cho client [${clientId}]. Đang đóng trình duyệt Chromium...`);
     try {
       await browserManager.closeBrowser();
     } catch (e) {
@@ -2049,7 +2088,25 @@ class SearchEngine extends EventEmitter {
     }
   }
 
-  getProgress() {
+  getProgress(clientId = 'default') {
+    if (clientId && clientId !== 'default' && this.clientTasks.has(clientId)) {
+      const task = this.clientTasks.get(clientId);
+      const phonesFound = Array.isArray(task.results)
+        ? task.results.filter(r => (r.verifiedPhones && r.verifiedPhones.length > 0) || (r.phones && r.phones.length > 0)).length
+        : 0;
+      return {
+        status: task.status,
+        found: task.found,
+        total: task.total,
+        accepted: task.acceptedCount,
+        review: task.reviewCount,
+        rejected: task.rejectedCount,
+        keyword: task.keyword || '',
+        finishedReason: task.finishedReason || null,
+        phoneCount: phonesFound
+      };
+    }
+
     const phonesFound = Array.isArray(this.results)
       ? this.results.filter(r => (r.verifiedPhones && r.verifiedPhones.length > 0) || (r.phones && r.phones.length > 0)).length
       : 0;
@@ -2065,6 +2122,13 @@ class SearchEngine extends EventEmitter {
       finishedReason: this.finishedReason || null,
       phoneCount: phonesFound
     };
+  }
+
+  getResults(clientId = 'default') {
+    if (clientId && clientId !== 'default' && this.clientTasks.has(clientId)) {
+      return this.clientTasks.get(clientId).results || [];
+    }
+    return this.results || [];
   }
 
   async _expandSeeMore(page) {

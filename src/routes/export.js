@@ -1,22 +1,55 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { exportToExcel } from '../core/excel-exporter.js';
+import { exportToExcel, exportToExcelBuffer } from '../core/excel-exporter.js';
 import searchEngine from '../core/search-engine.js';
 import logger from '../core/logger.js';
 import fs from 'fs/promises';
 
-import historyManager from '../core/history-manager.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
 
 const router = express.Router();
 
+/**
+ * Stream Excel directly to client without saving file to server disk
+ */
+router.post('/excel-stream', async (req, res) => {
+  try {
+    const sourcePosts = (Array.isArray(req.body?.results) && req.body.results.length > 0)
+      ? req.body.results
+      : (searchEngine.results && searchEngine.results.length > 0 ? searchEngine.results : []);
+    const includeReview = req.body?.includeReview === true;
+    const posts = sourcePosts.filter(post =>
+      post?.decision !== 'REJECTED' &&
+      (includeReview || (post?.decision !== 'REVIEW' && post?.status !== 'Cần kiểm tra'))
+    );
+
+    if (!posts || posts.length === 0) {
+      return res.status(400).json({ error: 'Không có lead đã duyệt để xuất Excel' });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `fb_leads_import_${timestamp}.xlsx`;
+
+    const buffer = await exportToExcelBuffer(posts, req.body?.exportConfig || {});
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('X-Filename', filename);
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to stream Excel export');
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/excel', async (req, res) => {
   try {
     const sourcePosts = (Array.isArray(req.body?.results) && req.body.results.length > 0)
       ? req.body.results
-      : (searchEngine.results && searchEngine.results.length > 0 ? searchEngine.results : await historyManager.getHistory());
+      : (searchEngine.results && searchEngine.results.length > 0 ? searchEngine.results : []);
     const includeReview = req.body?.includeReview === true;
     const posts = sourcePosts.filter(post =>
       post?.decision !== 'REJECTED' &&

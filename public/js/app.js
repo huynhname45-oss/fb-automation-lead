@@ -10,6 +10,18 @@ const state = {
     pollingInterval: null
 };
 
+/**
+ * Unique Client Identifier (Độc lập cho từng thiết bị Mac/Windows)
+ */
+function getClientId() {
+    let id = localStorage.getItem('fb_client_id');
+    if (!id) {
+        id = 'client_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('fb_client_id', id);
+    }
+    return id;
+}
+
 const DEFAULT_AI_PROMPT_CONTEXT = `Bạn là chuyên gia thẩm định khách hàng tiềm năng cho phần mềm Quản lý Bán hàng (POS) như Sapo, KiotViet, Haravan, MISA.
 Mục tiêu của bạn là phân tích bài viết Facebook để xác định xem người đăng có phải là CHỦ CỬA HÀNG / QUÁN ĐỘC LẬP (SMB) đang chuẩn bị khai trương hoặc đang kinh doanh cần phần mềm bán hàng hay không.
 
@@ -42,10 +54,11 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
 /**
  * App Initialization
  */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initNavigation();
     initEventListeners();
+    await initClientStorage();
     checkSessionStatus();
     fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
@@ -147,12 +160,16 @@ function initEventListeners() {
     const btnExport = document.getElementById('btnExport');
     const btnClearHistory = document.getElementById('btnClearHistory');
     const btnDeleteSelected = document.getElementById('btnDeleteSelected');
+    const btnSelectClientFolder = document.getElementById('btnSelectClientFolder');
+    const btnBackupData = document.getElementById('btnBackupData');
 
     if (searchForm) searchForm.addEventListener('submit', handleStartSearch);
     if (btnStopSearch) btnStopSearch.addEventListener('click', handleStopSearch);
     if (btnExport) btnExport.addEventListener('click', handleExport);
     if (btnClearHistory) btnClearHistory.addEventListener('click', handleClearHistory);
     if (btnDeleteSelected) btnDeleteSelected.addEventListener('click', handleDeleteSelected);
+    if (btnSelectClientFolder) btnSelectClientFolder.addEventListener('click', handleSelectClientFolder);
+    if (btnBackupData) btnBackupData.addEventListener('click', handleBackupData);
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -663,6 +680,105 @@ function handleResetDateFilter() {
 }
 
 /**
+ * Client Storage Handlers (IndexedDB & File System Access API)
+ * Lưu trữ 100% dữ liệu và cookie trên máy Client (Mac/Windows)
+ */
+async function initClientStorage() {
+    try {
+        if (window.ClientDB) {
+            await window.ClientDB.init();
+        }
+        if (window.ClientFS) {
+            const savedFolder = window.ClientFS.getFolderName();
+            if (savedFolder) {
+                updateClientFolderUI(savedFolder);
+            }
+        }
+    } catch (e) {
+        console.warn('[ClientStorage] Khởi tạo bộ nhớ client:', e);
+    }
+}
+
+function updateClientFolderUI(folderName) {
+    const txtClientFolderName = document.getElementById('txtClientFolderName');
+    const btnSelectClientFolder = document.getElementById('btnSelectClientFolder');
+    if (folderName) {
+        if (txtClientFolderName) txtClientFolderName.textContent = '📁 ' + folderName;
+        if (btnSelectClientFolder) {
+            btnSelectClientFolder.classList.add('connected');
+            btnSelectClientFolder.title = `Đang kết nối: ${folderName}. Bấm để chọn thư mục khác`;
+        }
+    } else {
+        if (txtClientFolderName) txtClientFolderName.textContent = 'Chọn thư mục máy...';
+        if (btnSelectClientFolder) {
+            btnSelectClientFolder.classList.remove('connected');
+            btnSelectClientFolder.title = 'Chọn thư mục trên máy bạn để tự động lưu file Excel và data';
+        }
+    }
+}
+
+async function handleSelectClientFolder() {
+    if (!window.ClientFS) return;
+    try {
+        const folderName = await window.ClientFS.selectFolder();
+        if (folderName) {
+            updateClientFolderUI(folderName);
+            showToast(`Đã kết nối thư mục máy bạn: "${folderName}"! Các file Excel sẽ tự động lưu vào exports/`, 'success');
+        }
+    } catch (err) {
+        showToast(err.message || 'Không thể chọn thư mục trên máy bạn', 'warning');
+    }
+}
+
+
+async function handleBackupData() {
+    const btn = document.getElementById('btnBackupData');
+    if (btn) setLoading(btn, true);
+    try {
+        let allLeads = [];
+        if (window.ClientDB) {
+            allLeads = await window.ClientDB.getAllLeads();
+        }
+        if (!allLeads || allLeads.length === 0) {
+            allLeads = state.search.results || [];
+        }
+
+        if (!allLeads.length) {
+            showToast('Chưa có dữ liệu bài viết nào trên máy để sao lưu', 'warning');
+            return;
+        }
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const filename = `fb_leads_backup_${dateStr}.json`;
+        const content = JSON.stringify(allLeads, null, 2);
+
+        if (window.ClientFS) {
+            const saveRes = await window.ClientFS.saveFile('data', filename, content, 'application/json');
+            if (saveRes && saveRes.directWrite) {
+                showToast(`Đã lưu file sao lưu vào thư mục máy bạn: ${saveRes.path}`, 'success');
+            } else {
+                showToast(`Đã tải file sao lưu ${filename} về máy bạn!`, 'success');
+            }
+        } else {
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            showToast(`Đã tải file sao lưu: ${filename}`, 'success');
+        }
+    } catch (err) {
+        showToast(err.message || 'Lỗi khi sao lưu dữ liệu', 'error');
+    } finally {
+        if (btn) setLoading(btn, false);
+    }
+}
+
+/**
  * Session API Handlers
  */
 let loginMonitorInterval = null;
@@ -670,8 +786,37 @@ let loginMonitorInterval = null;
 async function checkSessionStatus() {
     try {
         const res = await api('GET', '/api/session/status');
-        updateSessionUI(res);
+        if (res && res.status === 'active') {
+            updateSessionUI(res);
+            return;
+        }
+
+        // Nếu server chưa có session, kiểm tra session lưu trong IndexedDB máy Client
+        if (window.ClientDB) {
+            const clientSession = await window.ClientDB.getSession();
+            if (clientSession && clientSession.status === 'active' && clientSession.cookie) {
+                updateSessionUI({
+                    status: 'active',
+                    user: clientSession.user || { name: 'Cookie máy Client' },
+                    isClientSession: true
+                });
+                return;
+            }
+        }
+
+        updateSessionUI(res || { status: 'none', user: null });
     } catch (err) {
+        if (window.ClientDB) {
+            const clientSession = await window.ClientDB.getSession().catch(() => null);
+            if (clientSession && clientSession.status === 'active' && clientSession.cookie) {
+                updateSessionUI({
+                    status: 'active',
+                    user: clientSession.user || { name: 'Cookie máy Client' },
+                    isClientSession: true
+                });
+                return;
+            }
+        }
         updateSessionUI({ status: 'none', user: null });
     }
 }
@@ -757,7 +902,14 @@ async function handleLoginCookie() {
     try {
         const res = await api('POST', '/api/session/login-cookie', { cookie: cookieVal });
         if (res.status === 'active') {
-            showToast(res.message || 'Đăng nhập Cookie Facebook thành công!', 'success');
+            if (window.ClientDB) {
+                await window.ClientDB.saveSession({
+                    cookie: cookieVal,
+                    user: res.user || { name: 'Facebook User' },
+                    status: 'active'
+                });
+            }
+            showToast(res.message || 'Đăng nhập Cookie Facebook thành công! Dữ liệu cookie đã được lưu an toàn trên máy bạn.', 'success');
             inputCookie.value = '';
             updateSessionUI(res);
         } else {
@@ -777,6 +929,9 @@ async function handleLogout() {
     if (btnCloseBrowser) setLoading(btnCloseBrowser, true);
 
     try {
+        if (window.ClientDB) {
+            await window.ClientDB.clearSession();
+        }
         await api('POST', '/api/session/logout');
         if (loginMonitorInterval) {
             clearInterval(loginMonitorInterval);
@@ -852,9 +1007,14 @@ async function handleStartSearch(e) {
     e.preventDefault();
     if (state.search.status === 'searching') return;
 
-    // 1. Mandatory Session Guard: Must be active before searching
-    if (!state.session || state.session.status !== 'active') {
-        showToast('Bạn chưa đăng nhập Facebook! Vui lòng vào mục "Session Manager" để đăng nhập trước khi tìm kiếm.', 'warning');
+    // Retrieve client session & cookie if present
+    const clientSession = window.ClientDB ? await window.ClientDB.getSession() : null;
+    const clientCookie = clientSession?.cookie || localStorage.getItem('fb_cookie') || '';
+    const hasActiveSession = (state.session && state.session.status === 'active') || (clientCookie && clientCookie.length > 10);
+
+    // 1. Mandatory Session Guard: Must be active on server OR have client cookie
+    if (!hasActiveSession) {
+        showToast('Bạn chưa đăng nhập Facebook! Vui lòng vào mục "Session Manager" để đăng nhập hoặc dán Cookie trước khi tìm kiếm.', 'warning');
         const navSession = document.getElementById('navSession');
         if (navSession) navSession.click();
         return;
@@ -879,10 +1039,16 @@ async function handleStartSearch(e) {
         return;
     }
 
+    // Get existing keys from client IndexedDB to avoid crawling duplicates
+    const existingSignatures = window.ClientDB ? await window.ClientDB.getSignatures() : { keys: [] };
+
     const payload = {
         keyword,
         maxPosts,
-        filters: { recentPosts, datePosted, excludeKeywords, requirePhoneOnly }
+        filters: { recentPosts, datePosted, excludeKeywords, requirePhoneOnly },
+        cookie: clientCookie || undefined,
+        existingKeys: existingSignatures.keys,
+        clientId: getClientId()
     };
 
     setSearchState('searching');
@@ -906,7 +1072,7 @@ async function handleStartSearch(e) {
 
 async function handleStopSearch() {
     try {
-        await api('POST', '/api/search/stop');
+        await api('POST', '/api/search/stop', { clientId: getClientId() });
         showToast('Đã gửi yêu cầu dừng', 'info');
         stopPollingSearch();
         setSearchState('stopped');
@@ -938,28 +1104,17 @@ function startIdleSync() {
         // Chỉ chạy khi không đang trong tiến trình tìm kiếm và tab trình duyệt đang mở
         if (state.search.status === 'searching' || document.hidden) return;
         try {
-            const res = await api('GET', '/api/search/results');
-            if (res && Array.isArray(res.results)) {
-                const newLength = res.results.length;
-                const oldLength = (state.search.results || []).length;
-
-                let hasDiff = newLength !== oldLength;
-                if (!hasDiff) {
-                    for (let i = 0; i < Math.min(newLength, 25); i++) {
-                        if (res.results[i]?.status !== state.search.results[i]?.status ||
-                            getItemKey(res.results[i]) !== getItemKey(state.search.results[i])) {
-                            hasDiff = true;
-                            break;
+            if (window.ClientDB) {
+                const clientLeads = await window.ClientDB.getAllLeads();
+                if (clientLeads && clientLeads.length > 0) {
+                    const oldLength = (state.search.results || []).length;
+                    if (clientLeads.length !== oldLength) {
+                        state.search.results = clientLeads;
+                        updateStatPills();
+                        const kwInput = document.getElementById('filterKeywordInput');
+                        if (!kwInput || document.activeElement !== kwInput) {
+                            renderTable();
                         }
-                    }
-                }
-
-                if (hasDiff) {
-                    state.search.results = res.results;
-                    updateStatPills();
-                    const kwInput = document.getElementById('filterKeywordInput');
-                    if (!kwInput || document.activeElement !== kwInput) {
-                        renderTable();
                     }
                 }
             }
@@ -975,13 +1130,19 @@ window.addEventListener('focus', () => {
 });
 
 async function pollSearchProgress() {
+    const clientId = getClientId();
     try {
-        const progress = await api('GET', '/api/search/status');
-        const resData = await api('GET', '/api/search/results');
+        const progress = await api('GET', `/api/search/status?clientId=${encodeURIComponent(clientId)}`);
+        const resData = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
 
         state.search.progress = progress;
-        if (resData.results) {
-            state.search.results = resData.results;
+        if (resData.results && resData.results.length > 0) {
+            if (window.ClientDB) {
+                await window.ClientDB.saveLeads(resData.results);
+                state.search.results = await window.ClientDB.getAllLeads();
+            } else {
+                state.search.results = resData.results;
+            }
             renderTable();
         }
 
@@ -992,17 +1153,22 @@ async function pollSearchProgress() {
             stopPollingSearch();
             setSearchState('idle');
 
-            // Final fetch to get fully persisted results from historyManager
+            // Final fetch to get fully persisted results
             try {
-                const finalData = await api('GET', '/api/search/results');
-                if (finalData.results) {
-                    state.search.results = finalData.results;
+                const finalData = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
+                if (finalData.results && finalData.results.length > 0) {
+                    if (window.ClientDB) {
+                        await window.ClientDB.saveLeads(finalData.results);
+                        state.search.results = await window.ClientDB.getAllLeads();
+                    } else {
+                        state.search.results = finalData.results;
+                    }
                     renderTable();
                 }
             } catch (e) {}
 
             if (wasSearching && progress.status === 'idle') {
-                showToast(`Hoàn tất tìm kiếm! Đã thu thập đủ bài viết`, 'success');
+                showToast(`Hoàn tất tìm kiếm! Đã thu thập đủ bài viết vào máy bạn`, 'success');
                 showSearchCompletionModal(progress);
             }
         }
@@ -1113,15 +1279,24 @@ function updateProgressUI(progress) {
     if (fill) fill.style.width = `${percent}%`;
 }
 
-function fetchResultsHistory() {
-    api('GET', '/api/search/results')
-        .then(res => {
-            if (res.results) {
-                state.search.results = res.results;
-                renderTable();
-            }
-        })
-        .catch(() => {});
+async function fetchResultsHistory() {
+    try {
+        // 1. Nạp 100% dữ liệu từ IndexedDB trên máy Client (độc lập hoàn toàn, không nạp tự động từ Server)
+        if (window.ClientDB) {
+            const clientLeads = await window.ClientDB.getAllLeads();
+            state.search.results = clientLeads || [];
+            renderTable();
+            return;
+        }
+
+        // 2. Fallback nếu trình duyệt không hỗ trợ IndexedDB (chỉ lấy task kết quả của riêng clientId này)
+        const clientId = getClientId();
+        const res = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
+        if (res && res.results) {
+            state.search.results = res.results;
+            renderTable();
+        }
+    } catch (e) {}
 }
 
 let _prevStatCounts = { total: -1, new: -1, lead: -1, duplicate: -1, none: -1 };
@@ -1330,10 +1505,15 @@ function renderTable() {
                     if (found) found.status = newStatus;
                 }
 
-                // 2. Cập nhật số liệu thống kê realtime ngay lập tức trên các huy hiệu (pills)
+                // 2. Cập nhật vào cơ sở dữ liệu IndexedDB trên máy Client
+                if (window.ClientDB) {
+                    window.ClientDB.updateStatus(key, newStatus).catch(() => {});
+                }
+
+                // 3. Cập nhật số liệu thống kê realtime ngay lập tức trên các huy hiệu (pills)
                 updateStatPills();
 
-                // 3. Nếu đang áp dụng lọc theo trạng thái, lọc lại bảng ngay lập tức để danh sách hiển thị khớp thời gian thực
+                // 4. Nếu đang áp dụng lọc theo trạng thái, lọc lại bảng ngay lập tức để danh sách hiển thị khớp thời gian thực
                 if (state.dateFilter.status && state.dateFilter.status !== 'all') {
                     renderTable();
                 }
@@ -1346,19 +1526,8 @@ function renderTable() {
                     }
                     showToast(`Đã cập nhật trạng thái: "${newStatus}"`, 'success');
                 } catch (err) {
-                    // Phục hồi lại trạng thái cũ nếu server báo lỗi
-                    item.status = prevStatus;
-                    if (Array.isArray(state.search.results)) {
-                        const found = state.search.results.find(r => getItemKey(r) === key);
-                        if (found) found.status = prevStatus;
-                    }
-                    e.target.value = prevStatus;
-                    e.target.setAttribute('data-status', prevStatus);
-                    updateStatPills();
-                    if (state.dateFilter.status && state.dateFilter.status !== 'all') {
-                        renderTable();
-                    }
-                    showToast('Lỗi cập nhật trạng thái', 'error');
+                    // Trạng thái đã được lưu an toàn trong IndexedDB máy Client
+                    showToast(`Đã lưu trạng thái "${newStatus}" trên máy bạn!`, 'info');
                 }
             });
         }
@@ -1427,10 +1596,40 @@ async function handleExport() {
             productGroup: document.getElementById('cfgExportProductGroup')?.value.trim() || state.config?.exportConfig?.productGroup || 'RETAIL_PRO',
             salesRep: document.getElementById('cfgExportSalesRep')?.value.trim() || state.config?.exportConfig?.salesRep || 'trucnt@sapo.vn'
         };
-        const res = await api('POST', '/api/export/excel', { results: exportData, exportConfig });
-        if (res.filename) {
-            showToast(`Xuất ${exportData.length} lead theo mẫu template import thành công!`, 'success');
-            window.location.href = `/api/export/download/${res.filename}`;
+
+        const response = await fetch('/api/export/excel-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ results: exportData, exportConfig })
+        });
+
+        if (!response.ok) {
+            const errJson = await response.json().catch(() => ({}));
+            throw new Error(errJson.error || `Lỗi xuất file (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const headerFilename = response.headers.get('X-Filename');
+        const filename = headerFilename || `fb_leads_import_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+
+        // Ghi trực tiếp vào thư mục máy Client (exports/filename) hoặc tải về Downloads
+        if (window.ClientFS) {
+            const saveRes = await window.ClientFS.saveFile('exports', filename, blob, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            if (saveRes && saveRes.directWrite) {
+                showToast(`Đã xuất ${exportData.length} lead và lưu trực tiếp vào thư mục máy bạn: ${saveRes.path}!`, 'success');
+            } else {
+                showToast(`Đã tải file Excel: ${filename} về máy của bạn!`, 'success');
+            }
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            showToast(`Đã tải file Excel: ${filename}`, 'success');
         }
     } catch (e) {
         showToast(e.message || 'Xuất Excel thất bại', 'error');
@@ -1440,14 +1639,17 @@ async function handleExport() {
 }
 
 async function handleClearHistory() {
-    if (!confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ lịch sử dữ liệu bóc tách?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ lịch sử dữ liệu bóc tách trên máy bạn?')) return;
     try {
-        await api('POST', '/api/search/clear-history');
+        if (window.ClientDB) {
+            await window.ClientDB.clearAll();
+        }
+        api('POST', '/api/search/clear-history', { clientId: getClientId() }).catch(() => {});
         state.search.results = [];
         state.selectedKeys.clear();
         state.pagination.currentPage = 1;
         renderTable();
-        showToast('Đã xóa toàn bộ lịch sử dữ liệu!', 'info');
+        showToast('Đã xóa toàn bộ lịch sử dữ liệu trên máy bạn!', 'info');
     } catch (e) {
         showToast('Không thể xóa lịch sử', 'error');
     }
@@ -1462,8 +1664,14 @@ async function handleDeleteSelected() {
     if (!confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${keysArray.length} bài viết đã chọn khỏi lịch sử?`)) return;
 
     try {
-        const res = await api('POST', '/api/search/delete-selected', { keys: keysArray });
-        state.search.results = res.results || [];
+        if (window.ClientDB) {
+            await window.ClientDB.deleteSelected(keysArray);
+            state.search.results = await window.ClientDB.getAllLeads();
+        } else {
+            state.search.results = (state.search.results || []).filter(item => !state.selectedKeys.has(getItemKey(item)));
+        }
+
+        api('POST', '/api/search/delete-selected', { keys: keysArray, clientId: getClientId() }).catch(() => {});
         state.selectedKeys.clear();
         renderTable();
         showToast(`Đã xóa vĩnh viễn ${keysArray.length} bài viết đã chọn khỏi lịch sử!`, 'info');

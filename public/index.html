@@ -42,7 +42,14 @@
             <!-- Header -->
             <header class="header">
                 <h1 class="page-title" id="pageTitle">Session Manager</h1>
-                <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div class="client-storage-badge" id="clientStorageBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; background: rgba(99, 102, 241, 0.12); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 5px 10px; font-weight: 600;" title="Dữ liệu và Cookie được lưu trữ cục bộ 100% trên máy của bạn (IndexedDB)">
+                        <span>💾 Máy này: IndexedDB</span>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="btnSelectClientFolder" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; border-radius: 8px; padding: 5px 10px; border: 1px solid var(--glass-border);" title="Chọn thư mục trên máy Mac/Win để tự động tạo thư mục exports/ và lưu file Excel trực tiếp">
+                        <span>📁</span>
+                        <span id="txtClientFolderName">Chọn thư mục máy...</span>
+                    </button>
                     <button class="theme-toggle-btn" id="btnThemeToggle" title="Chuyển đổi giao diện Sáng / Tối">
                         <span id="themeToggleIcon">☀️</span>
                         <span id="themeToggleText">Giao diện Sáng</span>
@@ -275,12 +282,14 @@
                                     </button>
                                 </div>
 
-                                <!-- Dòng 4: 2 nút thao tác nằm BÊN DƯỚI bộ lọc (Xóa đã chọn & Xuất File Excel) -->
-                                <div class="header-action-group d-flex align-center gap-3">
-                                    <!-- Cố định nút Xóa đã chọn luôn hiển thị -->
-                                    <button class="btn btn-danger btn-sm" id="btnDeleteSelected" title="Xóa các bài viết đã chọn">
+                                <!-- Dòng 4: Các nút thao tác (Xóa đã chọn, Nhập từ Server, Sao lưu JSON, Xuất File Excel) -->
+                                <div class="header-action-group d-flex align-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm" id="btnDeleteSelected" title="Xóa các bài viết đã chọn khỏi máy này">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                         Xóa đã chọn ( <span id="selectedCountBadge">0</span> )
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" id="btnBackupData" title="Tải file sao lưu toàn bộ dữ liệu lead trên máy này (.json)">
+                                        💾 Sao lưu JSON
                                     </button>
                                     <button class="btn btn-success btn-sm" id="btnExport">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -536,6 +545,8 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/app.js?v=2.9.5"></script>
+    <script src="js/client-db.js?v=3.0.0"></script>
+    <script src="js/client-fs.js?v=3.0.0"></script>
+    <script src="js/app.js?v=3.0.0"></script>
 </body>
 </html>

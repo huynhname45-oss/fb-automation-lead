@@ -243,7 +243,7 @@ export function hasOnlyTollFreeNumbers(phones = []) {
 }
 
 // Prefix requires word boundary and whitespace (strictly avoids matching "mở", "phở", "cởi", etc.)
-const LOC_PREFIX = '(?:^|[\\s,;:!?\\(\\[])(?:ở|tại|bên|khu\\s*vực|sống\\s*tại|đến\\s*từ|về\\s*từ|located\\s*in|lives\\s*in|address|cụ\\s*thể|nước|quốc\\s*gia)[\\s:\\.-]*(?:nước\\s+(?:láng\\s*giềng|bạn)?|thành\\s*phố|tp|tiểu\\s*bang|khu\\s*vực|bên)?\\s*';
+const LOC_PREFIX = '(?:^|[\\s,;:!?\\(\\[])(?:ở|tại|bên|sang|đi|khu\\s*vực|sống\\s*tại|đến\\s*từ|về\\s*từ|located\\s*in|lives\\s*in|address|cụ\\s*thể|nước|quốc\\s*gia)[\\s:\\.-]*(?:nước\\s+(?:láng\\s*giềng|bạn)?|thành\\s*phố|tp|tiểu\\s*bang|khu\\s*vực|bên)?\\s*';
 
 // Patterns detecting foreign countries / overseas businesses & diaspora
 export const FOREIGN_PATTERNS = [
@@ -260,8 +260,9 @@ export const FOREIGN_PATTERNS = [
   // Direct cities & specific overseas countries that never collide with Vietnamese pronouns
   /\b(?:thái\s*lan|bangkok|chiang\s*mai|phnom\s*penh|siem\s*reap|campuchia|vientiane|viêng\s*chăn|kuala\s*lumpur|singapore|taipei|taichung|kaohsiung|đài\s*bắc|đài\s*trung|đài\s*nam|cao\s*hùng|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|seoul|busan|incheon|california|houston|sydney|melbourne|brisbane|vancouver|toronto)\b/i,
 
-  // Đối tượng / thị trường / cộng đồng nước ngoài
+  // Đối tượng / thị trường / cộng đồng nước ngoài & xuất khẩu
   /\b(?:du học sinh|xklđ|xuất khẩu lao động|tu nghiệp sinh|tokutei|định cư|kiều bào|việt kiều)\s+(?:nhật|hàn|đài|mỹ|úc|canada|âu|đức|anh)/i,
+  /(?:xuất\s*khẩu|xuat\s*khau|ship|gửi|gui|order|đơn\s*đi)\s+(?:sang|đi|cho|vào)\s+(?:mỹ|my|usa|canada|nhật|nhat|hàn|han|đài\s*loan|dai\s*loan|châu\s*âu|chau\s*au|úc|uc)/iu,
   /\b(?:ship toàn đài loan|ship toàn nhật|ship toàn hàn|ship us|order us|order uk|ship quốc tế)\b/i,
   /\b(?:tân đài tệ|đài tệ|tiền đài)\b/i,
   /(?:\b\d+[\d,.]*\s*(?:baht|bath|usd|dollar|đô|euro|eur|sgd|rmb|cny|tệ|jpy|yen|yên|krw|won|ntd|tân\s*đài\s*tệ|aud|cad|khr|riel|lak|kip|rub|bảng\s*anh|gbp|man|sen)\b|\$\s*\d+)/i
