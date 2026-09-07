@@ -371,7 +371,7 @@ export function checkForeignLead(post = {}) {
   // 1. Check International Phone Prefixes (+81, +82, +886, +1, +61, +44, +49, +33, +65, +60, +66...)
   for (const p of phones) {
     const cleanP = String(p).trim();
-    if (/^\+(?:81|82|886|1|61|44|49|33|65|60|66|855|856|7|48|420)\d{6,}/.test(cleanP)) {
+    if (/^\+(?!84)\d{6,}/.test(cleanP)) {
       return { isForeign: true, reason: `Số điện thoại quốc tế (${cleanP})` };
     }
   }

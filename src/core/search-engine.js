@@ -755,7 +755,7 @@ class SearchEngine extends EventEmitter {
         let rawPosts = [];
         try {
           rawPosts = await page.evaluate(() => {
-          let articles = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"], div[data-pagelet*="FeedUnit"], div[aria-describedby]'));
+          let articles = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"], div[data-pagelet*="FeedUnit"]'));
 
           if (articles.length === 0) {
             const containers = Array.from(document.querySelectorAll('div[dir="auto"]'))
@@ -767,8 +767,24 @@ class SearchEngine extends EventEmitter {
           const list = [];
 
           articles.forEach(node => {
-            // ONLY extract clean visible text to avoid matching hidden HTML IDs or URLs
-            const visibleText = (node.innerText || '').trim();
+            // Trích xuất chính xác văn bản bài viết từ message container chính thức của Facebook
+            let visibleText = '';
+            const msgEl = node.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
+            if (msgEl) {
+              visibleText = (msgEl.innerText || '').trim();
+            }
+            if (!visibleText || visibleText.length < 20) {
+              const dirEls = Array.from(node.querySelectorAll('div[dir="auto"]'));
+              const candidateTexts = dirEls
+                .map(d => (d.innerText || '').trim())
+                .filter(t => t.length > 20 && !t.startsWith('#') && !/(?:xem thêm|thích|bình luận|chia sẻ|hoạt động|gợi ý)/i.test(t));
+              if (candidateTexts.length > 0) {
+                visibleText = candidateTexts.join('\n');
+              }
+            }
+            if (!visibleText || visibleText.length < 20) {
+              visibleText = (node.innerText || '').trim();
+            }
             if (!visibleText || visibleText.length < 15) return;
 
             // Extract real post image URLs for OCR (supporting <img>, background-image, and SVG image elements)
@@ -1109,7 +1125,15 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          const fullPostContent = postVerification.fullContent || post.content;
+          const fullPostContent = (postVerification.fullContent && postVerification.fullContent.length >= (post.content || '').length)
+            ? postVerification.fullContent
+            : (post.content || postVerification.fullContent || '');
+
+          if (!fullPostContent || fullPostContent.length < 25 || fullPostContent.trim().toLowerCase() === post.authorName.trim().toLowerCase()) {
+            logger.info(`❌ [BỎ QUA NỘI DUNG RỖNG] BỎ QUA [${post.authorName}] vì không có nội dung bài viết chi tiết.`);
+            this.rejectedCount++;
+            continue;
+          }
 
           // Deep Exclude Keywords Check on Full Content
           if (excludeKeywords.length > 0) {
@@ -1157,11 +1181,11 @@ class SearchEngine extends EventEmitter {
               phoneEvidence,
               textPhones.map(phone => ({
                 phone,
-                verified: isPhoneExplicitlyContactLabeled(fullPostContent, phone),
+                verified: true,
                 authorMatched: true
               })),
               'post_text',
-              0.95,
+              1.0,
               fullPostContent.substring(0, 220),
               evidenceMetadata
             );
@@ -1276,6 +1300,9 @@ class SearchEngine extends EventEmitter {
               }
             }
           }
+
+          // Ưu tiên các số điện thoại lấy trực tiếp từ bài viết (confidence cao nhất, 1.0) lên đầu
+          phoneEvidence.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
           const phones = phoneEvidence.map(e => e.phone);
           const verifiedPhones = phoneEvidence.filter(e => e.verified === true).map(e => e.phone);
@@ -1479,7 +1506,8 @@ class SearchEngine extends EventEmitter {
 
       inspectPage = await context.newPage();
       await inspectPage.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await delay(Math.min(crawlDelay, 2500));
+      await inspectPage.waitForSelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"], div[role="article"], div[dir="auto"]', { timeout: 3500 }).catch(() => {});
+      await delay(Math.min(crawlDelay, 2000));
 
       await this._expandSeeMore(inspectPage);
 
@@ -1498,19 +1526,38 @@ class SearchEngine extends EventEmitter {
 
         const metaTime = document.querySelector('meta[property="article:published_time"]')?.getAttribute('content') || '';
         
-        let articleNode = document.querySelector('div[role="article"], div[data-pagelet*="FeedUnit"], div[data-ad-preview="message"]')?.closest('div[role="article"]') || document.querySelector('div[role="article"]') || document.querySelector('div[role="main"]') || document.body;
-        
         let mainText = '';
-        if (articleNode) {
-          const clone = articleNode.cloneNode(true);
-          const navs = clone.querySelectorAll('header, nav, div[role="navigation"], div[aria-label="Account"], div[role="banner"], svg, a[aria-label="Facebook"], div[aria-label*="Bình luận"], div[aria-label*="Comment"], form, ul, ol');
-          navs.forEach(n => n.remove());
-          mainText = (clone.innerText || '').trim();
+
+        // Ưu tiên 1: Lấy trực tiếp từ container thông điệp chính thức của bài viết Facebook
+        const messageEls = Array.from(document.querySelectorAll('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]'));
+        if (messageEls.length > 0) {
+          mainText = messageEls.map(el => (el.innerText || '').trim()).filter(Boolean).join('\n');
         }
 
+        // Ưu tiên 2: Tìm kiếm các khối văn bản dir="auto" trong modal/article
         if (!mainText || mainText.length < 20) {
-          let messageEl = document.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
-          if (messageEl) mainText = (messageEl.innerText || '').trim();
+          const postContainers = Array.from(document.querySelectorAll('div[role="dialog"] div[role="article"], div[role="main"] div[role="article"], div[role="article"]'));
+          for (const pNode of postContainers) {
+            const textNodes = Array.from(pNode.querySelectorAll('div[dir="auto"]'));
+            const validTexts = textNodes
+              .map(t => (t.innerText || '').trim())
+              .filter(t => t.length >= 20 && !/(?:bình luận|chia sẻ|thích|phản hồi|xem thêm)/i.test(t));
+            if (validTexts.length > 0) {
+              mainText = validTexts.join('\n');
+              break;
+            }
+          }
+        }
+
+        // Ưu tiên 3: Fallback lấy toàn bộ nội dung trong articleNode
+        if (!mainText || mainText.length < 20) {
+          let articleNode = document.querySelector('div[role="dialog"] div[role="article"], div[role="article"], div[data-pagelet*="FeedUnit"]') || document.querySelector('div[role="main"]') || document.body;
+          if (articleNode) {
+            const clone = articleNode.cloneNode(true);
+            const navs = clone.querySelectorAll('header, nav, div[role="navigation"], div[aria-label="Account"], div[role="banner"], svg, a[aria-label="Facebook"], div[aria-label*="Bình luận"], div[aria-label*="Comment"], form, ul, ol');
+            navs.forEach(n => n.remove());
+            mainText = (clone.innerText || '').trim();
+          }
         }
 
         if (mainText) {
