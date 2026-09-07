@@ -27,7 +27,7 @@ if exist "%~dp0node.exe" (
 )
 
 if not exist "%~dp0node_modules" (
-    echo [CANH BAO] Chua co thu muc node_modules. Dang tu dong cai dat thu vien (npm install)...
+    echo [CANH BAO] Chua co thu muc node_modules. Dang tu dong cai dat thu vien npm install...
     call npm install
 )
 
@@ -35,7 +35,7 @@ where npx >nul 2>nul
 if %errorlevel% equ 0 (
     if not exist "%LOCALAPPDATA%\ms-playwright" (
         if not exist "%~dp0browsers" (
-            echo [KIEM TRA] Dang tai trinh duyet Chromium cho Playwright (chi tai 1 lan duy nhat)...
+            echo [KIEM TRA] Dang tai trinh duyet Chromium cho Playwright...
             call npx playwright install chromium
         )
     )
