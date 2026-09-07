@@ -1074,17 +1074,16 @@ class SearchEngine extends EventEmitter {
           // =========================================================================
           const feedTimeLower = (post.feedTimeText || '').toLowerCase().trim();
 
-          // Loại bỏ ngay lập tức tại bảng tin nếu bài viết hiển thị "1 ngày", "2 ngày", "hôm qua", "tháng", "năm" hoặc >= 24h (không cần vào xem)
-          const isExplicitlyOver24h = /(?:\b(?:[1-9]\d*)\s*(?:ngày|ngay|days?|d|tuần|tuan|tháng|thang|năm|nam)\b|hôm qua|hom qua|yesterday)/iu.test(feedTimeLower) ||
-            /\b(?:2[4-9]|[3-9]\d|\d{3,})\s*(?:giờ|gio|h)\b/iu.test(feedTimeLower);
+          // Loại bỏ ngay lập tức tại bảng tin nếu bài viết hiển thị từ 4 ngày trở lên, tuần, tháng, năm
+          const isExplicitlyTooOld = /(?:\b(?:[4-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower);
 
-          if (enableRecent && isExplicitlyOver24h) {
-            logger.info(`⏩ [BỎ QUA BÀI >= 24H] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - Loại ngay tại bảng tin, không cần vào xem.`);
+          if (enableRecent && isExplicitlyTooOld) {
+            logger.info(`⏩ [BỎ QUA BÀI CŨ] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - Loại ngay tại bảng tin, không cần vào xem.`);
             this.rejectedCount++;
             continue;
           }
 
-          const targetRecencyHours = enableRecent ? 24 : 240;
+          const targetRecencyHours = enableRecent ? 72 : 240;
           let postVerification = resolveTimeResult({
             timeText: post.feedTimeText,
             rawContent: post.content,
@@ -1110,8 +1109,8 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          if (enableRecent && (!postVerification.isWithin24h || !postVerification.withinRequestedWindow || postVerification.status === 'unknown')) {
-            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 24 giờ qua!`);
+          if (enableRecent && postVerification.status !== 'unknown' && !postVerification.withinRequestedWindow) {
+            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 72 giờ qua!`);
             this.rejectedCount++;
             continue;
           }
@@ -1129,7 +1128,11 @@ class SearchEngine extends EventEmitter {
             ? postVerification.fullContent
             : (post.content || postVerification.fullContent || '');
 
-          if (!fullPostContent || fullPostContent.length < 25 || fullPostContent.trim().toLowerCase() === post.authorName.trim().toLowerCase()) {
+          const hasImagesOrPhones = (post.imageUrls && post.imageUrls.length > 0) || 
+                                    (postVerification.imageUrls && postVerification.imageUrls.length > 0) || 
+                                    (extractPhonesFromText(fullPostContent).length > 0);
+
+          if (!fullPostContent || fullPostContent.trim().toLowerCase() === post.authorName.trim().toLowerCase() || (fullPostContent.length < 15 && !hasImagesOrPhones)) {
             logger.info(`❌ [BỎ QUA NỘI DUNG RỖNG] BỎ QUA [${post.authorName}] vì không có nội dung bài viết chi tiết.`);
             this.rejectedCount++;
             continue;

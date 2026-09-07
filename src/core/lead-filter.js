@@ -316,11 +316,23 @@ export const EVENT_GIFT_SERVICES_PATTERNS = [
 ];
 
 export function checkEventGiftServiceLead(post = {}) {
-  const rawText = `${post.authorName || ''} ${post.content || ''}`.normalize('NFKC');
+  const author = `${post.authorName || ''}`.normalize('NFKC');
+  const content = `${post.content || ''}`.normalize('NFKC');
+  const rawText = `${author} ${content}`;
+
+  // If author/content is clearly an F&B/Retail/SMB store opening and merely receives/thanks for congratulatory flowers:
+  const isFbOrStore = /(?:quán|tiệm|trà\s*sữa|cà\s*phê|cafe|coffee|mỳ|mì|lẩu|nướng|bún|phở|cơm|bánh|bida|billiards|karaoke|quán\s*nhậu|ăn\s*vặt|shop|cửa\s*hàng)\b/iu.test(rawText);
+  const isThankingFlowers = /(?:cảm\s*ơn|cam\s*on|tri\s*ân|nhận\s*(?:được)?|ngập\s*tràn|rực\s*rỡ)[^\n.!?]{0,60}(?:hoa|lẵng|kệ\s*hoa)/iu.test(content) ||
+                            /(?:hoa|lẵng\s*hoa|kệ\s*hoa)[^\n.!?]{0,60}(?:chúc\s*mừng|chuc\s*mung|của|từ|bạn\s*bè|anh\s*em|đối\s*tác)/iu.test(content);
+
   for (const regex of EVENT_GIFT_SERVICES_PATTERNS) {
     const m = rawText.match(regex);
     if (m) {
-      return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${m[0].trim()}"` };
+      const matched = m[0].trim();
+      if (isFbOrStore && isThankingFlowers && /(?:lẵng\s*hoa|kệ\s*hoa|hoa\s*khai\s*trương|giỏ\s*hoa|bó\s*hoa)/iu.test(matched)) {
+        continue;
+      }
+      return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${matched}"` };
     }
   }
   return { isEventGiftService: false };
