@@ -740,12 +740,21 @@ class SearchEngine extends EventEmitter {
       // BƯỚC 4: CUỘN TRANG TIẾP TỤC CHO ĐẾN KHI ĐỦ BÀI (Continuous Stream Loop)
       // =========================================================================
       while ((isClientIsolated ? task.acceptedCount : this.acceptedCount) < targetAccepted && (isClientIsolated ? !task.isStopped : (!this.isStopped && !task.isStopped)) && noNewPostsCount < 150) {
+        if (!page || page.isClosed() || (isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped))) {
+          break;
+        }
 
         // Expand "Xem thêm" on search feed
         await this._expandSeeMore(page);
 
+        if (page.isClosed() || (isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped))) {
+          break;
+        }
+
         // Fast Candidate Post Extractor with Clean Visible Text & Image URLs
-        const rawPosts = await page.evaluate(() => {
+        let rawPosts = [];
+        try {
+          rawPosts = await page.evaluate(() => {
           let articles = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"], div[data-pagelet*="FeedUnit"], div[aria-describedby]'));
 
           if (articles.length === 0) {
@@ -994,12 +1003,19 @@ class SearchEngine extends EventEmitter {
 
           return list;
         });
+        } catch (evalErr) {
+          if (task.isStopped || (isClientIsolated ? task.isStopped : this.isStopped) || page.isClosed() || (evalErr.message && evalErr.message.includes('closed'))) {
+            logger.info(`⏹ Trình duyệt đã đóng hoặc phiên quét đã dừng cho client [${clientId}].`);
+            break;
+          }
+          throw evalErr;
+        }
 
         let foundNewCandidateInThisBatch = false;
 
         // Process candidate posts with EXACT 4-STEP ORDER
         for (const post of rawPosts) {
-          if (this.acceptedCount >= targetAccepted || this.isStopped) break;
+          if ((isClientIsolated ? task.acceptedCount : this.acceptedCount) >= targetAccepted || (isClientIsolated ? task.isStopped : this.isStopped)) break;
           if (!post.authorName || !post.postLink) continue;
 
           // Unique Post Key Check
@@ -1419,6 +1435,17 @@ class SearchEngine extends EventEmitter {
       return task.results.length > 0 ? task.results : processedResults;
 
     } catch (error) {
+      const isClosedErr = error.message && (
+        error.message.includes('Target page, context or browser has been closed') ||
+        error.message.includes('TargetClosedError') ||
+        error.message.includes('Session closed')
+      );
+      if (task.isStopped || (isClientIsolated ? task.isStopped : this.isStopped) || isClosedErr) {
+        logger.info(`⏹ Phiên tìm kiếm của client [${clientId}] đã dừng (context closed).`);
+        task.finishedReason = 'user_stopped';
+        task.status = 'stopped';
+        return task.results || [];
+      }
       logger.error({ err: error }, 'Search failed');
 
       throw error;

@@ -40,7 +40,13 @@ router.post('/start', async (req, res) => {
 
     // Start search asynchronously so we can return response immediately
     searchEngine.search(parsed.keyword, parsed.filters, parsed.maxPosts, clientId)
-      .catch(err => logger.error({ err, clientId }, 'Background search failed'));
+      .catch(err => {
+        if (err.message && (err.message.includes('Target page, context or browser has been closed') || err.message.includes('TargetClosedError') || err.message.includes('Session closed'))) {
+          logger.info(`⏹ Phiên tìm kiếm client [${clientId}] kết thúc an toàn.`);
+          return;
+        }
+        logger.error({ err, clientId }, 'Background search failed');
+      });
       
     res.json({ message: 'Search started', status: searchEngine.getProgress(clientId) });
   } catch (error) {
