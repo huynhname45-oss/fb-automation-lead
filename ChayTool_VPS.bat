@@ -31,6 +31,16 @@ if not exist "%~dp0node_modules" (
     call npm install
 )
 
+where npx >nul 2>nul
+if %errorlevel% equ 0 (
+    if not exist "%LOCALAPPDATA%\ms-playwright" (
+        if not exist "%~dp0browsers" (
+            echo [KIEM TRA] Dang tai trinh duyet Chromium cho Playwright (chi tai 1 lan duy nhat)...
+            call npx playwright install chromium
+        )
+    )
+)
+
 :: 2. Open Windows Firewall for Port 3001
 echo [KIEM TRA] Dang mo cong 3001 tren Windows Firewall...
 netsh advfirewall firewall add rule name="FB Automation Tool" dir=in action=allow protocol=TCP localport=3001 >nul 2>&1
