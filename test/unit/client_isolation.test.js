@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import searchEngine from '../../src/core/search-engine.js';
 import { processResults } from '../../src/core/data-processor.js';
@@ -86,4 +86,64 @@ test('Data Processor: processResults preserves unique key and id', async () => {
   assert.equal(processed.length, 1);
   assert.equal(processed[0].key, 'fbid_123456789');
   assert.equal(processed[0].id, 'fbid_123456789');
+});
+
+test('Session Isolation: sessionManager isolates client sessions in RAM and never leaks to server or disk', async () => {
+  const fs = await import('fs');
+  const path = await import('path');
+  const { default: sessionManager } = await import('../../src/core/session-manager.js');
+
+  const clientMac = 'client_mac_' + Date.now();
+  const clientWin = 'client_win_' + Date.now();
+
+  // Server default status must be 'none'
+  const serverStatus = sessionManager.getStatus('default');
+  assert.equal(serverStatus.status, 'none');
+  assert.equal(serverStatus.user, null);
+
+  // Client Mac sets session in memory
+  sessionManager.clientSessions.set(clientMac, {
+    status: 'active',
+    user: { id: '111111', name: 'Hoàng Luận' },
+    lastChecked: Date.now()
+  });
+
+  // Client Win sets different session in memory
+  sessionManager.clientSessions.set(clientWin, {
+    status: 'active',
+    user: { id: '222222', name: 'Nguyễn Văn A' },
+    lastChecked: Date.now()
+  });
+
+  // Client Mac sees only its own session
+  const statusMac = sessionManager.getStatus(clientMac);
+  assert.equal(statusMac.status, 'active');
+  assert.equal(statusMac.user.name, 'Hoàng Luận');
+  assert.equal(statusMac.user.id, '111111');
+
+  // Client Win sees only its own session
+  const statusWin = sessionManager.getStatus(clientWin);
+  assert.equal(statusWin.status, 'active');
+  assert.equal(statusWin.user.name, 'Nguyễn Văn A');
+  assert.equal(statusWin.user.id, '222222');
+
+  // Server itself still sees 'none'
+  const serverCheck = sessionManager.getStatus('server');
+  assert.equal(serverCheck.status, 'none');
+  assert.equal(serverCheck.user, null);
+
+  // Verify server disk does NOT have facebook.json or account_info.json
+  const sessionFilePath = path.join(process.cwd(), 'session', 'facebook.json');
+  const accountFilePath = path.join(process.cwd(), 'session', 'account_info.json');
+  assert.equal(fs.existsSync(sessionFilePath), false, 'Server disk must not contain facebook.json');
+  assert.equal(fs.existsSync(accountFilePath), false, 'Server disk must not contain account_info.json');
+
+  // Logging out Mac client only removes Mac client
+  await sessionManager.logout(clientMac);
+  assert.equal(sessionManager.getStatus(clientMac).status, 'none');
+  assert.equal(sessionManager.getStatus(clientWin).status, 'active');
+  assert.equal(sessionManager.getStatus(clientWin).user.name, 'Nguyễn Văn A');
+
+  // Clean up
+  await sessionManager.logout(clientWin);
 });

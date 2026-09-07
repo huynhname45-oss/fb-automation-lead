@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, isLandmarkContext } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, checkIndustrialManufacturingLead, isLandmarkContext } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -126,8 +126,10 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
    - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, ĐANG KINH DOANH (Cần máy in bill, phần mềm bán hàng, quản lý bàn/kho/giờ).
 
 2. ĐIỂM 0 (0 - 15 điểm) - BẮT BUỘC LOẠI BỎ (isQualified = false):
-   - KHÁCH HÀNG / BÀI VIẾT Ở NƯỚC NGOÀI (Thái Lan, Bangkok, Nhật, Hàn, Đài Loan, Mỹ, Úc, Canada... các bài viết tin tức xã hội, an sinh, người vô gia cư, chính sách nước ngoài).
-   - KHAI TRƯƠNG TÒA NHÀ, SA BÀN, DỰ ÁN BẤT ĐỘNG SẢN, CAO ỐC, ĐẠI ĐÔ THỊ, VINHOMES, NOVALAND, MASTERISE, SUN GROUP, VĂN PHÒNG CHO THUÊ.
+    - KHÁCH HÀNG / BÀI VIẾT Ở NƯỚC NGOÀI (Thái Lan, Bangkok, Nhật, Hàn, Đài Loan, Mỹ, Úc, Canada... các bài viết tin tức xã hội, an sinh, người vô gia cư, chính sách nước ngoài, xuất khẩu hàng hóa ra nước ngoài).
+    - NHÀ MÁY, XÍ NGHIỆP, KHU CÔNG NGHIỆP (KCN), CỤM CÔNG NGHIỆP, KHU CHẾ XUẤT, CÔNG TY SẢN XUẤT, XƯỞNG MAY, GIA CÔNG, XUẤT KHẨU HÀNG HÓA.
+    - TUYỂN DỤNG CÔNG NHÂN, LAO ĐỘNG PHỔ THÔNG, THỢ MAY, CÔNG NHÂN SẢN XUẤT, THỜI VỤ.
+    - KHAI TRƯƠNG TÒA NHÀ, SA BÀN, DỰ ÁN BẤT ĐỘNG SẢN, CAO ỐC, ĐẠI ĐÔ THỊ, VINHOMES, NOVALAND, MASTERISE, SUN GROUP, VĂN PHÒNG CHO THUÊ.
    - TẤT CẢ CÁC NGÀNH DỊCH VỤ CÒN LẠI (TRỪ BIDA VÀ KARAOKE):
      + Dịch vụ làm đẹp: Spa, Thẩm mỹ viện, Tiệm Nail, Triệt lông, Massage, Gội đầu dưỡng sinh, Cắt tóc, Salon tóc, Barbershop.
      + Dịch vụ kỹ thuật & sửa chữa: Gara ô tô, Sửa xe máy, Rửa xe, Chăm sóc xe, Sửa điện thoại, Sửa điện lạnh, Lắp camera, Thi công nội thất, Biển quảng cáo.
@@ -945,6 +947,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       };
     }
 
+    // -0.3. Industrial Manufacturing, Factory, KCN & Worker Recruitment Check (Highest Priority)
+    const industrialCheck = checkIndustrialManufacturingLead({ authorName, content, phones });
+    if (industrialCheck.isIndustrial) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (Đã loại trừ)',
+        businessType: 'Sản xuất công nghiệp / KCN',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (${industrialCheck.reason}), không phải cửa hàng F&B/Bán lẻ SMB mở mới.`,
+        provider: 'local_nlp'
+      };
+    }
+
     const textLower = `${authorName} ${content}`.toLowerCase();
     const cleanPadded = ` ${textLower.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 
@@ -1050,8 +1068,9 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
 
     // 4. Identify Business Category
     let businessType = 'Bán lẻ / Dịch vụ SMB';
-    const hasFBKeyword = /(?:quán\s+ăn|nhà\s+hàng|bánh\s+mì|ăn\s+vặt|quán\s+nhậu|hải\s+sản|quán\s+ốc|tiệm\s+ốc)/i.test(textLower) ||
-      [' bún ', ' phở ', ' cơm ', ' lẩu ', ' nướng ', ' bbq ', ' ốc ', ' bia '].some(kw => cleanPadded.includes(kw));
+    const hasFBKeyword = /(?:quán\s+ăn|nhà\s+hàng|bánh\s+mì|ăn\s+vặt|quán\s+nhậu|hải\s+sản|quán\s+ốc|tiệm\s+ốc|quán\s+cơm|tiệm\s+cơm|quán\s+phở|tiệm\s+phở|quán\s+bún|tiệm\s+bún|quán\s+lẩu|quán\s+nướng|tiệm\s+nướng|quán\s+bia)/i.test(textLower) ||
+      [' bún bò ', ' bún chả ', ' bún riêu ', ' bún đậu ', ' phở bò ', ' phở gà ', ' cơm tấm ', ' cơm gà ', ' cơm niêu ', ' cơm bình dân ', ' cơm sườn ', ' lẩu nướng ', ' bbq '].some(kw => cleanPadded.includes(kw)) ||
+      ([' bún ', ' phở ', ' lẩu ', ' nướng ', ' bbq ', ' ốc '].some(kw => cleanPadded.includes(kw)) && !/(?:tiền\s*cơm|bao\s*cơm|hỗ\s*trợ\s*cơm|phụ\s*cấp\s*cơm|có\s*cơm|ăn\s*cơm)/i.test(textLower));
 
     if (/\b(?:bida|billiard|billiards|bi-a|karaoke|hát\s*cho\s*nhau\s*nghe)\b/i.test(textLower)) {
       businessType = 'Dịch vụ Giải trí - Bida / Karaoke';

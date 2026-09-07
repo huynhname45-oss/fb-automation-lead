@@ -14,18 +14,11 @@ import path from 'path';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-export function getLoggedInUserUid() {
-  try {
-    const sessionFile = path.join(process.cwd(), 'session', 'facebook.json');
-    if (fsSync.existsSync(sessionFile)) {
-      const raw = fsSync.readFileSync(sessionFile, 'utf-8');
-      const data = JSON.parse(raw);
-      if (data && Array.isArray(data.cookies)) {
-        const cUser = data.cookies.find(c => c.name === 'c_user');
-        if (cUser && cUser.value) return String(cUser.value).trim();
-      }
-    }
-  } catch (e) {}
+export function getLoggedInUserUid(cookieInput = '') {
+  if (cookieInput && typeof cookieInput === 'string') {
+    const m = cookieInput.match(/(?:^|[;\s])c_user=([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) return m[1].trim();
+  }
   return '';
 }
 
@@ -676,7 +669,9 @@ class SearchEngine extends EventEmitter {
     let page;
 
     try {
-      const context = await browserManager.launch(isHeadless);
+      const context = isClientIsolated
+        ? await browserManager.createClientContext(clientId, isHeadless)
+        : await browserManager.launch(isHeadless);
 
       if (filters.cookie) {
         try {
@@ -744,7 +739,7 @@ class SearchEngine extends EventEmitter {
       // =========================================================================
       // BƯỚC 4: CUỘN TRANG TIẾP TỤC CHO ĐẾN KHI ĐỦ BÀI (Continuous Stream Loop)
       // =========================================================================
-      while (this.acceptedCount < targetAccepted && !this.isStopped && noNewPostsCount < 150) {
+      while ((isClientIsolated ? task.acceptedCount : this.acceptedCount) < targetAccepted && (isClientIsolated ? !task.isStopped : (!this.isStopped && !task.isStopped)) && noNewPostsCount < 150) {
 
         // Expand "Xem thêm" on search feed
         await this._expandSeeMore(page);
@@ -1362,18 +1357,20 @@ class SearchEngine extends EventEmitter {
             }
             logger.info(`➕ [GỘP BÀI CÙNG TÁC GIẢ] Đã bổ sung bằng chứng từ bài khác của [${post.authorName}] mà không tăng số lead.`);
           } else {
-            acceptedAuthorIndex.set(authorKey, this.results.length);
-            this.results.push(cleanPostObj);
+            acceptedAuthorIndex.set(authorKey, task.results.length);
+            if (!isClientIsolated) {
+              this.results.push(cleanPostObj);
+              this.acceptedCount++;
+              this.found = this.acceptedCount;
+            }
             task.results.push(cleanPostObj);
-            this.acceptedCount++;
             task.acceptedCount++;
+            task.found = task.acceptedCount;
           }
-          this.found = this.acceptedCount;
-          task.found = this.acceptedCount;
           this.emit('progress', this.getProgress(clientId));
 
           const phoneLogStr = phones.length > 0 ? `SĐT: [${phones.join(', ')}]` : `[CHƯA CÓ SĐT - NHẮN TIN FB]`;
-          logger.info(`⚡ [THÀNH CÔNG] [${this.found}/${targetAccepted}] ${phoneLogStr} | Điểm: ${aiEval.score}/100 | Ngành: ${aiEval.businessType} | Tác giả: ${post.authorName}`);
+          logger.info(`⚡ [THÀNH CÔNG] [${task.found}/${targetAccepted}] ${phoneLogStr} | Điểm: ${aiEval.score}/100 | Ngành: ${aiEval.businessType} | Tác giả: ${post.authorName}`);
         }
 
         if (!foundNewCandidateInThisBatch) {
@@ -1388,7 +1385,9 @@ class SearchEngine extends EventEmitter {
         // =========================================================================
         // BƯỚC 4: CUỘN TRANG TIẾP TỤC CHO ĐẾN KHI ĐỦ BÀI (SEARCH-P0-001)
         // =========================================================================
-        if (this.acceptedCount < targetAccepted && !this.isStopped && !task.isStopped) {
+        const clientAccepted = isClientIsolated ? task.acceptedCount : this.acceptedCount;
+        const isTaskStopped = isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped);
+        if (clientAccepted < targetAccepted && !isTaskStopped) {
           scrollAttempts++;
           await this._smoothScrollDown(page, 2500);
           await delay(crawlDelay);
@@ -1396,12 +1395,14 @@ class SearchEngine extends EventEmitter {
       }
 
       const processedResults = processResults(this.results);
+      const finalAccepted = isClientIsolated ? task.acceptedCount : this.acceptedCount;
+      const isTaskStopped = isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped);
       
-      if (this.acceptedCount < targetAccepted && !this.isStopped && !task.isStopped) {
+      if (finalAccepted < targetAccepted && !isTaskStopped) {
         this.finishedReason = 'all_posts_exhausted';
         task.finishedReason = 'all_posts_exhausted';
-        logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${this.acceptedCount}/${targetAccepted} bài đạt chuẩn).`);
-      } else if (!this.isStopped && !task.isStopped) {
+        logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${finalAccepted}/${targetAccepted} bài đạt chuẩn).`);
+      } else if (!isTaskStopped) {
         this.finishedReason = 'target_reached';
         task.finishedReason = 'target_reached';
       } else {
@@ -1409,10 +1410,10 @@ class SearchEngine extends EventEmitter {
         task.finishedReason = 'user_stopped';
       }
 
-      logger.info(`🎉 HOÀN TẤT! ${this.acceptedCount}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã thu thập ${task.results.length} bản ghi cho máy bạn.`);
+      logger.info(`🎉 HOÀN TẤT! ${finalAccepted}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã thu thập ${task.results.length} bản ghi cho client [${clientId}].`);
 
-      this.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
-      task.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
+      this.status = this.isStopped ? 'stopped' : 'idle';
+      task.status = task.isStopped ? 'stopped' : 'idle';
       this.emit('progress', this.getProgress(clientId));
       
       return task.results.length > 0 ? task.results : processedResults;
@@ -1422,12 +1423,19 @@ class SearchEngine extends EventEmitter {
 
       throw error;
     } finally {
-      task.status = (this.isStopped || task.isStopped) ? 'stopped' : 'idle';
-      this.status = this.isStopped ? 'stopped' : 'idle';
+      task.status = task.isStopped ? 'stopped' : 'idle';
+      if (!isClientIsolated) {
+        this.status = this.isStopped ? 'stopped' : 'idle';
+      }
       this.emit('progress', this.getProgress(clientId));
       try {
-        await browserManager.closeBrowser();
-        logger.info('🔒 Đã đóng trình duyệt Chromium.');
+        if (isClientIsolated) {
+          await browserManager.closeClientContext(clientId);
+          logger.info(`🔒 Đã đóng trình duyệt Chromium cho client [${clientId}].`);
+        } else {
+          await browserManager.closeBrowser();
+          logger.info('🔒 Đã đóng trình duyệt Chromium.');
+        }
       } catch (closeErr) {}
     }
   }
@@ -1672,11 +1680,17 @@ class SearchEngine extends EventEmitter {
       let locationResult = null;
       const foundPhones = new Set();
 
-      const loggedInUid = getLoggedInUserUid();
+      let loggedInUid = '';
+      if (context) {
+        try {
+          const contextCookies = await context.cookies();
+          loggedInUid = contextCookies.find(c => c.name === 'c_user')?.value || '';
+        } catch (e) {}
+      }
 
       // 1. Phân giải numeric User ID (UID) của tác giả (loại trừ tài khoản đang đăng nhập)
       let resolvedUid = extractUidFromUrl(profileUrl);
-      if (resolvedUid && resolvedUid === loggedInUid) {
+      if (resolvedUid && loggedInUid && resolvedUid === loggedInUid) {
         resolvedUid = '';
       }
 
@@ -2072,15 +2086,26 @@ class SearchEngine extends EventEmitter {
   }
 
   async stop(clientId = 'default') {
-    if (clientId && clientId !== 'default' && this.clientTasks.has(clientId)) {
-      const task = this.clientTasks.get(clientId);
-      task.isStopped = true;
-      task.status = 'stopped';
+    if (clientId && clientId !== 'default') {
+      if (this.clientTasks.has(clientId)) {
+        const task = this.clientTasks.get(clientId);
+        task.isStopped = true;
+        task.status = 'stopped';
+      }
+      this.emit('progress', this.getProgress(clientId));
+      logger.info(`⏹ Đã nhận lệnh dừng tìm kiếm cho client [${clientId}]. Đang đóng Chromium context...`);
+      try {
+        await browserManager.closeClientContext(clientId);
+      } catch (e) {
+        logger.warn({ err: e.message }, `Failed to close client context for [${clientId}]`);
+      }
+      return;
     }
+
     this.isStopped = true;
     this.status = 'stopped';
-    this.emit('progress', this.getProgress(clientId));
-    logger.info(`⏹ Đã nhận lệnh dừng tìm kiếm cho client [${clientId}]. Đang đóng trình duyệt Chromium...`);
+    this.emit('progress', this.getProgress('default'));
+    logger.info(`⏹ Đã nhận lệnh dừng tìm kiếm cho default server. Đang đóng trình duyệt Chromium...`);
     try {
       await browserManager.closeBrowser();
     } catch (e) {

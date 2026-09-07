@@ -102,18 +102,7 @@ export function parseCookieInput(cookieInput) {
   return cookies;
 }
 
-/**
- * Read and validate stored cookies from disk
- */
 export function getSavedCookiesFromDisk() {
-  try {
-    if (!fs.existsSync(SESSION_FILE)) return [];
-    const data = fs.readFileSync(SESSION_FILE, 'utf-8');
-    const parsed = JSON.parse(data);
-    if (parsed && Array.isArray(parsed.cookies)) {
-      return parsed.cookies.filter(c => c.name && c.value);
-    }
-  } catch (e) {}
   return [];
 }
 
@@ -182,41 +171,7 @@ class SessionManager extends EventEmitter {
     this.accountInfo = { id: '', name: '' };
     this.lastChecked = null;
     this.monitorTimer = null;
-    this._initFromDisk();
-  }
-
-  _initFromDisk() {
-    const cookies = getSavedCookiesFromDisk();
-    const cUser = cookies.find(c => c.name === 'c_user');
-    const xs = cookies.find(c => c.name === 'xs');
-
-    if (cUser && cUser.value && xs && xs.value) {
-      let savedName = '';
-      try {
-        if (fs.existsSync(ACCOUNT_INFO_FILE)) {
-          const data = fs.readFileSync(ACCOUNT_INFO_FILE, 'utf-8');
-          const parsed = JSON.parse(data);
-          if (parsed && parsed.id === cUser.value && parsed.name && 
-              parsed.name.toLowerCase() !== 'bạn' && 
-              parsed.name.toLowerCase() !== 'ban' &&
-              parsed.name.toLowerCase() !== 'lỗi' &&
-              parsed.name.toLowerCase() !== 'error') {
-            savedName = parsed.name;
-          }
-        }
-      } catch (e) {}
-
-      this.status = 'active';
-      this.accountInfo = {
-        id: cUser.value,
-        name: (savedName && savedName.toLowerCase() !== 'bạn' && savedName.toLowerCase() !== 'lỗi') ? savedName : `Tài khoản (${cUser.value})`
-      };
-      this.lastChecked = Date.now();
-    } else {
-      this.status = 'none';
-      this.accountInfo = { id: '', name: '' };
-      this.lastChecked = null;
-    }
+    this.clientSessions = new Map();
   }
 
   async startLoginProcess() {
@@ -256,9 +211,9 @@ class SessionManager extends EventEmitter {
     }
   }
 
-  async loginWithCookie(cookieInput) {
+  async loginWithCookie(cookieInput, clientId = 'default') {
     try {
-      logger.info('Processing Cookie login input...');
+      logger.info(`Processing Cookie login input for client [${clientId}]...`);
 
       if (this.monitorTimer) {
         clearInterval(this.monitorTimer);
@@ -286,77 +241,53 @@ class SessionManager extends EventEmitter {
         secure: true
       })).filter(c => c.name && c.value);
 
-      const storageState = {
-        cookies: formattedCookies,
-        origins: [
-          {
-            origin: 'https://www.facebook.com',
-            localStorage: []
-          }
-        ]
-      };
-
-      const dir = path.dirname(SESSION_FILE);
-      await fsPromises.mkdir(dir, { recursive: true });
-      await fsPromises.writeFile(SESSION_FILE, JSON.stringify(storageState, null, 2), 'utf-8');
-
-      // 1. Close existing browser and clear old browser profile cache
-      await browserManager.closeBrowser();
-      await browserManager.clearProfileDir();
-
-      // 2. Launch browser context (Headless based on user config)
-      const isHeadless = !!configManager.get('headless');
-      const context = await browserManager.launch(isHeadless);
-
-      // 3. Force inject cookies into Chromium context
-      await context.addCookies(formattedCookies);
-
-      // 4. Open Facebook page and verify login status
-      const pages = context.pages();
-      const page = pages.length > 0 ? pages[0] : await context.newPage();
-      logger.info('Navigating to Facebook to verify Cookie session...');
-      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-      // Wait a moment for Facebook redirects and cookies processing
-      await new Promise(r => setTimeout(r, 2500));
-
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
-      const cookiesAfter = await context.cookies();
-      const cUserAfter = cookiesAfter.find(c => c.name === 'c_user');
-
-      const isLoginFailed = currentUrl.includes('/login') || 
-                            currentUrl.includes('checkpoint') ||
-                            pageTitle.toLowerCase().includes('log in') || 
-                            pageTitle.toLowerCase().includes('đăng nhập') ||
-                            !cUserAfter;
-
-      if (isLoginFailed) {
-        logger.warn('Facebook rejected the cookie (redirected to login/checkpoint).');
-        await this.logout();
+      // Fast verification first
+      const fastResult = await fastVerifyCookiesWithFacebook(formattedCookies);
+      if (!fastResult.valid) {
         throw new Error('Facebook từ chối chuỗi Cookie này (Cookie có thể đã hết hạn hoặc bị checkpoint). Vui lòng lấy lại Cookie mới nhất từ trình duyệt của bạn!');
       }
 
-      const extractedName = await this._extractRealName(page, cUser.value);
-      const finalName = (extractedName && extractedName.toLowerCase() !== 'bạn' && extractedName.toLowerCase() !== 'lỗi') ? extractedName : `Tài khoản (${cUser.value})`;
+      let finalName = `Tài khoản (${cUser.value})`;
 
-      this.accountInfo = {
+      // Extract real display name via transient Playwright page
+      try {
+        const isHeadless = !!configManager.get('headless');
+        const context = await browserManager.launch(isHeadless);
+        await context.addCookies(formattedCookies);
+
+        const pages = context.pages();
+        const page = pages.length > 0 ? pages[0] : await context.newPage();
+        logger.info(`Navigating to Facebook to extract account name for client [${clientId}]...`);
+        await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 25000 });
+        await new Promise(r => setTimeout(r, 2000));
+
+        const extractedName = await this._extractRealName(page, cUser.value);
+        if (extractedName && extractedName.toLowerCase() !== 'bạn' && extractedName.toLowerCase() !== 'lỗi') {
+          finalName = extractedName;
+        }
+        await page.close().catch(() => {});
+        await browserManager.closeBrowser().catch(() => {});
+      } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to extract real name via browser, using default UID name');
+      }
+
+      const clientInfo = {
         id: cUser.value,
         name: finalName
       };
 
-      await fsPromises.writeFile(ACCOUNT_INFO_FILE, JSON.stringify(this.accountInfo, null, 2), 'utf-8');
-      await browserManager.saveSession();
-
-      this.status = 'active';
-      this.lastChecked = Date.now();
-      this.emit('statusUpdate', this.getStatus());
+      // Store ONLY in memory for this specific clientId
+      this.clientSessions.set(clientId, {
+        status: 'active',
+        user: clientInfo,
+        lastChecked: Date.now()
+      });
 
       return {
         success: true,
         status: 'active',
-        user: this.accountInfo,
-        message: `Đăng nhập Cookie thành công! Tên: ${this.accountInfo.name} (UID: ${this.accountInfo.id})`
+        user: clientInfo,
+        message: `Đăng nhập Cookie thành công! Tên: ${finalName} (UID: ${cUser.value})`
       };
     } catch (error) {
       logger.error({ err: error.message }, 'Login with cookie failed');
@@ -511,14 +442,22 @@ class SessionManager extends EventEmitter {
   /**
    * Real-time live session verification with Facebook
    */
-  async checkSession() {
+  async checkSession(cookieInput = '', clientId = 'default') {
     this.lastChecked = Date.now();
-    const cookies = getSavedCookiesFromDisk();
+    let cookies = [];
+    if (cookieInput && typeof cookieInput === 'string' && cookieInput.trim()) {
+      cookies = parseCookieInput(cookieInput);
+    } else if (clientId && this.clientSessions.has(clientId)) {
+      const stored = this.clientSessions.get(clientId);
+      if (stored && stored.cookie) {
+        cookies = parseCookieInput(stored.cookie);
+      }
+    }
 
     if (!cookies || cookies.length === 0) {
-      this.status = 'none';
-      this.accountInfo = { id: '', name: '' };
-      this.emit('statusUpdate', this.getStatus());
+      if (clientId && this.clientSessions.has(clientId)) {
+        this.clientSessions.delete(clientId);
+      }
       return { active: false, status: 'none', user: null, message: 'Chưa có phiên đăng nhập. Vui lòng đăng nhập Facebook.' };
     }
 
@@ -526,116 +465,86 @@ class SessionManager extends EventEmitter {
     const xs = cookies.find(c => c.name === 'xs');
 
     if (!cUser || !cUser.value || !xs || !xs.value) {
-      this.status = 'none';
-      this.accountInfo = { id: '', name: '' };
-      this.emit('statusUpdate', this.getStatus());
+      if (clientId && this.clientSessions.has(clientId)) {
+        this.clientSessions.delete(clientId);
+      }
       return { active: false, status: 'none', user: null, message: 'Cookie không hợp lệ hoặc thiếu c_user/xs.' };
     }
 
     try {
-      // 1. First run fast HTTP verification
       const fastResult = await fastVerifyCookiesWithFacebook(cookies);
 
       if (!fastResult.valid) {
-        logger.warn(`Live session verification failed: ${fastResult.reason}`);
-        this.status = 'expired';
-        this.emit('statusUpdate', this.getStatus());
+        logger.warn(`Live session verification failed for client [${clientId}]: ${fastResult.reason}`);
+        if (clientId && this.clientSessions.has(clientId)) {
+          this.clientSessions.delete(clientId);
+        }
         return { active: false, status: 'expired', user: null, message: 'Phiên đăng nhập đã hết hạn hoặc bị Facebook đăng xuất. Vui lòng đăng nhập lại!' };
       }
 
-      // Check if we already have a valid name saved in ACCOUNT_INFO_FILE
-      let currentName = '';
-      try {
-        if (fs.existsSync(ACCOUNT_INFO_FILE)) {
-          const data = fs.readFileSync(ACCOUNT_INFO_FILE, 'utf-8');
-          const parsed = JSON.parse(data);
-          if (parsed && parsed.id === cUser.value && parsed.name && 
-              parsed.name.toLowerCase() !== 'bạn' && 
-              parsed.name.toLowerCase() !== 'ban' &&
-              parsed.name.toLowerCase() !== 'lỗi' && 
-              parsed.name.toLowerCase() !== 'error' &&
-              !parsed.name.startsWith('Tài khoản (')) {
-            currentName = parsed.name;
-          }
-        }
-      } catch (e) {}
+      const existingUser = this.clientSessions.get(clientId)?.user;
+      const currentName = (existingUser?.name && !existingUser.name.startsWith('Tài khoản ('))
+        ? existingUser.name
+        : `Tài khoản (${cUser.value})`;
 
-      // If no valid name yet, launch Playwright to extract real name
-      if (!currentName) {
-        try {
-          const isHeadless = configManager.get('headless') ?? true;
-          const context = await browserManager.launch(isHeadless);
-          await browserManager.injectSessionCookies();
-          const page = (await context.pages())[0] || (await context.newPage());
-          await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await new Promise(r => setTimeout(r, 2000));
-          const extracted = await this._extractRealName(page, cUser.value);
-          if (extracted && extracted.toLowerCase() !== 'bạn' && extracted.toLowerCase() !== 'lỗi') {
-            currentName = extracted;
-          }
-        } catch (e) {}
-      }
-
-      this.accountInfo = {
+      const clientInfo = {
         id: cUser.value,
-        name: currentName || `Tài khoản (${cUser.value})`
+        name: currentName
       };
 
-      await fsPromises.writeFile(ACCOUNT_INFO_FILE, JSON.stringify(this.accountInfo, null, 2), 'utf-8').catch(() => {});
+      if (clientId) {
+        this.clientSessions.set(clientId, {
+          status: 'active',
+          user: clientInfo,
+          cookie: cookieInput || this.clientSessions.get(clientId)?.cookie,
+          lastChecked: Date.now()
+        });
+      }
 
-      this.status = 'active';
-      this.emit('statusUpdate', this.getStatus());
       return {
         active: true,
         status: 'active',
-        user: this.accountInfo,
-        message: `Phiên đăng nhập hoạt động tốt! Tài khoản: ${this.accountInfo.name} (${this.accountInfo.id})`
+        user: clientInfo,
+        message: `Phiên đăng nhập hoạt động tốt! Tài khoản: ${clientInfo.name} (${clientInfo.id})`
       };
     } catch (err) {
       logger.error({ err: err.message }, 'Check session error');
-      this.status = 'active';
-      return { active: true, status: 'active', user: this.accountInfo, message: 'Đã kiểm tra phiên làm việc.' };
+      return { active: false, status: 'none', user: null, message: 'Lỗi kiểm tra phiên làm việc.' };
     }
   }
 
-  getStatus() {
-    const cookies = getSavedCookiesFromDisk();
-    const cUser = cookies.find(c => c.name === 'c_user');
-    const xs = cookies.find(c => c.name === 'xs');
-
-    if (!cUser || !cUser.value || !xs || !xs.value) {
-      if (this.status !== 'authenticating') {
-        this.status = 'none';
-        this.accountInfo = { id: '', name: '' };
-      }
-    } else if (this.status === 'none') {
-      this.status = 'active';
-      this.accountInfo.id = cUser.value;
-      if (!this.accountInfo.name || this.accountInfo.name.toLowerCase() === 'bạn' || this.accountInfo.name.toLowerCase() === 'ban') {
-        this.accountInfo.name = `Tài khoản (${cUser.value})`;
-      }
-    }
-
-    if (this.accountInfo.name && (this.accountInfo.name.toLowerCase() === 'bạn' || this.accountInfo.name.toLowerCase() === 'ban')) {
-      this.accountInfo.name = `Tài khoản (${this.accountInfo.id || cUser?.value || ''})`;
+  getStatus(clientId = 'default') {
+    if (clientId && this.clientSessions.has(clientId)) {
+      const session = this.clientSessions.get(clientId);
+      return {
+        status: session.status || 'none',
+        lastChecked: session.lastChecked || null,
+        user: session.user || null
+      };
     }
 
     return {
-      status: this.status,
-      lastChecked: this.lastChecked,
-      user: (this.status === 'active' && this.accountInfo.id) ? this.accountInfo : null
+      status: 'none',
+      lastChecked: null,
+      user: null
     };
   }
 
-  async logout() {
-    logger.info('Closing browser and clearing session');
+  async logout(clientId = 'default') {
+    logger.info(`Closing session for client [${clientId}]`);
     if (this.monitorTimer) {
       clearInterval(this.monitorTimer);
       this.monitorTimer = null;
     }
 
-    this.accountInfo = { id: '', name: '' };
+    if (clientId && clientId !== 'default') {
+      this.clientSessions.delete(clientId);
+      return { success: true, message: `Đã xóa phiên đăng nhập của client [${clientId}].` };
+    }
+
+    this.clientSessions.clear();
     this.status = 'none';
+    this.accountInfo = { id: '', name: '' };
     this.lastChecked = null;
 
     try {
@@ -644,9 +553,6 @@ class SessionManager extends EventEmitter {
     } catch (e) {
       logger.warn({ err: e.message }, 'Error closing browser on logout');
     }
-
-    try { await fsPromises.unlink(SESSION_FILE); } catch {}
-    try { await fsPromises.unlink(ACCOUNT_INFO_FILE); } catch {}
 
     this.emit('statusUpdate', this.getStatus());
     return { success: true, message: 'Đã đóng trình duyệt và xóa toàn bộ phiên đăng nhập.' };

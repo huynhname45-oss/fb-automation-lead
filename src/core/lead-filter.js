@@ -326,6 +326,42 @@ export function checkEventGiftServiceLead(post = {}) {
   return { isEventGiftService: false };
 }
 
+// Patterns detecting Industrial Manufacturing, Factories, Industrial Zones (KCN), and Manual Worker Recruitment
+export const INDUSTRIAL_MANUFACTURING_PATTERNS = [
+  // 1. Khu công nghiệp, khu chế xuất, cụm công nghiệp
+  /(?:^|[\s,;:.!?-])(?:kcn|khu\s*công\s*nghiệp|khu\s*cong\s*nghiep|khu\s*chế\s*xuất|khu\s*che\s*xuat|cụm\s*công\s*nghiệp|cum\s*cong\s*nghiep)(?:[\s,;:.!?-]|$)/iu,
+
+  // 2. Nhà máy, xí nghiệp, phân xưởng, xưởng sản xuất, công ty sản xuất
+  /(?:^|[\s,;:.!?-])(?:nhà\s*máy|nha\s*may|xí\s*nghiệp|xi\s*nghiep|phân\s*xưởng|phan\s*xuong|xưởng\s*sản\s*xuất|xuong\s*san\s*xuat|công\s*ty\s*sản\s*xuất|cong\s*ty\s*san\s*xuat)(?:[\s,;:.!?-]|$)/iu,
+
+  // 3. Tuyển công nhân, lao động phổ thông, công nhân may/sản xuất/thời vụ
+  /(?:^|[\s,;:.!?-])(?:tuyển|tuyen)\s+(?:dụng\s+)?(?:gấp\s+)?(?:\d+\s+)?(?:công\s*nhân|cong\s*nhan|lao\s*động\s*phổ\s*thông|lao\s*dong\s*pho\s*thong|thợ\s*may|tho\s*may|công\s*nhân\s*may|công\s*nhân\s*sản\s*xuất|công\s*nhân\s*thời\s*vụ|thợ\s*hàn|thợ\s*tiện|thợ\s*cơ\s*khí)/iu,
+  /(?:^|[\s,;:.!?-])(?:công\s*nhân\s*may|công\s*nhân\s*sản\s*xuất|công\s*nhân\s*thời\s*vụ|công\s*nhân\s*đứng\s*máy|lao\s*động\s*phổ\s*thông)(?:[\s,;:.!?-]|$)/iu,
+
+  // 4. Gia công / Sản xuất công nghiệp hàng loạt (bít tất, may mặc, da giày, linh kiện, xuất khẩu)
+  /(?:^|[\s,;:.!?-])(?:sản\s*xuất\s*(?:bít\s*tất|tất|vớ|giày|dép|may\s*mặc|quần\s*áo\s*xuất\s*khẩu|linh\s*kiện|bao\s*bì|nhựa|cơ\s*khí)|gia\s*công\s*(?:may|linh\s*kiện|hàng\s*xuất\s*khẩu|cơ\s*khí)|may\s*xuất\s*khẩu)/iu,
+
+  // 5. Xuất khẩu sang nước ngoài
+  /(?:^|[\s,;:.!?-])(?:xuất\s*khẩu|xuat\s*khau)\s+(?:sang|đi|cho|vào)\s+(?:mỹ|my|usa|canada|nhật|nhat|hàn|han|đài\s*loan|dai\s*loan|châu\s*âu|chau\s*au|úc|uc)/iu
+];
+
+export function checkIndustrialManufacturingLead(post = {}) {
+  const author = `${post.authorName || ''}`.normalize('NFKC');
+  const content = `${post.content || ''}`.normalize('NFKC');
+  const combined = `${author} ${content}`;
+
+  for (const regex of INDUSTRIAL_MANUFACTURING_PATTERNS) {
+    const m = combined.match(regex);
+    if (m) {
+      const term = m[0].trim();
+      if (!isLandmarkContext(content, term)) {
+        return { isIndustrial: true, reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông: "${term}"` };
+      }
+    }
+  }
+  return { isIndustrial: false };
+}
+
 /**
  * Checks if a post represents a business or person located overseas / in a foreign country.
  */
@@ -406,6 +442,17 @@ export class LeadFilter {
         category: 'guest_congratulations',
         matchedTerm: congratCheck.reason,
         reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`
+      };
+    }
+
+    // 0.6. Industrial Zone / Factory / Manufacturing / Worker Recruitment Check
+    const industrialCheck = checkIndustrialManufacturingLead(post);
+    if (industrialCheck.isIndustrial) {
+      return {
+        qualified: false,
+        category: 'industrial_manufacturing',
+        matchedTerm: industrialCheck.reason,
+        reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (${industrialCheck.reason}), không phải cửa hàng F&B/Bán lẻ SMB.`
       };
     }
 

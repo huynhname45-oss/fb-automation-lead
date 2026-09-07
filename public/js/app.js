@@ -37,6 +37,8 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
 
 3. ĐIỂM THẤP (0 - 49 điểm) - BẮT BUỘC LOẠI BỎ (KHÔNG PHẢI KHÁCH MỤC TIÊU):
    - Cửa hàng, quán, khách hàng ở NƯỚC NGOÀI (Nhật Bản, Hàn Quốc, Đài Loan, Mỹ, Úc, Canada, Châu Âu, Singapore, Thái Lan...). Bắt buộc quán/cửa hàng phải kinh doanh tại Việt Nam.
+   - Khu công nghiệp (KCN), Cụm công nghiệp, Khu chế xuất, Nhà máy, Xí nghiệp, Phân xưởng, Công ty sản xuất, Cơ sở sản xuất, Gia công may mặc, Sản xuất bít tất, Hàng xuất khẩu.
+   - Bài tuyển dụng Công nhân, Lao động phổ thông, Công nhân may, Công nhân sản xuất, Thời vụ.
    - Trường học, Mầm non, Nhà trẻ, Trường tiểu học, THCS, THPT, Đại học, Cao đẳng, Học viện.
    - Lễ khai giảng, Khai trường năm học mới, Mùa khai trường, Ngày hội tựu trường, Năm học mới, Học sinh, Sinh viên, Tân sinh viên, Lớp học, Niên khóa.
    - Dịch vụ in ấn biển bảng/hoa/bóng bay chúc mừng khai giảng năm học.
@@ -785,38 +787,34 @@ let loginMonitorInterval = null;
 
 async function checkSessionStatus() {
     try {
-        const res = await api('GET', '/api/session/status');
-        if (res && res.status === 'active') {
+        // 1. Luôn ưu tiên kiểm tra session lưu trong IndexedDB / LocalStorage của chính Client này
+        if (window.ClientDB) {
+            const clientSession = await window.ClientDB.getSession();
+            if (clientSession && clientSession.status === 'active' && clientSession.cookie) {
+                state.session = clientSession;
+                updateSessionUI({
+                    status: 'active',
+                    user: clientSession.user || { name: 'Tài khoản Facebook' },
+                    isClientSession: true
+                });
+                return;
+            }
+        }
+
+        // 2. Nếu Client chưa có session trong ClientDB, kiểm tra theo clientId của máy này trên server
+        const clientId = getClientId();
+        const res = await api('GET', `/api/session/status?clientId=${encodeURIComponent(clientId)}`);
+        if (res && res.status === 'active' && res.user) {
+            state.session = res;
             updateSessionUI(res);
             return;
         }
 
-        // Nếu server chưa có session, kiểm tra session lưu trong IndexedDB máy Client
-        if (window.ClientDB) {
-            const clientSession = await window.ClientDB.getSession();
-            if (clientSession && clientSession.status === 'active' && clientSession.cookie) {
-                updateSessionUI({
-                    status: 'active',
-                    user: clientSession.user || { name: 'Cookie máy Client' },
-                    isClientSession: true
-                });
-                return;
-            }
-        }
-
-        updateSessionUI(res || { status: 'none', user: null });
+        // Mặc định: Thiết bị này chưa đăng nhập
+        state.session = { status: 'none', user: null };
+        updateSessionUI({ status: 'none', user: null });
     } catch (err) {
-        if (window.ClientDB) {
-            const clientSession = await window.ClientDB.getSession().catch(() => null);
-            if (clientSession && clientSession.status === 'active' && clientSession.cookie) {
-                updateSessionUI({
-                    status: 'active',
-                    user: clientSession.user || { name: 'Cookie máy Client' },
-                    isClientSession: true
-                });
-                return;
-            }
-        }
+        state.session = { status: 'none', user: null };
         updateSessionUI({ status: 'none', user: null });
     }
 }
@@ -827,15 +825,39 @@ async function handleVerifySession() {
     showToast('Đang kết nối và kiểm tra session với Facebook...', 'info');
 
     try {
-        const res = await api('POST', '/api/session/verify');
-        updateSessionUI(res);
+        const clientSession = window.ClientDB ? await window.ClientDB.getSession() : null;
+        const cookieVal = clientSession?.cookie || localStorage.getItem('fb_cookie') || '';
+        if (!cookieVal) {
+            showToast('Chưa có Cookie Facebook trên máy bạn. Vui lòng dán Cookie vào ô bên dưới!', 'warning');
+            updateSessionUI({ status: 'none', user: null });
+            return;
+        }
+
+        const res = await api('POST', '/api/session/verify', { 
+            cookie: cookieVal, 
+            clientId: getClientId() 
+        });
+
         if (res.active && res.status === 'active') {
+            if (window.ClientDB) {
+                await window.ClientDB.saveSession({
+                    cookie: cookieVal,
+                    user: res.user || clientSession?.user || { name: 'Facebook User' },
+                    status: 'active'
+                });
+            }
+            state.session = res;
+            updateSessionUI(res);
             showToast(res.message || 'Session hoạt động tốt!', 'success');
         } else {
-            showToast(res.message || 'Phiên đăng nhập không hợp lệ!', 'warning');
+            if (window.ClientDB) {
+                await window.ClientDB.clearSession();
+            }
+            state.session = { status: 'none', user: null };
+            updateSessionUI({ status: 'none', user: null });
+            showToast(res.message || 'Phiên đăng nhập đã hết hạn! Vui lòng lấy lại Cookie mới.', 'warning');
         }
     } catch (err) {
-        updateSessionUI({ status: 'none', user: null });
         showToast(err.message || 'Lỗi kiểm tra session', 'error');
     } finally {
         if (btnVerifySession) setLoading(btnVerifySession, false);
@@ -868,7 +890,7 @@ async function handleLogin() {
             }
 
             try {
-                const statusRes = await api('GET', '/api/session/status');
+                const statusRes = await api('GET', `/api/session/status?clientId=${encodeURIComponent(getClientId())}`);
                 if (statusRes.status === 'active') {
                     clearInterval(loginMonitorInterval);
                     loginMonitorInterval = null;
@@ -900,7 +922,11 @@ async function handleLoginCookie() {
     showToast('Đang kiểm tra và nạp Cookie với Facebook...', 'info');
 
     try {
-        const res = await api('POST', '/api/session/login-cookie', { cookie: cookieVal });
+        const res = await api('POST', '/api/session/login-cookie', { 
+            cookie: cookieVal,
+            clientId: getClientId() 
+        });
+
         if (res.status === 'active') {
             if (window.ClientDB) {
                 await window.ClientDB.saveSession({
@@ -911,6 +937,7 @@ async function handleLoginCookie() {
             }
             showToast(res.message || 'Đăng nhập Cookie Facebook thành công! Dữ liệu cookie đã được lưu an toàn trên máy bạn.', 'success');
             inputCookie.value = '';
+            state.session = res;
             updateSessionUI(res);
         } else {
             showToast(res.message || 'Đăng nhập Cookie không thành công', 'warning');
@@ -923,7 +950,7 @@ async function handleLoginCookie() {
 }
 
 async function handleLogout() {
-    if (!confirm('Bạn có chắc chắn muốn đóng trình duyệt và xóa toàn bộ phiên đăng nhập?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa phiên đăng nhập Facebook trên máy bạn?')) return;
 
     const btnCloseBrowser = document.getElementById('btnCloseBrowser');
     if (btnCloseBrowser) setLoading(btnCloseBrowser, true);
@@ -932,14 +959,14 @@ async function handleLogout() {
         if (window.ClientDB) {
             await window.ClientDB.clearSession();
         }
-        await api('POST', '/api/session/logout');
+        await api('POST', '/api/session/logout', { clientId: getClientId() });
         if (loginMonitorInterval) {
             clearInterval(loginMonitorInterval);
             loginMonitorInterval = null;
         }
         state.session = { status: 'none', user: null, lastChecked: null };
         updateSessionUI({ status: 'none', user: null });
-        showToast('Đã đóng trình duyệt và xóa toàn bộ phiên đăng nhập!', 'info');
+        showToast('Đã xóa phiên đăng nhập Facebook trên máy bạn thành công!', 'info');
     } catch (err) {
         showToast(err.message || 'Lỗi đăng xuất', 'error');
     } finally {

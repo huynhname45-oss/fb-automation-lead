@@ -14,11 +14,11 @@ router.post('/login', async (req, res) => {
 
 router.post('/login-cookie', async (req, res) => {
   try {
-    const { cookie } = req.body || {};
+    const { cookie, clientId } = req.body || {};
     if (!cookie || typeof cookie !== 'string') {
       return res.status(400).json({ error: 'Vui lòng dán chuỗi Cookie hợp lệ!' });
     }
-    const result = await sessionManager.loginWithCookie(cookie);
+    const result = await sessionManager.loginWithCookie(cookie, clientId || 'default');
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -27,7 +27,8 @@ router.post('/login-cookie', async (req, res) => {
 
 router.get('/status', (req, res) => {
   try {
-    const status = sessionManager.getStatus();
+    const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
+    const status = sessionManager.getStatus(clientId);
     res.json(status);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -36,7 +37,8 @@ router.get('/status', (req, res) => {
 
 router.post('/verify', async (req, res) => {
   try {
-    const result = await sessionManager.checkSession();
+    const { cookie, clientId } = req.body || {};
+    const result = await sessionManager.checkSession(cookie, clientId || 'default');
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -45,8 +47,9 @@ router.post('/verify', async (req, res) => {
 
 router.post('/logout', async (req, res) => {
   try {
-    await sessionManager.logout();
-    res.json({ message: 'Đã đóng trình duyệt và xóa session' });
+    const { clientId } = req.body || {};
+    const result = await sessionManager.logout(clientId || 'default');
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

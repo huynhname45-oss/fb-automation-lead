@@ -77,6 +77,72 @@ class BrowserManager {
   constructor() {
     this.context = null;
     this.currentHeadless = null;
+    this.clientContexts = new Map(); // clientId -> { context, profileDir }
+  }
+
+  async createClientContext(clientId = 'default', headless = true) {
+    if (this.clientContexts.has(clientId)) {
+      await this.closeClientContext(clientId);
+    }
+
+    const clientProfileDir = path.join(os.tmpdir(), 'fb_automation_profiles', clientId);
+    await fs.mkdir(clientProfileDir, { recursive: true });
+
+    const executablePath = ensureLocalChromiumInstalled();
+    const launchArgs = [
+      '--disable-notifications',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled'
+    ];
+    if (!headless) {
+      launchArgs.push('--start-maximized');
+    }
+
+    const launchOptions = {
+      headless: !!headless,
+      viewport: headless ? { width: 1280, height: 800 } : null,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      executablePath: executablePath || undefined,
+      args: launchArgs
+    };
+
+    let ctx;
+    try {
+      ctx = await chromium.launchPersistentContext(clientProfileDir, launchOptions);
+    } catch (err1) {
+      try {
+        ctx = await chromium.launchPersistentContext(clientProfileDir, {
+          ...launchOptions,
+          executablePath: undefined,
+          channel: 'msedge'
+        });
+      } catch (err2) {
+        ctx = await chromium.launchPersistentContext(clientProfileDir, {
+          ...launchOptions,
+          executablePath: undefined,
+          channel: 'chrome'
+        });
+      }
+    }
+
+    this.clientContexts.set(clientId, { context: ctx, profileDir: clientProfileDir });
+    logger.info(`[MULTI-CLIENT] Created isolated Chromium context for client [${clientId}]`);
+    return ctx;
+  }
+
+  async closeClientContext(clientId = 'default') {
+    if (this.clientContexts.has(clientId)) {
+      const record = this.clientContexts.get(clientId);
+      this.clientContexts.delete(clientId);
+      try {
+        await record.context.close();
+      } catch (e) {}
+      try {
+        await fs.rm(record.profileDir, { recursive: true, force: true });
+      } catch (e) {}
+      logger.info(`[MULTI-CLIENT] Closed and cleaned Chromium context for client [${clientId}]`);
+    }
   }
 
   async clearProfileDir() {
@@ -129,15 +195,6 @@ class BrowserManager {
     await fs.mkdir(PROFILE_DIR, { recursive: true });
     logger.info(`Launching persistent browser context at ${PROFILE_DIR} (headless: ${headless})...`);
 
-    let storageStatePath = null;
-    try {
-      await fs.access(SESSION_FILE);
-      storageStatePath = SESSION_FILE;
-      logger.info(`Found saved session file: ${SESSION_FILE}`);
-    } catch (e) {
-      logger.info('No saved session file found. Starting fresh session.');
-    }
-
     const executablePath = ensureLocalChromiumInstalled();
 
     const launchArgs = [
@@ -154,7 +211,6 @@ class BrowserManager {
       headless: !!headless,
       viewport: headless ? { width: 1280, height: 800 } : null,
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      storageState: storageStatePath || undefined,
       executablePath: executablePath || undefined,
       args: launchArgs
     };
@@ -162,7 +218,6 @@ class BrowserManager {
     try {
       this.context = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
       this.currentHeadless = headless;
-      await this.injectSessionCookies();
       logger.info(`Chromium browser launched successfully from ${executablePath || 'Playwright defaults'}!`);
       return this.context;
     } catch (err1) {
@@ -177,7 +232,6 @@ class BrowserManager {
         channel: 'msedge'
       });
       this.currentHeadless = headless;
-      await this.injectSessionCookies();
       logger.info('Launched Microsoft Edge system browser successfully!');
       return this.context;
     } catch (err2) {
@@ -192,7 +246,6 @@ class BrowserManager {
         channel: 'chrome'
       });
       this.currentHeadless = headless;
-      await this.injectSessionCookies();
       logger.info('Launched Google Chrome system browser successfully!');
       return this.context;
     } catch (err3) {
@@ -208,31 +261,14 @@ class BrowserManager {
   }
 
   async saveSession() {
-    try {
-      if (this.context && (!this.context.browser || this.context.browser()?.isConnected())) {
-        const dir = path.dirname(SESSION_FILE);
-        await fs.mkdir(dir, { recursive: true });
-        await this.context.storageState({ path: SESSION_FILE });
-        logger.info(`Storage state exported to ${SESSION_FILE}`);
-      }
-    } catch (error) {
-      // If the browser was closed or disconnected before/during export, handle gracefully
-      if (error?.message?.includes('Target page, context or browser has been closed') || 
-          error?.message?.includes('has been closed') ||
-          error?.name === 'TargetClosedError') {
-        logger.debug('Trình duyệt đã đóng trước khi xuất session (không ảnh hưởng dữ liệu).');
-      } else {
-        logger.warn({ err: error.message }, 'Không thể xuất file session lưu trữ');
-      }
-    }
+    // In client-isolated architecture, client cookies are managed strictly client-side.
+    // Server does not persist client cookies or storageState to disk.
+    logger.debug('Session persistence bypassed (client-isolated architecture).');
   }
 
   async closeBrowser() {
     if (this.context) {
       try {
-        if (!this.context.browser || this.context.browser()?.isConnected()) {
-          await this.saveSession();
-        }
         await this.context.close();
       } catch (e) {
         // Safe ignore if already closed
