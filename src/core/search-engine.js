@@ -1074,16 +1074,17 @@ class SearchEngine extends EventEmitter {
           // =========================================================================
           const feedTimeLower = (post.feedTimeText || '').toLowerCase().trim();
 
-          // Loại bỏ ngay lập tức tại bảng tin nếu bài viết hiển thị từ 4 ngày trở lên, tuần, tháng, năm
-          const isExplicitlyTooOld = /(?:\b(?:[4-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower);
+          // Loại bỏ ngay lập tức tại bảng tin nếu bài viết hiển thị từ 2 ngày trở lên, tuần, tháng, năm hoặc >= 25 giờ
+          const isExplicitlyOver24h = /(?:\b(?:[2-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower) ||
+            /\b(?:2[5-9]|[3-9]\d|\d{3,})\s*(?:giờ|gio|h)\b/iu.test(feedTimeLower);
 
-          if (enableRecent && isExplicitlyTooOld) {
-            logger.info(`⏩ [BỎ QUA BÀI CŨ] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - Loại ngay tại bảng tin, không cần vào xem.`);
+          if (enableRecent && isExplicitlyOver24h) {
+            logger.info(`⏩ [BỎ QUA BÀI > 24H] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - Loại ngay tại bảng tin.`);
             this.rejectedCount++;
             continue;
           }
 
-          const targetRecencyHours = enableRecent ? 72 : 240;
+          const targetRecencyHours = enableRecent ? 24 : 240;
           let postVerification = resolveTimeResult({
             timeText: post.feedTimeText,
             rawContent: post.content,
@@ -1109,8 +1110,8 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          if (enableRecent && postVerification.status !== 'unknown' && !postVerification.withinRequestedWindow) {
-            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 72 giờ qua!`);
+          if (enableRecent && (!postVerification.isWithin24h && !postVerification.withinRequestedWindow)) {
+            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 24 giờ qua!`);
             this.rejectedCount++;
             continue;
           }
