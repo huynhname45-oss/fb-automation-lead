@@ -357,6 +357,62 @@ async function dbClearClientSession() {
     });
 }
 
+async function dbSaveJoinedGroups(groups = []) {
+    try {
+        localStorage.setItem('fb_joined_groups', JSON.stringify(groups));
+    } catch (e) {}
+
+    const db = await initClientDB();
+    if (!db) return;
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('config', 'readwrite');
+            const store = tx.objectStore('config');
+            store.put({ key: 'joined_groups', groups, updatedAt: new Date().toISOString() });
+            tx.oncomplete = () => resolve(groups);
+            tx.onerror = () => resolve(groups);
+        } catch (e) {
+            resolve(groups);
+        }
+    });
+}
+
+async function dbGetJoinedGroups() {
+    const db = await initClientDB();
+    if (!db) {
+        try {
+            return JSON.parse(localStorage.getItem('fb_joined_groups') || '[]');
+        } catch (e) { return []; }
+    }
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('config', 'readonly');
+            const store = tx.objectStore('config');
+            const req = store.get('joined_groups');
+            req.onsuccess = () => {
+                if (req.result && Array.isArray(req.result.groups)) {
+                    resolve(req.result.groups);
+                } else {
+                    try {
+                        resolve(JSON.parse(localStorage.getItem('fb_joined_groups') || '[]'));
+                    } catch (e) { resolve([]); }
+                }
+            };
+            req.onerror = () => {
+                try {
+                    resolve(JSON.parse(localStorage.getItem('fb_joined_groups') || '[]'));
+                } catch (e) { resolve([]); }
+            };
+        } catch (e) {
+            try {
+                resolve(JSON.parse(localStorage.getItem('fb_joined_groups') || '[]'));
+            } catch (err) { resolve([]); }
+        }
+    });
+}
+
 // Export ra window toàn cầu
 window.ClientDB = {
     init: initClientDB,
@@ -370,5 +426,7 @@ window.ClientDB = {
     getSignatures: dbGetExistingSignatures,
     saveSession: dbSaveClientSession,
     getSession: dbGetClientSession,
-    clearSession: dbClearClientSession
+    clearSession: dbClearClientSession,
+    saveGroups: dbSaveJoinedGroups,
+    getGroups: dbGetJoinedGroups
 };

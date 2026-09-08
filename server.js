@@ -11,6 +11,7 @@ import sessionRoutes from './src/routes/session.js';
 import searchRoutes from './src/routes/search.js';
 import exportRoutes from './src/routes/export.js';
 import configRoutes from './src/routes/config.js';
+import groupsRoutes from './src/routes/groups.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +43,7 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/groups', groupsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

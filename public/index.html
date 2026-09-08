@@ -27,6 +27,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     <span>Search & Export</span>
                 </button>
+                <button class="sidebar-item" id="navGroups" data-tab="groups">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span>Nhóm đã tham gia</span>
+                </button>
                 <button class="sidebar-item" id="navConfig" data-tab="config">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     <span>Cấu hình (Settings)</span>
@@ -336,6 +340,128 @@
                                         <button class="btn btn-ghost btn-sm" id="btnNextPage" disabled>Trang sau »</button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                <!-- Groups Tab -->
+                <section id="tabGroups" class="tab-content">
+                    <div class="card glass-card mb-4">
+                        <div class="card-header d-flex justify-between align-center wrap-gap">
+                            <div>
+                                <h2>Danh Sách Nhóm Facebook Đã Tham Gia</h2>
+                                <p>Tự động lấy toàn bộ nhóm bạn đã tham gia bằng Facebook Graph API hoặc Cookie phiên làm việc. Dữ liệu được lưu trữ an toàn trên máy (IndexedDB).</p>
+                            </div>
+                            <div class="d-flex align-center gap-2">
+                                <button class="btn btn-ghost btn-sm" id="btnRefreshGroupsList" title="Làm mới bảng hiển thị từ bộ nhớ cục bộ">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                    Làm mới
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Stats Bar -->
+                            <div class="grid-3 mb-4">
+                                <div class="stat-card" style="padding: 16px; border-radius: 12px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2);">
+                                    <div class="text-xs text-muted font-semibold mb-1" style="text-transform: uppercase; letter-spacing: 0.5px;">Tổng số nhóm</div>
+                                    <div class="d-flex align-baseline gap-2">
+                                        <span id="groupsStatTotal" style="font-size: 1.85rem; font-weight: 700; color: #6366f1;">0</span>
+                                        <span class="text-xs text-muted">nhóm đã tham gia</span>
+                                    </div>
+                                </div>
+                                <div class="stat-card" style="padding: 16px; border-radius: 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2);">
+                                    <div class="text-xs text-muted font-semibold mb-1" style="text-transform: uppercase; letter-spacing: 0.5px;">Nhóm Công Khai</div>
+                                    <div class="d-flex align-baseline gap-2">
+                                        <span id="groupsStatPublic" style="font-size: 1.85rem; font-weight: 700; color: #10b981;">0</span>
+                                        <span class="text-xs text-muted">nhóm public</span>
+                                    </div>
+                                </div>
+                                <div class="stat-card" style="padding: 16px; border-radius: 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2);">
+                                    <div class="text-xs text-muted font-semibold mb-1" style="text-transform: uppercase; letter-spacing: 0.5px;">Nhóm Riêng Tư</div>
+                                    <div class="d-flex align-baseline gap-2">
+                                        <span id="groupsStatPrivate" style="font-size: 1.85rem; font-weight: 700; color: #f59e0b;">0</span>
+                                        <span class="text-xs text-muted">nhóm kín / private</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Controls & Method Selector -->
+                            <div class="groups-control-box p-3 mb-4" style="background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--glass-border);">
+                                <div class="d-flex align-center justify-between wrap-gap mb-3">
+                                    <div class="d-flex align-center gap-2">
+                                        <label class="font-semibold text-sm" for="selGroupFetchMethod">Phương thức quét:</label>
+                                        <select id="selGroupFetchMethod" class="input input-styled" style="height: 38px; width: auto; font-size: 0.88rem; padding: 4px 12px;">
+                                            <option value="auto">⚡ Tự động (Ưu tiên Cookie / Token)</option>
+                                            <option value="cookie">🍪 Cookie Facebook (Siêu tốc 1-2 giây)</option>
+                                            <option value="token">🔑 Facebook Graph API Access Token</option>
+                                            <option value="browser">🌐 Playwright Browser (/groups/joins)</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex align-center gap-2">
+                                        <button class="btn btn-purple-full" id="btnFetchJoinedGroups" style="height: 38px; padding: 0 20px; font-weight: 600; font-size: 0.9rem;">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path><polyline points="17 8 12 13 9 10"></polyline></svg>
+                                            <span id="btnFetchJoinedGroupsText">Quét Tất Cả Nhóm</span>
+                                        </button>
+                                        <button class="btn btn-ghost" id="btnExportGroupsExcel" style="height: 38px; font-size: 0.88rem;" title="Xuất toàn bộ danh sách ra file Excel .xlsx">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                            Xuất Excel
+                                        </button>
+                                        <button class="btn btn-ghost" id="btnCopyAllGroupIds" style="height: 38px; font-size: 0.88rem;" title="Sao chép toàn bộ Group ID vào Clipboard">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                            Copy Toàn bộ ID
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Token Input Row (Expandable or visible when method is token) -->
+                                <div id="groupTokenInputContainer" style="display: none; padding-top: 10px; border-top: 1px dashed var(--glass-border);">
+                                    <label class="field-label text-xs font-semibold mb-1" for="inputGroupApiToken">
+                                        Facebook Graph API User Access Token (Bắt đầu bằng <code>EAAB...</code> hoặc <code>EAA...</code>):
+                                    </label>
+                                    <div class="d-flex gap-2">
+                                        <input type="password" id="inputGroupApiToken" class="input input-styled" style="height: 38px; font-size: 0.88rem;" placeholder="Dán Access Token của bạn tại đây (Bỏ trống để dùng Cookie phiên hiện tại)">
+                                    </div>
+                                    <span class="text-muted text-xs mt-1 d-block">💡 Gợi ý: Lấy Token từ Trình quản lý quảng cáo (Facebook Ads Manager) hoặc Graph API Explorer với quyền <code>groups_access_member_info</code>.</span>
+                                </div>
+                            </div>
+
+                            <!-- Filter & Search Bar -->
+                            <div class="d-flex align-center justify-between wrap-gap mb-3">
+                                <div class="d-flex align-center gap-2" style="flex: 1; max-width: 420px;">
+                                    <input type="text" id="inputFilterGroups" class="input input-styled" style="height: 38px; font-size: 0.88rem;" placeholder="🔍 Tìm nhanh theo tên hoặc ID nhóm...">
+                                </div>
+                                <div class="d-flex align-center gap-2">
+                                    <select id="selFilterPrivacy" class="input input-styled" style="height: 38px; width: auto; font-size: 0.88rem; padding: 4px 12px;">
+                                        <option value="all">Tất cả quyền riêng tư</option>
+                                        <option value="public">Chỉ nhóm Công khai</option>
+                                        <option value="private">Chỉ nhóm Riêng tư</option>
+                                    </select>
+                                    <span class="badge" id="groupsCountFilteredBadge" style="background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.82rem; padding: 6px 12px;">0 nhóm</span>
+                                </div>
+                            </div>
+
+                            <!-- Groups Table Container -->
+                            <div class="table-responsive" style="max-height: 560px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px;">
+                                <table class="table" id="groupsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 55px; text-align: center;">STT</th>
+                                            <th style="width: 55px; text-align: center;">Ảnh</th>
+                                            <th>Tên Nhóm Facebook</th>
+                                            <th style="width: 220px;">Group ID</th>
+                                            <th style="width: 140px; text-align: center;">Quyền riêng tư</th>
+                                            <th style="width: 160px; text-align: center;">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="groupsTableBody">
+                                        <tr class="empty-row">
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
+                                                <div style="font-weight: 500;">Chưa có dữ liệu nhóm nào.</div>
+                                                <div class="text-xs text-muted mt-1">Bấm nút <strong>"Quét Tất Cả Nhóm"</strong> ở trên để bắt đầu lấy danh sách!</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>

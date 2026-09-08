@@ -2,6 +2,7 @@ const state = {
     currentTab: 'session',
     session: { status: 'none', lastChecked: null, user: null },
     search: { status: 'idle', keyword: '', results: [], progress: { found: 0, total: 10 } },
+    groups: { list: [], filteredList: [], searchQuery: '', privacyFilter: 'all', isLoading: false },
     config: { headless: false, crawlDelay: 2500, maxPosts: 10 },
     pagination: { currentPage: 1, pageSize: 10, totalPages: 1 },
     selectedKeys: new Set(),
@@ -64,6 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkSessionStatus();
     fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
+    loadSavedGroups();     // Automatically load cached groups on startup
     startIdleSync();
 });
 
@@ -104,15 +106,18 @@ function applyTheme(theme) {
 function initNavigation() {
     const navSession = document.getElementById('navSession');
     const navSearch = document.getElementById('navSearch');
+    const navGroups = document.getElementById('navGroups');
     const navConfig = document.getElementById('navConfig');
     
     const tabSession = document.getElementById('tabSession');
     const tabSearch = document.getElementById('tabSearch');
+    const tabGroups = document.getElementById('tabGroups');
     const tabConfig = document.getElementById('tabConfig');
 
     const tabs = [
         { btn: navSession, target: tabSession, name: 'session' },
         { btn: navSearch, target: tabSearch, name: 'search' },
+        { btn: navGroups, target: tabGroups, name: 'groups' },
         { btn: navConfig, target: tabConfig, name: 'config' }
     ];
 
@@ -132,7 +137,12 @@ function switchTab(tabName, tabs) {
     if (pageTitle) {
         if (tabName === 'session') pageTitle.textContent = 'Session Manager';
         else if (tabName === 'search') pageTitle.textContent = 'Search & Export';
+        else if (tabName === 'groups') pageTitle.textContent = 'Nhóm Facebook Đã Tham Gia';
         else if (tabName === 'config') pageTitle.textContent = 'Cấu hình Hệ thống';
+    }
+
+    if (tabName === 'groups' && state.groups.list.length === 0) {
+        loadSavedGroups();
     }
 
     tabs.forEach(t => {
@@ -172,6 +182,42 @@ function initEventListeners() {
     if (btnDeleteSelected) btnDeleteSelected.addEventListener('click', handleDeleteSelected);
     if (btnSelectClientFolder) btnSelectClientFolder.addEventListener('click', handleSelectClientFolder);
     if (btnBackupData) btnBackupData.addEventListener('click', handleBackupData);
+
+    // Group Manager Event Listeners
+    const selGroupFetchMethod = document.getElementById('selGroupFetchMethod');
+    const groupTokenInputContainer = document.getElementById('groupTokenInputContainer');
+    if (selGroupFetchMethod && groupTokenInputContainer) {
+        selGroupFetchMethod.addEventListener('change', (e) => {
+            if (e.target.value === 'token') {
+                groupTokenInputContainer.style.display = 'block';
+            } else {
+                groupTokenInputContainer.style.display = 'none';
+            }
+        });
+    }
+
+    const btnFetchJoinedGroups = document.getElementById('btnFetchJoinedGroups');
+    if (btnFetchJoinedGroups) btnFetchJoinedGroups.addEventListener('click', handleFetchGroups);
+
+    const btnRefreshGroupsList = document.getElementById('btnRefreshGroupsList');
+    if (btnRefreshGroupsList) btnRefreshGroupsList.addEventListener('click', loadSavedGroups);
+
+    const btnExportGroupsExcel = document.getElementById('btnExportGroupsExcel');
+    if (btnExportGroupsExcel) btnExportGroupsExcel.addEventListener('click', handleExportGroupsExcel);
+
+    const btnCopyAllGroupIds = document.getElementById('btnCopyAllGroupIds');
+    if (btnCopyAllGroupIds) btnCopyAllGroupIds.addEventListener('click', handleCopyAllGroupIds);
+
+    const inputFilterGroups = document.getElementById('inputFilterGroups');
+    if (inputFilterGroups) inputFilterGroups.addEventListener('input', handleFilterGroups);
+
+    const selFilterPrivacy = document.getElementById('selFilterPrivacy');
+    if (selFilterPrivacy) selFilterPrivacy.addEventListener('change', handleFilterGroups);
+
+    const groupsTableBody = document.getElementById('groupsTableBody');
+    if (groupsTableBody) {
+        groupsTableBody.addEventListener('click', handleGroupsTableClick);
+    }
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -2146,3 +2192,321 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+/**
+ * ============================================================================
+ * JOINED GROUPS MANAGER MODULE
+ * ============================================================================
+ */
+
+async function loadSavedGroups() {
+    try {
+        if (window.ClientDB && typeof window.ClientDB.getGroups === 'function') {
+            const saved = await window.ClientDB.getGroups();
+            if (Array.isArray(saved) && saved.length > 0) {
+                state.groups.list = saved;
+                applyGroupFilters();
+                renderGroupsUI();
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn('Lỗi khi nạp danh sách nhóm từ IndexedDB:', e);
+    }
+}
+
+async function handleFetchGroups() {
+    if (state.groups.isLoading) return;
+
+    const method = document.getElementById('selGroupFetchMethod')?.value || 'auto';
+    const token = document.getElementById('inputGroupApiToken')?.value?.trim() || '';
+
+    // Check session or cookie
+    let cookie = '';
+    if (window.ClientDB && typeof window.ClientDB.getSession === 'function') {
+        const session = await window.ClientDB.getSession();
+        cookie = session?.cookie || '';
+    }
+    if (!cookie) {
+        cookie = localStorage.getItem('fb_cookie') || localStorage.getItem('fb_client_session') || '';
+    }
+
+    if (method === 'token' && !token) {
+        showToast('Vui lòng nhập Facebook Graph API Access Token để tiếp tục!', 'warning');
+        return;
+    }
+
+    const btnFetch = document.getElementById('btnFetchJoinedGroups');
+    const btnText = document.getElementById('btnFetchJoinedGroupsText');
+    state.groups.isLoading = true;
+    if (btnFetch) {
+        btnFetch.disabled = true;
+        if (btnText) btnText.innerHTML = '<span class="loading-spinner"></span> Đang tải tất cả nhóm...';
+    }
+
+    showToast('Đang quét toàn bộ danh sách nhóm Facebook đã tham gia. Vui lòng chờ...', 'info');
+
+    try {
+        const response = await fetch('/api/groups/fetch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                method,
+                token,
+                cookie,
+                clientId: getClientId()
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${response.status}: Lỗi khi tải danh sách nhóm`);
+        }
+
+        const groups = Array.isArray(data.groups) ? data.groups : [];
+        state.groups.list = groups;
+
+        // Persist to ClientDB
+        if (window.ClientDB && typeof window.ClientDB.saveGroups === 'function') {
+            await window.ClientDB.saveGroups(groups);
+        }
+
+        applyGroupFilters();
+        renderGroupsUI();
+
+        showToast(`🎉 Đã lấy thành công toàn bộ ${groups.length} nhóm Facebook bạn đã tham gia!`, 'success');
+    } catch (err) {
+        showToast(err.message || 'Không thể lấy danh sách nhóm Facebook', 'error');
+    } finally {
+        state.groups.isLoading = false;
+        if (btnFetch) {
+            btnFetch.disabled = false;
+            if (btnText) btnText.textContent = 'Quét Tất Cả Nhóm';
+        }
+    }
+}
+
+function handleFilterGroups() {
+    const inputSearch = document.getElementById('inputFilterGroups');
+    const selPrivacy = document.getElementById('selFilterPrivacy');
+
+    state.groups.searchQuery = (inputSearch?.value || '').trim().toLowerCase();
+    state.groups.privacyFilter = selPrivacy?.value || 'all';
+
+    applyGroupFilters();
+    renderGroupsUI();
+}
+
+function applyGroupFilters() {
+    const query = state.groups.searchQuery;
+    const privacy = state.groups.privacyFilter;
+
+    state.groups.filteredList = state.groups.list.filter(g => {
+        // Privacy filter
+        if (privacy === 'public' && g.privacy !== 'Công khai') return false;
+        if (privacy === 'private' && g.privacy !== 'Riêng tư') return false;
+
+        // Search query filter
+        if (query) {
+            const nameNorm = (g.name || '').toLowerCase();
+            const idNorm = String(g.id || '').toLowerCase();
+            if (!nameNorm.includes(query) && !idNorm.includes(query)) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+}
+
+function renderGroupsUI() {
+    const statTotal = document.getElementById('groupsStatTotal');
+    const statPublic = document.getElementById('groupsStatPublic');
+    const statPrivate = document.getElementById('groupsStatPrivate');
+    const badgeCount = document.getElementById('groupsCountFilteredBadge');
+    const tbody = document.getElementById('groupsTableBody');
+
+    const total = state.groups.list.length;
+    const publicCount = state.groups.list.filter(g => g.privacy === 'Công khai').length;
+    const privateCount = state.groups.list.filter(g => g.privacy === 'Riêng tư').length;
+
+    if (statTotal) statTotal.textContent = total.toLocaleString('vi-VN');
+    if (statPublic) statPublic.textContent = publicCount.toLocaleString('vi-VN');
+    if (statPrivate) statPrivate.textContent = privateCount.toLocaleString('vi-VN');
+
+    const filtered = state.groups.filteredList || [];
+    if (badgeCount) {
+        badgeCount.textContent = `${filtered.length} / ${total} nhóm`;
+    }
+
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (filtered.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.className = 'empty-row';
+        if (total === 0) {
+            emptyRow.innerHTML = `
+                <td colspan="6" class="text-center py-5 text-muted">
+                    <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
+                    <div style="font-weight: 500;">Chưa có dữ liệu nhóm nào.</div>
+                    <div class="text-xs text-muted mt-1">Bấm nút <strong>"Quét Tất Cả Nhóm"</strong> ở trên để bắt đầu lấy danh sách!</div>
+                </td>
+            `;
+        } else {
+            emptyRow.innerHTML = `
+                <td colspan="6" class="text-center py-5 text-muted">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">🔍</div>
+                    <div style="font-weight: 500;">Không tìm thấy nhóm nào khớp với bộ lọc "${escapeHtml(state.groups.searchQuery)}".</div>
+                </td>
+            `;
+        }
+        tbody.appendChild(emptyRow);
+        return;
+    }
+
+    filtered.forEach((g, idx) => {
+        const tr = document.createElement('tr');
+        const isPublic = g.privacy === 'Công khai';
+        const privacyBadge = isPublic
+            ? `<span class="badge-privacy-public">🌐 Công khai</span>`
+            : `<span class="badge-privacy-private">🔒 Riêng tư</span>`;
+
+        const avatarHtml = g.avatar
+            ? `<img src="${escapeHtml(g.avatar)}" alt="" class="group-avatar" onerror="this.outerHTML='<span class=\\'group-avatar-placeholder\\'>👥</span>'"/>`
+            : `<span class="group-avatar-placeholder">👥</span>`;
+
+        tr.innerHTML = `
+            <td style="text-align: center; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
+            <td style="text-align: center;">${avatarHtml}</td>
+            <td>
+                <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="group-link">
+                    ${escapeHtml(g.name || 'Nhóm không tên')}
+                </a>
+                ${g.membersCount ? `<div class="text-xs text-muted mt-1">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
+            </td>
+            <td>
+                <div class="d-flex align-center gap-1">
+                    <code style="font-size: 0.84rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">${escapeHtml(g.id)}</code>
+                    <button class="btn btn-ghost btn-xs btn-copy-group-id" data-id="${escapeHtml(g.id)}" title="Sao chép ID">📋</button>
+                </div>
+            </td>
+            <td style="text-align: center;">${privacyBadge}</td>
+            <td style="text-align: center;">
+                <div class="d-flex align-center justify-center gap-1">
+                    <button class="btn btn-ghost btn-xs btn-scan-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Chuyển sang tab Tìm kiếm để quét bài trong nhóm này">
+                        🔎 Quét bài
+                    </button>
+                    <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-xs" title="Mở nhóm trên Facebook">
+                        ↗
+                    </a>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function handleGroupsTableClick(e) {
+    const copyBtn = e.target.closest('.btn-copy-group-id');
+    if (copyBtn) {
+        const id = copyBtn.getAttribute('data-id');
+        if (id) {
+            navigator.clipboard.writeText(id).then(() => {
+                showToast(`Đã chép Group ID: ${id}`, 'info');
+            }).catch(() => {
+                showToast('Không thể chép vào clipboard', 'error');
+            });
+        }
+        return;
+    }
+
+    const scanBtn = e.target.closest('.btn-scan-group');
+    if (scanBtn) {
+        const id = scanBtn.getAttribute('data-id');
+        const name = scanBtn.getAttribute('data-name');
+        
+        // Populate search input with group keyword or name
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.value = name || id;
+        }
+
+        // Switch to search tab
+        const navSearch = document.getElementById('navSearch');
+        if (navSearch) navSearch.click();
+
+        showToast(`Đã chuyển sang tìm kiếm với nhóm: ${name || id}`, 'info');
+        return;
+    }
+}
+
+async function handleExportGroupsExcel() {
+    const groups = state.groups.filteredList.length > 0 ? state.groups.filteredList : state.groups.list;
+    if (!groups || groups.length === 0) {
+        showToast('Chưa có nhóm nào để xuất Excel. Hãy bấm "Quét Tất Cả Nhóm" trước!', 'warning');
+        return;
+    }
+
+    const btnExport = document.getElementById('btnExportGroupsExcel');
+    setLoading(btnExport, true);
+
+    try {
+        const response = await fetch('/api/groups/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups })
+        });
+
+        if (!response.ok) {
+            const errJson = await response.json().catch(() => ({}));
+            throw new Error(errJson.error || `Lỗi xuất file (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const headerFilename = response.headers.get('X-Filename');
+        const filename = headerFilename || `fb_joined_groups_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.xlsx`;
+
+        if (window.ClientFS) {
+            const saveRes = await window.ClientFS.saveFile('exports', filename, blob, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            if (saveRes && saveRes.directWrite) {
+                showToast(`Đã xuất ${groups.length} nhóm và lưu vào thư mục: ${saveRes.path}!`, 'success');
+            } else {
+                showToast(`Đã tải file Excel: ${filename} về máy của bạn!`, 'success');
+            }
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            showToast(`Đã tải file Excel danh sách nhóm: ${filename}`, 'success');
+        }
+    } catch (e) {
+        showToast(e.message || 'Xuất Excel thất bại', 'error');
+    } finally {
+        setLoading(btnExport, false);
+    }
+}
+
+function handleCopyAllGroupIds() {
+    const groups = state.groups.filteredList.length > 0 ? state.groups.filteredList : state.groups.list;
+    if (!groups || groups.length === 0) {
+        showToast('Chưa có nhóm nào để sao chép ID!', 'warning');
+        return;
+    }
+
+    const ids = groups.map(g => g.id).filter(Boolean);
+    const text = ids.join(', ');
+
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`Đã sao chép ${ids.length} Group ID vào Clipboard!`, 'success');
+    }).catch(() => {
+        showToast('Không thể sao chép vào clipboard', 'error');
+    });
+}
+
