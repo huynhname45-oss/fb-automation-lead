@@ -45,6 +45,16 @@ router.post('/verify', async (req, res) => {
   }
 });
 
+router.post('/update-name', (req, res) => {
+  try {
+    const { name, clientId } = req.body || {};
+    const result = sessionManager.updateAccountName(name, clientId || 'default');
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   try {
     const { clientId } = req.body || {};

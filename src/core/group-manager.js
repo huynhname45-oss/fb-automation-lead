@@ -138,20 +138,24 @@ export class GroupManager {
         throw new Error('Phiên Cookie Facebook đã hết hạn hoặc bị đăng xuất. Vui lòng cập nhật lại Cookie!');
       }
 
-      // Regex extracting group anchors: /groups/([a-zA-Z0-9._]+)/?
-      const anchorRegex = /<a[^>]+href="(\/groups\/([^"/?#]+)[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+      // Regex extracting group anchors: /groups/([a-zA-Z0-9._-]+)/?
+      const anchorRegex = /<a\s+[^>]*href=["'](?:https?:\/\/[^"'/]+)?\/groups\/([a-zA-Z0-9._-]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
       let match;
       let foundInThisPage = 0;
 
       while ((match = anchorRegex.exec(html)) !== null) {
-        const rawHref = match[1];
-        const groupSlug = match[2];
-        const rawText = match[3].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim();
+        const groupSlug = match[1];
+        let rawText = match[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#039;/g, "'").trim();
 
         // Skip non-group anchors like "Tạo nhóm", "Khám phá", "Cài đặt"
-        if (!groupSlug || ['create', 'discover', 'feed', 'notifications', 'search', 'joins'].includes(groupSlug.toLowerCase())) {
+        if (!groupSlug || ['create', 'discover', 'feed', 'notifications', 'search', 'joins', 'category', 'browse', 'your_groups', 'settings', 'edit', 'member'].includes(groupSlug.toLowerCase())) {
           continue;
         }
+
+        if (rawText.includes('\n')) {
+          rawText = rawText.split('\n')[0].trim();
+        }
+        rawText = rawText.replace(/·.*$/, '').trim();
 
         if (rawText && rawText.length >= 2 && !seenIds.has(groupSlug)) {
           seenIds.add(groupSlug);
@@ -166,14 +170,17 @@ export class GroupManager {
       }
 
       // Find "Xem thêm" pagination link: href="/groups/?seemore&start=..."
-      const seemoreMatch = html.match(/<a[^>]+href="(\/groups\/\?seemore[^"]+)"[^>]*>[\s\S]*?(?:Xem thêm|See more)[\s\S]*?<\/a>/i);
+      const seemoreMatch = html.match(/<a[^>]+href=["'](\/groups\/\?[^"']*(?:seemore|start=[0-9]+)[^"']*)["'][^>]*>[\s\S]*?(?:Xem thêm|See more|nhóm khác)[\s\S]*?<\/a>/i) ||
+                           html.match(/<a[^>]+href=["'](\/groups\/\?[^"']*(?:seemore|start=[0-9]+)[^"']*)["']/i);
       if (seemoreMatch && seemoreMatch[1]) {
         targetUrl = 'https://mbasic.facebook.com' + seemoreMatch[1].replace(/&amp;/g, '&');
+      } else if (pageCount === 1 && foundInThisPage === 0 && targetUrl.includes('?seemore')) {
+        targetUrl = 'https://mbasic.facebook.com/groups/';
       } else {
         targetUrl = null;
       }
 
-      if (foundInThisPage === 0) break;
+      if (foundInThisPage === 0 && pageCount > 1) break;
     }
 
     logger.info(`[COOKIE MBASIC] Đã tải thành công ${groups.length} nhóm đã tham gia.`);

@@ -142,7 +142,7 @@ function switchTab(tabName, tabs) {
     }
 
     if (tabName === 'groups' && state.groups.list.length === 0) {
-        loadSavedGroups();
+        loadSavedGroups(true);
     }
 
     tabs.forEach(t => {
@@ -161,11 +161,13 @@ function initEventListeners() {
     const btnLoginCookie = document.getElementById('btnLoginCookie');
     const btnVerifySession = document.getElementById('btnVerifySession');
     const btnCloseBrowser = document.getElementById('btnCloseBrowser');
+    const btnEditAccountName = document.getElementById('btnEditAccountName');
 
     if (btnLogin) btnLogin.addEventListener('click', handleLogin);
     if (btnLoginCookie) btnLoginCookie.addEventListener('click', handleLoginCookie);
     if (btnVerifySession) btnVerifySession.addEventListener('click', handleVerifySession);
     if (btnCloseBrowser) btnCloseBrowser.addEventListener('click', handleLogout);
+    if (btnEditAccountName) btnEditAccountName.addEventListener('click', handleEditAccountName);
 
     const searchForm = document.getElementById('searchForm');
     const btnStopSearch = document.getElementById('btnStopSearch');
@@ -843,6 +845,17 @@ async function checkSessionStatus() {
                     user: clientSession.user || { name: 'Tài khoản Facebook' },
                     isClientSession: true
                 });
+
+                // Tự động kiểm tra và nâng cấp tên thật nếu hiện đang là ID "Tài khoản (...)"
+                if (!clientSession.user?.name || clientSession.user.name.startsWith('Tài khoản (')) {
+                    api('POST', '/api/session/verify', { cookie: clientSession.cookie, clientId: getClientId() }).then(res => {
+                        if (res && res.user && res.user.name && !res.user.name.startsWith('Tài khoản (')) {
+                            clientSession.user.name = res.user.name;
+                            window.ClientDB.saveSession(clientSession);
+                            updateSessionUI(clientSession);
+                        }
+                    }).catch(() => {});
+                }
                 return;
             }
         }
@@ -1018,6 +1031,40 @@ async function handleLogout() {
     } finally {
         if (btnCloseBrowser) setLoading(btnCloseBrowser, false);
     }
+}
+
+async function handleEditAccountName() {
+    const currentName = document.getElementById('accountDisplayName')?.textContent?.trim() || '';
+    const initialVal = (currentName && !currentName.startsWith('Tài khoản (')) ? currentName : '';
+    const newName = prompt('Nhập tên bạn muốn đặt cho tài khoản Facebook này:', initialVal);
+    if (!newName || !newName.trim()) return;
+
+    const cleanName = newName.trim();
+    const accountDisplayName = document.getElementById('accountDisplayName');
+    if (accountDisplayName) accountDisplayName.textContent = cleanName;
+
+    // Persist to ClientDB
+    if (window.ClientDB) {
+        const session = await window.ClientDB.getSession();
+        if (session) {
+            session.user = { ...(session.user || {}), name: cleanName };
+            await window.ClientDB.saveSession(session);
+        }
+    }
+
+    if (state.session && state.session.user) {
+        state.session.user.name = cleanName;
+    }
+
+    // Persist to server session memory
+    try {
+        await api('POST', '/api/session/update-name', {
+            name: cleanName,
+            clientId: getClientId()
+        });
+    } catch (e) {}
+
+    showToast(`Đã đổi tên hiển thị tài khoản thành: "${cleanName}"`, 'success');
 }
 
 function updateSessionUI(sessionData) {
@@ -2199,7 +2246,7 @@ function escapeHtml(str) {
  * ============================================================================
  */
 
-async function loadSavedGroups() {
+async function loadSavedGroups(autoFetchIfEmpty = false) {
     try {
         if (window.ClientDB && typeof window.ClientDB.getGroups === 'function') {
             const saved = await window.ClientDB.getGroups();
@@ -2212,6 +2259,10 @@ async function loadSavedGroups() {
         }
     } catch (e) {
         console.warn('Lỗi khi nạp danh sách nhóm từ IndexedDB:', e);
+    }
+
+    if (autoFetchIfEmpty && state.session && state.session.status === 'active' && !state.groups.isLoading) {
+        handleFetchGroups();
     }
 }
 

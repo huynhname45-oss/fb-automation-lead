@@ -107,6 +107,98 @@ export function getSavedCookiesFromDisk() {
 }
 
 /**
+ * Extract real account display name via fast HTTP (zero browser overhead)
+ */
+export async function fetchAccountRealNameViaHttp(cookies = []) {
+  if (!cookies || cookies.length === 0) return '';
+  const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Cookie': cookieHeader,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+  };
+
+  const blacklist = new Set([
+    'bạn', 'ban', 'trang cá nhân', 'tai khoan', 'tài khoản', 'account', 'profile',
+    'facebook', 'menu', 'home', 'trang chủ', 'trang chu', 'bạn bè', 'ban be',
+    'tin nhắn', 'tin nhan', 'thông báo', 'thong bao', 'watch', 'marketplace',
+    'gaming', 'video', 'cài đặt', 'cai dat', 'xem thêm', 'xem them', 'stories',
+    'bảng feed', 'bảng tin', 'bang tin', 'reels', 'nhóm', 'groups', 'lỗi', 'error',
+    'đăng nhập', 'log in'
+  ]);
+
+  function cleanCandidate(name) {
+    if (!name || typeof name !== 'string') return '';
+    let clean = name.replace(/\(\d+\)/g, '').replace(/\|\s*Facebook/i, '').replace(/Facebook/i, '').replace(/['"“”]/g, '').trim();
+    if (clean.length < 2 || clean.length > 50) return '';
+    if (clean.includes('http') || clean.includes('www.')) return '';
+    const lower = clean.toLowerCase();
+    if (blacklist.has(lower)) return '';
+    if (lower.startsWith('trang cá nhân') || lower.startsWith('tài khoản của') || lower.startsWith('tài khoản (')) return '';
+    return clean;
+  }
+
+  // 1. Try mbasic.facebook.com/me
+  try {
+    const res = await fetch('https://mbasic.facebook.com/me', {
+      method: 'GET',
+      headers,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(6000)
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleM && titleM[1]) {
+        const cleaned = cleanCandidate(titleM[1]);
+        if (cleaned) return cleaned;
+      }
+
+      const strongM = html.match(/<strong[^>]*>([^<]+)<\/strong>/i);
+      if (strongM && strongM[1]) {
+        const cleaned = cleanCandidate(strongM[1]);
+        if (cleaned) return cleaned;
+      }
+    }
+  } catch (e) {}
+
+  // 2. Try www.facebook.com/
+  try {
+    const res = await fetch('https://www.facebook.com/', {
+      method: 'GET',
+      headers,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(6000)
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const nameMatch = html.match(/"NAME":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i) ||
+                        html.match(/"user_name":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i) ||
+                        html.match(/"USER_NAME":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+      if (nameMatch && nameMatch[1]) {
+        try {
+          const parsed = JSON.parse(`"${nameMatch[1]}"`);
+          const cleaned = cleanCandidate(parsed);
+          if (cleaned) return cleaned;
+        } catch (e) {}
+      }
+
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleM && titleM[1]) {
+        const cleaned = cleanCandidate(titleM[1]);
+        if (cleaned) return cleaned;
+      }
+    }
+  } catch (e) {}
+
+  return '';
+}
+
+/**
  * Fast live HTTP verification with Facebook to check if cookies are genuinely active
  */
 export async function fastVerifyCookiesWithFacebook(cookies = []) {
@@ -133,26 +225,38 @@ export async function fastVerifyCookiesWithFacebook(cookies = []) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
       },
-      redirect: 'manual',
+      redirect: 'follow',
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
 
-    const location = res.headers.get('location') || '';
-
-    // If redirected to login page or checkpoint
-    if (location.includes('/login') || location.includes('checkpoint') || res.status === 401 || res.status === 403) {
+    const finalUrl = res.url || '';
+    if (finalUrl.includes('/login') || finalUrl.includes('checkpoint') || res.status === 401 || res.status === 403) {
       return { valid: false, id: cUser.value, reason: 'Facebook redirected to login/checkpoint (Cookie expired)' };
     }
 
-    // Status 200 or 302 to user profile means session is active!
-    if (res.status === 200 || (res.status === 302 && (location.includes('facebook.com') || location.startsWith('/')))) {
-      return {
-        valid: true,
-        id: cUser.value
-      };
+    let extractedName = '';
+    if (res.ok) {
+      const html = await res.text();
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleM && titleM[1]) {
+        const raw = titleM[1].replace(/\(\d+\)/g, '').replace(/\|\s*Facebook/i, '').replace(/Facebook/i, '').trim();
+        if (raw.length >= 2 && !raw.toLowerCase().includes('đăng nhập') && !raw.toLowerCase().includes('log in')) {
+          extractedName = raw;
+        }
+      }
     }
+
+    if (!extractedName) {
+      extractedName = await fetchAccountRealNameViaHttp(cookies).catch(() => '');
+    }
+
+    return {
+      valid: true,
+      id: cUser.value,
+      name: extractedName || ''
+    };
   } catch (err) {
     logger.debug({ err: err.message }, 'Fast HTTP verification timed out or encountered network error');
   }
@@ -160,7 +264,8 @@ export async function fastVerifyCookiesWithFacebook(cookies = []) {
   // Fallback: If c_user and xs exist and not expired, treat as potentially valid until full check
   return {
     valid: true,
-    id: cUser.value
+    id: cUser.value,
+    name: ''
   };
 }
 
@@ -247,28 +352,37 @@ class SessionManager extends EventEmitter {
         throw new Error('Facebook từ chối chuỗi Cookie này (Cookie có thể đã hết hạn hoặc bị checkpoint). Vui lòng lấy lại Cookie mới nhất từ trình duyệt của bạn!');
       }
 
-      let finalName = `Tài khoản (${cUser.value})`;
+      let finalName = fastResult.name || '';
+      if (!finalName) {
+        finalName = await fetchAccountRealNameViaHttp(formattedCookies).catch(() => '');
+      }
 
-      // Extract real display name via transient Playwright page
-      try {
-        const isHeadless = !!configManager.get('headless');
-        const context = await browserManager.launch(isHeadless);
-        await context.addCookies(formattedCookies);
+      // Extract real display name via transient Playwright page if still needed
+      if (!finalName) {
+        try {
+          const isHeadless = !!configManager.get('headless');
+          const context = await browserManager.launch(isHeadless);
+          await context.addCookies(formattedCookies);
 
-        const pages = context.pages();
-        const page = pages.length > 0 ? pages[0] : await context.newPage();
-        logger.info(`Navigating to Facebook to extract account name for client [${clientId}]...`);
-        await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 25000 });
-        await new Promise(r => setTimeout(r, 2000));
+          const pages = context.pages();
+          const page = pages.length > 0 ? pages[0] : await context.newPage();
+          logger.info(`Navigating to Facebook to extract account name for client [${clientId}]...`);
+          await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 25000 });
+          await new Promise(r => setTimeout(r, 2000));
 
-        const extractedName = await this._extractRealName(page, cUser.value);
-        if (extractedName && extractedName.toLowerCase() !== 'bạn' && extractedName.toLowerCase() !== 'lỗi') {
-          finalName = extractedName;
+          const extractedName = await this._extractRealName(page, cUser.value);
+          if (extractedName && extractedName.toLowerCase() !== 'bạn' && extractedName.toLowerCase() !== 'lỗi') {
+            finalName = extractedName;
+          }
+          await page.close().catch(() => {});
+          await browserManager.closeBrowser().catch(() => {});
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Failed to extract real name via browser, using default UID name');
         }
-        await page.close().catch(() => {});
-        await browserManager.closeBrowser().catch(() => {});
-      } catch (err) {
-        logger.warn({ err: err.message }, 'Failed to extract real name via browser, using default UID name');
+      }
+
+      if (!finalName) {
+        finalName = `Tài khoản (${cUser.value})`;
       }
 
       const clientInfo = {
@@ -483,9 +597,17 @@ class SessionManager extends EventEmitter {
       }
 
       const existingUser = this.clientSessions.get(clientId)?.user;
-      const currentName = (existingUser?.name && !existingUser.name.startsWith('Tài khoản ('))
+      let currentName = (existingUser?.name && !existingUser.name.startsWith('Tài khoản ('))
         ? existingUser.name
-        : `Tài khoản (${cUser.value})`;
+        : '';
+
+      if (!currentName) {
+        currentName = fastResult.name || await fetchAccountRealNameViaHttp(cookies).catch(() => '');
+      }
+
+      if (!currentName) {
+        currentName = `Tài khoản (${cUser.value})`;
+      }
 
       const clientInfo = {
         id: cUser.value,
@@ -528,6 +650,20 @@ class SessionManager extends EventEmitter {
       lastChecked: null,
       user: null
     };
+  }
+
+  updateAccountName(name, clientId = 'default') {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return { success: false, error: 'Tên không hợp lệ' };
+    if (this.clientSessions.has(clientId)) {
+      const sess = this.clientSessions.get(clientId);
+      if (sess.user) sess.user.name = cleanName;
+    }
+    if (this.accountInfo) {
+      this.accountInfo.name = cleanName;
+    }
+    this.emit('statusUpdate', this.getStatus(clientId));
+    return { success: true, name: cleanName };
   }
 
   async logout(clientId = 'default') {
