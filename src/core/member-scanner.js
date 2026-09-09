@@ -136,7 +136,14 @@ export class MemberScanner extends EventEmitter {
   }
 
   getProgress(clientId = 'default') {
-    return this.activeScans.get(clientId) || {
+    if (this.activeScans.has(clientId)) {
+      return this.activeScans.get(clientId);
+    }
+    // Fail-safe: If only one scan is running, return it so polling never misses it
+    if (this.activeScans.size === 1) {
+      return this.activeScans.values().next().value;
+    }
+    return {
       isScanning: false,
       currentGroup: '',
       processedMembers: 0,
@@ -148,8 +155,11 @@ export class MemberScanner extends EventEmitter {
   }
 
   stopScan(clientId = 'default') {
-    if (this.activeScans.has(clientId)) {
-      const state = this.activeScans.get(clientId);
+    let state = this.activeScans.get(clientId);
+    if (!state && this.activeScans.size === 1) {
+      state = this.activeScans.values().next().value;
+    }
+    if (state) {
       state.abortRequested = true;
       state.isScanning = false;
       logger.info(`[MEMBER-SCANNER] Đã nhận lệnh dừng quét cho client [${clientId}]`);
@@ -189,10 +199,15 @@ export class MemberScanner extends EventEmitter {
     };
     this.activeScans.set(clientId, state);
 
-    const log = (msg) => {
-      const entry = `[${new Date().toLocaleTimeString('vi-VN')}] ${msg}`;
-      state.logs.unshift(entry);
-      if (state.logs.length > 100) state.logs.pop();
+    const log = (msg, type = 'info') => {
+      const entry = {
+        timestamp: Date.now(),
+        message: msg,
+        type
+      };
+      state.logs.push(entry);
+      if (state.logs.length > 150) state.logs.shift();
+      logger.info(`[MEMBER-SCANNER] [${clientId}] ${msg}`);
       this.emit('progress', { clientId, state });
     };
 
@@ -200,7 +215,7 @@ export class MemberScanner extends EventEmitter {
     let page = null;
 
     try {
-      log('🚀 Đang khởi động trình duyệt Chromium để quét thành viên...');
+      log('🚀 Đang khởi động trình duyệt Chromium để quét thành viên...', 'info');
       const isHeadless = true;
       context = await browserManager.createClientContext(clientId, isHeadless);
 
@@ -250,15 +265,19 @@ export class MemberScanner extends EventEmitter {
           await page.goto(membersUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
           await delay(2500);
 
-          // Scroll to find "Mới vào nhóm"
-          log('📜 Đang cuộn tìm mục "Mới vào nhóm"...');
+          // Scroll to find "Mới vào nhóm" or "New to the group"
+          log('📜 Đang kiểm tra mục "Mới vào nhóm"...', 'info');
           let foundHeading = false;
           for (let s = 0; s < 8; s++) {
             const hasHeading = await page.evaluate(() => {
-              const elements = Array.from(document.querySelectorAll('span, h2, h3, div'));
+              const elements = Array.from(document.querySelectorAll('span, h2, h3, div[role="heading"]'));
               return elements.some(el => {
-                const t = el.textContent.trim();
-                return t === 'Mới vào nhóm' || t === 'New to the group';
+                const t = (el.textContent || '').trim().toLowerCase();
+                if (t.length > 60) return false;
+                return t.includes('mới vào nhóm') ||
+                       t.includes('thành viên mới') ||
+                       t.includes('mới tham gia') ||
+                       t.includes('new to the group');
               });
             });
 
@@ -266,16 +285,15 @@ export class MemberScanner extends EventEmitter {
               foundHeading = true;
               break;
             }
-            await page.evaluate(() => window.scrollBy(0, 700));
-            await delay(1200);
+            await page.evaluate(() => window.scrollBy(0, 650));
+            await delay(1000);
           }
 
-          if (!foundHeading) {
-            log(`⚠️ Không tìm thấy mục "Mới vào nhóm" tại nhóm [${groupId}]. Có thể nhóm này ẩn thành viên hoặc cần quyền phê duyệt.`);
-            continue;
+          if (foundHeading) {
+            log('✅ Đã xác định khu vực "Mới vào nhóm". Bắt đầu quét các thành viên mới gia nhập...', 'success');
+          } else {
+            log('ℹ️ Facebook đang tải trang hoặc tiêu đề ẩn, tiến hành quét trực tiếp danh sách thành viên...', 'info');
           }
-
-          log('✅ Đã tìm thấy mục "Mới vào nhóm". Đang quét danh sách thành viên trong 24h...');
 
           // Scroll & collect members
           const candidateMembers = [];
@@ -287,37 +305,48 @@ export class MemberScanner extends EventEmitter {
             if (state.abortRequested || hitTimeLimit) break;
 
             const extractedInPage = await page.evaluate((currentGroupId) => {
-              // Find the "Mới vào nhóm" section container
-              const allElements = Array.from(document.querySelectorAll('span, h2, h3, div'));
+              // 1. Locate heading element if available
+              const allElements = Array.from(document.querySelectorAll('span, h2, h3, div[role="heading"]'));
               const headingEl = allElements.find(el => {
-                const t = el.textContent.trim();
-                return t === 'Mới vào nhóm' || t === 'New to the group';
+                const t = (el.textContent || '').trim().toLowerCase();
+                if (t.length > 60) return false;
+                return t.includes('mới vào nhóm') ||
+                       t.includes('thành viên mới') ||
+                       t.includes('mới tham gia') ||
+                       t.includes('new to the group');
               });
 
-              if (!headingEl) return [];
-
-              // Walk up to find the common section container
-              let sectionParent = headingEl.parentElement;
-              for (let i = 0; i < 4; i++) {
-                if (sectionParent && sectionParent.parentElement && sectionParent.parentElement.children.length > 2) {
-                  sectionParent = sectionParent.parentElement;
-                  break;
+              // Walk up to find container
+              let sectionParent = null;
+              if (headingEl) {
+                sectionParent = headingEl.parentElement;
+                for (let i = 0; i < 5; i++) {
+                  if (sectionParent && sectionParent.parentElement && sectionParent.parentElement.children.length > 2) {
+                    sectionParent = sectionParent.parentElement;
+                    break;
+                  }
+                  if (sectionParent && sectionParent.parentElement) sectionParent = sectionParent.parentElement;
                 }
-                if (sectionParent && sectionParent.parentElement) sectionParent = sectionParent.parentElement;
               }
 
-              const results = [];
-              if (!sectionParent) return results;
+              const searchRoot = (sectionParent && sectionParent.querySelectorAll('a[href*="/user/"]').length > 0)
+                ? sectionParent
+                : document.body;
 
-              // Find member links within this section
-              const userLinks = Array.from(sectionParent.querySelectorAll('a[href*="/user/"], a[role="link"][href*="/groups/"]'));
+              const results = [];
+              const userLinks = Array.from(searchRoot.querySelectorAll('a[href*="/user/"], a[role="link"][href*="/groups/"]'));
+
               for (const a of userLinks) {
                 const href = a.getAttribute('href') || '';
                 const mId = href.match(/\/user\/(\d+)/i) || href.match(/\/user\/([^/?]+)/i);
                 if (!mId) continue;
                 const memberId = mId[1];
+                if (!memberId || memberId === currentGroupId || memberId.toLowerCase() === 'members') continue;
 
-                const container = a.closest('div[role="listitem"]') || a.closest('div[data-visualcompletion="ignore-dynamic-snippet"]') || a.parentElement?.parentElement;
+                const container = a.closest('div[role="listitem"]') ||
+                                  a.closest('div[data-visualcompletion="ignore-dynamic-snippet"]') ||
+                                  a.parentElement?.parentElement?.parentElement ||
+                                  a.parentElement?.parentElement;
                 if (!container) continue;
 
                 // Extract name
@@ -336,12 +365,15 @@ export class MemberScanner extends EventEmitter {
 
                 for (const line of rawLines) {
                   const lowerL = line.toLowerCase();
-                  if (lowerL.includes('tham gia') || lowerL.includes('trước') || lowerL.includes('hôm nay') || lowerL.includes('joined') || lowerL.includes('thêm vào')) {
+                  if (lowerL.includes('tham gia') || lowerL.includes('trước') || lowerL.includes('hôm nay') || lowerL.includes('joined') || lowerL.includes('thêm vào') || lowerL.includes('vừa xong')) {
                     if (!joinedTimeText) joinedTimeText = line;
-                  } else if (line !== name && !line.includes('Theo dõi') && !line.includes('Thêm bạn bè') && !line.includes('Nhắn tin')) {
+                  } else if (line !== name && !line.includes('Theo dõi') && !line.includes('Thêm bạn bè') && !line.includes('Nhắn tin') && !line.includes('Thành viên')) {
                     if (!subtitleText) subtitleText = line;
                   }
                 }
+
+                // If not inside an explicit heading, only take members that have a recent joined text indicator
+                if (!headingEl && !joinedTimeText) continue;
 
                 results.push({
                   memberId,
@@ -364,8 +396,12 @@ export class MemberScanner extends EventEmitter {
                 const timeCheck = parseMemberJoinedTime(item.joinedTimeText);
                 if (timeCheck.stopScrolling) {
                   hitTimeLimit = true;
-                  log(`⏹ Gặp thành viên vào quá 24h ("${item.joinedTimeText}"). Dừng nạp thêm.`);
+                  log(`⏹ Gặp thành viên đã vào nhóm quá 24h: ${item.name} ("${item.joinedTimeText}"). Hoàn thành lấy thành viên mới.`, 'warning');
                   break;
+                }
+
+                if (item.joinedTimeText && !timeCheck.within24h) {
+                  continue;
                 }
 
                 candidateMembers.push(item);
@@ -388,21 +424,21 @@ export class MemberScanner extends EventEmitter {
             await delay(1500);
           }
 
-          log(`👥 Đã thu thập ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định từng thành viên...`);
+          log(`👥 Đã thu thập ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định từng thành viên...`, 'info');
 
           // Inspect each candidate member
           for (const member of candidateMembers) {
             if (state.abortRequested) break;
             state.processedMembers++;
 
-            log(`🔍 [${state.processedMembers}/${candidateMembers.length}] Đang kiểm tra: ${member.name} (${member.joinedTimeText || '24h qua'})`);
+            log(`🔍 [${state.processedMembers}/${candidateMembers.length}] Đang kiểm tra: ${member.name} (${member.joinedTimeText || '24h qua'})`, 'info');
 
             // Tier 1: Fast check on name and subtitle
             if (excludeSales) {
               const t1Check = evaluateMemberContent(`${member.name} ${member.subtitleText}`);
               if (t1Check.isNegative) {
                 state.skippedCount++;
-                log(`⏩ [TẦNG 1] Bỏ qua ${member.name}: ${t1Check.reason}`);
+                log(`⏩ [TẦNG 1] Bỏ qua ${member.name}: ${t1Check.reason}`, 'warning');
                 continue;
               }
             }
@@ -450,7 +486,7 @@ export class MemberScanner extends EventEmitter {
                 const t2Check = evaluateMemberContent(groupProfileData.activityText);
                 if (t2Check.isNegative) {
                   state.skippedCount++;
-                  log(`⏩ [TẦNG 2] Bỏ qua ${member.name}: ${t2Check.reason}`);
+                  log(`⏩ [TẦNG 2] Bỏ qua ${member.name}: ${t2Check.reason}`, 'warning');
                   groupActivityCheckFailed = true;
                   continue;
                 }
@@ -465,7 +501,7 @@ export class MemberScanner extends EventEmitter {
             let phone = '';
 
             try {
-              log(`👤 Đang mở trang cá nhân của ${member.name}...`);
+              log(`👤 Đang mở trang cá nhân của ${member.name}...`, 'info');
               await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
               await delay(2200);
 
@@ -484,13 +520,13 @@ export class MemberScanner extends EventEmitter {
               const foundPhones = extractPhonesFromText(profileInfo);
               if (foundPhones.length > 0) {
                 phone = foundPhones[0];
-                log(`📞 Tìm thấy SĐT trên Bio/Giới thiệu của ${member.name}: ${phone}`);
+                log(`📞 Tìm thấy SĐT trên Bio/Giới thiệu của ${member.name}: ${phone}`, 'success');
               }
 
               // 3.3 Deep Phone Search via profile timeline search: profile/{UID}/search/?q=sdt
               if (!phone && deepPhoneSearch) {
                 const searchUrl = buildProfileSearchUrl(member.memberId, 'sdt') || `https://www.facebook.com/profile/${member.memberId}/search/?q=sdt`;
-                log(`🔎 [TÌM KIẾM CHUYÊN SÂU] Tìm 'sdt' trên tường của ${member.name}: ${searchUrl}`);
+                log(`🔎 [TÌM KIẾM CHUYÊN SÂU] Tìm 'sdt' trên tường của ${member.name}: ${searchUrl}`, 'info');
 
                 try {
                   await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -506,7 +542,7 @@ export class MemberScanner extends EventEmitter {
                     const searchCheck = evaluateMemberContent(searchPostsText);
                     if (searchCheck.isNegative) {
                       state.skippedCount++;
-                      log(`⏩ [TẦNG 3] Bỏ qua ${member.name}: ${searchCheck.reason}`);
+                      log(`⏩ [TẦNG 3] Bỏ qua ${member.name}: ${searchCheck.reason}`, 'warning');
                       continue;
                     }
                   }
@@ -514,7 +550,7 @@ export class MemberScanner extends EventEmitter {
                   const deepPhones = extractPhonesFromText(searchPostsText);
                   if (deepPhones.length > 0) {
                     phone = deepPhones[0];
-                    log(`🎯 Tìm thấy SĐT qua tìm kiếm bài viết của ${member.name}: ${phone}`);
+                    log(`🎯 Tìm thấy SĐT qua tìm kiếm bài viết của ${member.name}: ${phone}`, 'success');
                   }
                 } catch (searchErr) {
                   logger.debug({ err: searchErr.message }, 'Profile search error');
@@ -541,7 +577,7 @@ export class MemberScanner extends EventEmitter {
 
             state.qualifiedLeads++;
             state.leads.unshift(qualifiedLead);
-            log(`⭐ [LEAD HỢP LỆ #${state.qualifiedLeads}] ${member.name} | Tỉnh: ${province || '(Trống)'} | SĐT: ${phone || '(Trống)'}`);
+            log(`⭐ [LEAD HỢP LỆ #${state.qualifiedLeads}] ${member.name} | Tỉnh: ${province || '(Trống)'} | SĐT: ${phone || '(Trống)'}`, 'success');
 
             this.emit('lead', { clientId, lead: qualifiedLead });
             this.emit('progress', { clientId, state });
@@ -551,14 +587,14 @@ export class MemberScanner extends EventEmitter {
           }
 
         } catch (grpErr) {
-          log(`❌ Lỗi khi xử lý nhóm [${groupId}]: ${grpErr.message}`);
+          log(`❌ Lỗi khi xử lý nhóm [${groupId}]: ${grpErr.message}`, 'error');
         }
       }
 
-      log(`🎉 Hoàn tất tiến trình quét! Đã kiểm tra: ${state.processedMembers}, Bỏ qua (Sale/Thanh lý): ${state.skippedCount}, Thu được: ${state.qualifiedLeads} leads chất lượng.`);
+      log(`🎉 Hoàn tất tiến trình quét! Đã kiểm tra: ${state.processedMembers}, Bỏ qua (Sale/Thanh lý): ${state.skippedCount}, Thu được: ${state.qualifiedLeads} leads chất lượng.`, 'success');
 
     } catch (err) {
-      log(`❌ Lỗi hệ thống khi quét thành viên: ${err.message}`);
+      log(`❌ Lỗi hệ thống khi quét thành viên: ${err.message}`, 'error');
       logger.error({ err: err.message }, 'Member scanner fatal error');
     } finally {
       state.isScanning = false;

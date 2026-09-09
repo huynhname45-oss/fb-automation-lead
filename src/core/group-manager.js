@@ -62,7 +62,40 @@ export class GroupManager {
       'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
     };
 
-    // 1. Try mbasic.facebook.com/groups/<slug>/
+    // 1. Ultra-fast OpenGraph resolve using facebookexternalhit User-Agent
+    try {
+      const resMeta = await fetch(`https://www.facebook.com/groups/${encodeURIComponent(cleanSlug)}/`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(7000)
+      });
+
+      if (resMeta.ok) {
+        const text = await resMeta.text();
+        const m = text.match(/fb:\/\/group\/(\d+)/i) ||
+                  text.match(/fb:\/\/group\/\?id=(\d+)/i) ||
+                  text.match(/property=["']al:android:url["'][^>]*content=["'][^"']*?(\d{8,})["']/i) ||
+                  text.match(/content=["'][^"']*?(\d{8,})["'][^>]*property=["']al:android:url["']/i) ||
+                  text.match(/property=["']al:ios:url["'][^>]*content=["'][^"']*?id=(\d{8,})["']/i) ||
+                  text.match(/content=["'][^"']*?id=(\d{8,})["'][^>]*property=["']al:ios:url["']/i) ||
+                  text.match(/["']groupID["']\s*:\s*["'](\d+)["']/i) ||
+                  text.match(/["']entity_id["']\s*:\s*["'](\d+)["']/i) ||
+                  text.match(/["']target_id["']\s*:\s*["'](\d+)["']/i);
+        if (m && m[1]) {
+          this._slugCache.set(cleanSlug, m[1]);
+          return m[1];
+        }
+      }
+    } catch (e) {
+      logger.debug({ slug: cleanSlug, err: e.message }, '[RESOLVE GROUP ID] facebookexternalhit failed');
+    }
+
+    // 2. Try mbasic.facebook.com/groups/<slug>/
     try {
       const res = await fetch(`https://mbasic.facebook.com/groups/${encodeURIComponent(cleanSlug)}/`, {
         method: 'GET',

@@ -3673,7 +3673,7 @@ async function handleStopScanMembers() {
     if (btnStop) btnStop.disabled = true;
 
     try {
-        await api('POST', '/api/members/stop');
+        await api('POST', '/api/members/stop', { clientId: getClientId() });
         showToast('Đang yêu cầu dừng quét thành viên...', 'info');
     } catch (err) {
         showToast(err.message || 'Lỗi khi gửi yêu cầu dừng quét', 'error');
@@ -3688,7 +3688,7 @@ function startPollingMemberStatus() {
 
     state.members.pollingInterval = setInterval(async () => {
         try {
-            const status = await api('GET', '/api/members/status');
+            const status = await api('GET', `/api/members/status?clientId=${encodeURIComponent(getClientId())}`);
             updateMemberScanUI(status);
 
             if (!status.isScanning) {
@@ -3739,7 +3739,7 @@ function updateMemberScanUI(status) {
     if (statusBadge) {
         if (status.isScanning) {
             const curGroup = status.currentGroup || '';
-            const foundCount = status.totalFound || 0;
+            const foundCount = status.processedMembers || status.totalFound || 0;
             const validCount = state.members.leads.length;
             statusBadge.innerHTML = `<span class="loading-spinner"></span> Đang quét ${curGroup ? `nhóm <strong>${escapeHtml(curGroup)}</strong>` : ''}... (Đã duyệt ${foundCount}, lọc được <strong>${validCount}</strong> lead tiềm năng)`;
         } else {
@@ -3750,14 +3750,22 @@ function updateMemberScanUI(status) {
     // Update live log box
     const logBox = document.getElementById('memberScanLogBox');
     if (logBox && Array.isArray(status.logs) && status.logs.length > 0) {
-        const logHtml = status.logs.slice(-20).map(l => {
-            const time = new Date(l.timestamp).toLocaleTimeString('vi-VN');
+        const logHtml = status.logs.slice(-30).map(l => {
+            let time = '';
+            let message = '';
             let color = 'var(--text-secondary)';
-            if (l.type === 'success') color = '#10b981';
-            else if (l.type === 'warning') color = '#f59e0b';
-            else if (l.type === 'error') color = '#ef4444';
-            else if (l.type === 'info') color = '#6366f1';
-            return `<div style="color: ${color};">[${time}] ${escapeHtml(l.message)}</div>`;
+            if (typeof l === 'object' && l !== null) {
+                time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString('vi-VN') : new Date().toLocaleTimeString('vi-VN');
+                message = l.message || '';
+                if (l.type === 'success') color = '#10b981';
+                else if (l.type === 'warning') color = '#f59e0b';
+                else if (l.type === 'error') color = '#ef4444';
+                else if (l.type === 'info') color = '#6366f1';
+            } else {
+                message = String(l || '');
+                time = new Date().toLocaleTimeString('vi-VN');
+            }
+            return `<div style="color: ${color}; margin-bottom: 3px; line-height: 1.4;">[${time}] ${escapeHtml(message)}</div>`;
         }).join('');
         logBox.innerHTML = logHtml;
         logBox.scrollTop = logBox.scrollHeight;

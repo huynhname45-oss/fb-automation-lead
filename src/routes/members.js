@@ -40,6 +40,14 @@ router.post('/scan', async (req, res) => {
     if (!effectiveCookie && clientId && sessionManager.clientSessions?.has(clientId)) {
       effectiveCookie = sessionManager.clientSessions.get(clientId)?.cookie || '';
     }
+    if (!effectiveCookie && sessionManager.clientSessions?.size > 0) {
+      for (const sess of sessionManager.clientSessions.values()) {
+        if (sess?.cookie) {
+          effectiveCookie = sess.cookie;
+          break;
+        }
+      }
+    }
 
     const currentProgress = memberScanner.getProgress(clientId);
     if (currentProgress.isScanning) {
