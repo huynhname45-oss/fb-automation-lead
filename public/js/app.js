@@ -167,7 +167,7 @@ function switchTab(tabName, tabs) {
         if (tabName === 'session') pageTitle.textContent = 'Session Manager';
         else if (tabName === 'search') pageTitle.textContent = 'Search & Export';
         else if (tabName === 'groups') pageTitle.textContent = 'Nhóm Facebook Đã Tham Gia';
-        else if (tabName === 'members') pageTitle.textContent = 'Quét Thành Viên Nhóm (24H Lead Hunter)';
+        else if (tabName === 'members') pageTitle.textContent = 'Quét Thành Viên Nhóm (Đang cập nhật)';
         else if (tabName === 'config') pageTitle.textContent = 'Cấu hình Hệ thống';
     }
 
