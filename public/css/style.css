@@ -1119,6 +1119,13 @@ body {
 .justify-between { justify-content: space-between; }
 .align-center { align-items: center; }
 .flex-wrap { flex-wrap: wrap; }
+.flex-column { flex-direction: column !important; }
+.flex-row { flex-direction: row !important; }
+.align-start { align-items: flex-start !important; }
+.justify-center { justify-content: center !important; }
+.gap-1 { gap: 4px !important; }
+.gap-2 { gap: 8px !important; }
+.gap-3 { gap: 12px !important; }
 
 /* Spacing Utilities */
 .form-group { margin-bottom: 16px; }
@@ -2193,11 +2200,12 @@ body {
 .group-link {
   color: var(--text-primary);
   text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 550;
-  line-height: 1.55;
-  letter-spacing: -0.01em;
-  display: inline-block;
+  font-size: 0.81rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: normal;
+  display: block;
+  word-break: break-word;
   transition: color 0.15s ease;
 }
 
@@ -2289,11 +2297,11 @@ body {
 .group-bundle-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
+  gap: 3px;
+  padding: 1.5px 7px;
   border-radius: 4px;
-  font-size: 0.74rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 500;
   background: rgba(79, 70, 229, 0.08);
   color: var(--primary);
   border: 1px solid rgba(79, 70, 229, 0.25);

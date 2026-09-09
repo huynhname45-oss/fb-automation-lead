@@ -2695,7 +2695,7 @@ function renderGroupsUI() {
         // Find which bundles this group belongs to
         const memberBundles = (state.groups.bundles || []).filter(b => Array.isArray(b.groupIds) && b.groupIds.includes(String(g.id)));
         const bundleBadgesHtml = memberBundles.length > 0
-            ? `<div class="d-flex flex-wrap gap-1 mt-1">
+            ? `<div class="d-flex flex-wrap gap-1" style="margin-top: 3px;">
                 ${memberBundles.map(b => {
                     const c = b.color || '#4f46e5';
                     return `<span class="group-bundle-tag" style="background: ${c}15; color: ${c}; border: 1px solid ${c}35;" title="Nhóm lớn: ${escapeHtml(b.name)}">${escapeHtml(b.name)}</span>`;
@@ -2710,16 +2710,16 @@ function renderGroupsUI() {
             <td style="text-align: center; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
             <td style="text-align: center;">${avatarHtml}</td>
             <td>
-                <div class="d-flex flex-column" style="gap: 4px;">
+                <div class="d-flex flex-column align-start" style="gap: 4px; width: 100%;">
                     <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="group-link">
                         ${escapeHtml(g.name || 'Nhóm không tên')}
                     </a>
-                    ${g.membersCount ? `<div class="text-xs text-muted" style="font-size: 0.78rem; opacity: 0.85;">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
                     ${bundleBadgesHtml}
+                    ${g.membersCount ? `<div class="text-xs text-muted" style="font-size: 0.75rem; opacity: 0.85; margin-top: 1px;">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
                 </div>
             </td>
             <td>
-                <div class="d-flex flex-column gap-1">
+                <div class="d-flex flex-column align-start" style="gap: 4px;">
                     <div class="d-flex align-center gap-1">
                         <code class="font-mono text-sm font-semibold" style="background: rgba(79, 70, 229, 0.08); color: var(--primary); padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(79, 70, 229, 0.2);">${escapeHtml(g.id)}</code>
                         <button class="btn btn-ghost btn-xs btn-copy-group-id" data-id="${escapeHtml(g.id)}" title="Sao chép Group ID">📋</button>
@@ -2729,7 +2729,7 @@ function renderGroupsUI() {
             </td>
             <td style="text-align: center;">${privacyBadge}</td>
             <td style="text-align: center;">
-                <div class="d-flex align-center justify-center gap-1">
+                <div class="d-flex align-center justify-center" style="gap: 6px;">
                     <button class="btn btn-ghost btn-xs btn-assign-single-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Gán vào Nhóm Lớn">
                         📁+
                     </button>
