@@ -199,21 +199,6 @@ function initEventListeners() {
     if (btnSelectClientFolder) btnSelectClientFolder.addEventListener('click', handleSelectClientFolder);
     if (btnBackupData) btnBackupData.addEventListener('click', handleBackupData);
 
-    const selTimeRange = document.getElementById('selTimeRange');
-    const colRecent = document.getElementById('colRecentPostsToggle');
-    const chkRecent = document.getElementById('filterRecentPosts');
-    if (selTimeRange) {
-        selTimeRange.addEventListener('change', () => {
-            if (selTimeRange.value === '24h') {
-                if (colRecent) colRecent.style.display = '';
-                if (chkRecent) chkRecent.checked = true;
-            } else {
-                if (colRecent) colRecent.style.display = 'none';
-                if (chkRecent) chkRecent.checked = false;
-            }
-        });
-    }
-
     // Group Manager Event Listeners
     const selGroupFetchMethod = document.getElementById('selGroupFetchMethod');
     const groupTokenInputContainer = document.getElementById('groupTokenInputContainer');
@@ -1239,9 +1224,7 @@ async function handleStartSearch(e) {
     const maxPosts = parseInt(document.getElementById('filterMaxPosts').value, 10) || state.config?.maxPosts || 50;
     const datePosted = document.getElementById('filterDatePosted').value;
     const timeRange = document.getElementById('selTimeRange')?.value || '24h';
-    const recentPosts = (timeRange === '24h')
-        ? (document.getElementById('filterRecentPosts')?.checked !== false)
-        : false;
+    const recentPosts = (timeRange === '24h');
     const requirePhoneOnly = document.getElementById('chkRequirePhoneOnly')?.checked || false;
 
     if (!keyword) {
@@ -1965,9 +1948,11 @@ async function fetchConfig() {
         }
 
         if (config.defaultFilters) {
-            const filterRecentPosts = document.getElementById('filterRecentPosts');
-            if (filterRecentPosts && config.defaultFilters.recentPosts !== undefined) {
-                filterRecentPosts.checked = !!config.defaultFilters.recentPosts;
+            const selTimeRange = document.getElementById('selTimeRange');
+            if (selTimeRange && config.defaultFilters.timeRange) {
+                selTimeRange.value = config.defaultFilters.timeRange;
+            } else if (selTimeRange && config.defaultFilters.recentPosts === false) {
+                selTimeRange.value = 'any';
             }
             const filterDatePosted = document.getElementById('filterDatePosted');
             if (filterDatePosted && config.defaultFilters.datePosted !== undefined) {
