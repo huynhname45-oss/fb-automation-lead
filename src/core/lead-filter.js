@@ -107,7 +107,7 @@ function findMatchedKeyword(textClean, keywords = []) {
  * Used to avoid false-rejecting SMB posts that merely mention a landmark in their address line
  * (e.g. "Ngay Nhà thuốc Long Châu – đối diện Chung cư Sky9", "cạnh Vinmart", "gần bệnh viện...").
  */
-export const LANDMARK_PREFIX_REGEX = /(?:địa\s*chỉ|đ\/c|dc|address|vị\s*trí|vi\s*tri|toạ\s*độ|tại|tai|ở|o|ngay|ngay\s*cổng|ngay\s*chân|đối\s*diện|doi\s*dien|doi\s*dien\s*cong|đối\s*diện\s*cổng|gần|gan|gần\s*cổng|gan\s*cong|cạnh|canh|kế\s*bên|ke\s*ben|kế|ke|sát\s*bên|sat\s*ben|sát|sat|cách|cach|sau\s*lưng|sau\s*lung|sau|trước\s*mặt|truoc\s*mat|trước|truoc|bên\s*hông|ben\s*hong|bên\s*cạnh|ben\s*canh|hướng\s*đi|huong\s*di|hướng\s*về|huong\s*ve|đoạn|doan|ngã\s*[345ba|tư|tu|năm|nam]|nga\s*[345ba|tu|nam]|vòng\s*xoay|vong\s*xoay|bùng\s*binh|bung\s*binh|chân\s*cầu|chan\s*cau|dưới\s*chân|duoi\s*chan|shophouse|tầng\s*trệt|tang\s*tret|khu\s*đô\s*thị|khu\s*do\s*thi|chung\s*cư|chung\s*cu|toà\s*nhà|tòa\s*nhà|toa\s*nha)\s*(?:của|ở|tại|phía|bên)?\s*(?:nhà\s*thuốc|siêu\s*thị|cửa\s*hàng|chi\s*nhánh|toà\s*nhà|tòa\s*nhà|toa\s*nha|chung\s*cư|chung\s*cu|dự\s*án|du\s*an|khu\s*đô\s*thị|khu\s*do\s*thi|trung\s*tâm|tttm|chợ|bệnh\s*viện|trường|cổng)?\s*$/i;
+export const LANDMARK_PREFIX_REGEX = /(?:địa\s*chỉ|đ\/c|dc|address|vị\s*trí|vi\s*tri|toạ\s*độ|tại|tai|ở|o|ngay|ngay\s*cổng|ngay\s*chân|đối\s*diện|doi\s*dien|doi\s*dien\s*cong|đối\s*diện\s*cổng|gần|gan|gần\s*cổng|gan\s*cong|cạnh|canh|kế\s*bên|ke\s*ben|kế|ke|sát\s*bên|sat\s*ben|sát|sat|cách|cach|sau\s*lưng|sau\s*lung|sau|trước\s*mặt|truoc\s*mat|trước|truoc|bên\s*hông|ben\s*hong|bên\s*cạnh|ben\s*canh|hướng\s*đi|huong\s*di|hướng\s*về|huong\s*ve|đoạn|doan|ngã\s*[345ba|tư|tu|năm|nam]|nga\s*[345ba|tu|nam]|vòng\s*xoay|vong\s*xoay|bùng\s*binh|bung\s*binh|chân\s*cầu|chan\s*cau|dưới\s*chân|duoi\s*chan|shophouse|tầng\s*trệt|tang\s*tret|khu\s*đô\s*thị|khu\s*do\s*thi|chung\s*cư|chung\s*cu|toà\s*nhà|tòa\s*nhà|toa\s*nha|đường|duong|phố|pho|ngõ|ngo|hẻm|hem|số|so)\s*(?:của|ở|tại|phía|bên)?\s*(?:nhà\s*thuốc|siêu\s*thị|cửa\s*hàng|chi\s*nhánh|toà\s*nhà|tòa\s*nhà|toa\s*nha|chung\s*cư|chung\s*cu|dự\s*án|du\s*an|khu\s*đô\s*thị|khu\s*do\s*thi|trung\s*tâm|tttm|chợ|bệnh\s*viện|trường|truong|trường\s*học|trường\s*đại\s*học|đại\s*học|dai\s*hoc|cao\s*đẳng|cao\s*dang|cổng|cong|cổng\s*trường|ktx|kcn|khu\s*công\s*nghiệp)?\s*$/i;
 
 /**
  * Checks if ALL occurrences of a matched keyword in post content appear inside a directional landmark context.
@@ -258,14 +258,16 @@ export const FOREIGN_PATTERNS = [
   new RegExp(`${LOC_PREFIX}(?:singapore|malaysia|thái lan|bangkok|campuchia|phnom penh|nước lào|philippines)\\b`, 'i'),
 
   // Direct cities & specific overseas countries that never collide with Vietnamese pronouns
-  /\b(?:thái\s*lan|bangkok|chiang\s*mai|phnom\s*penh|siem\s*reap|campuchia|vientiane|viêng\s*chăn|kuala\s*lumpur|singapore|taipei|taichung|kaohsiung|đài\s*bắc|đài\s*trung|đài\s*nam|cao\s*hùng|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|seoul|busan|incheon|california|houston|sydney|melbourne|brisbane|vancouver|toronto)\b/i,
+  /\b(?:đài\s*loan|taiwan|nhật\s*bản|hàn\s*quốc|hoa\s*kỳ|thái\s*lan|bangkok|chiang\s*mai|phnom\s*penh|siem\s*reap|campuchia|vientiane|viêng\s*chăn|kuala\s*lumpur|singapore|taipei|taichung|kaohsiung|đài\s*bắc|đài\s*trung|đài\s*nam|cao\s*hùng|tokyo|osaka|nagoya|fukuoka|saitama|chiba|hokkaido|okinawa|seoul|busan|incheon|california|houston|sydney|melbourne|brisbane|vancouver|toronto)\b/i,
 
   // Đối tượng / thị trường / cộng đồng nước ngoài & xuất khẩu
   /\b(?:du học sinh|xklđ|xuất khẩu lao động|tu nghiệp sinh|tokutei|định cư|kiều bào|việt kiều)\s+(?:nhật|hàn|đài|mỹ|úc|canada|âu|đức|anh)/i,
   /(?:xuất\s*khẩu|xuat\s*khau|ship|gửi|gui|order|đơn\s*đi)\s+(?:sang|đi|cho|vào)\s+(?:mỹ|my|usa|canada|nhật|nhat|hàn|han|đài\s*loan|dai\s*loan|châu\s*âu|chau\s*au|úc|uc)/iu,
   /\b(?:ship toàn đài loan|ship toàn nhật|ship toàn hàn|ship us|order us|order uk|ship quốc tế)\b/i,
   /\b(?:tân đài tệ|đài tệ|tiền đài)\b/i,
-  /(?:\b\d+[\d,.]*\s*(?:baht|bath|usd|dollar|đô|euro|eur|sgd|rmb|cny|tệ|jpy|yen|yên|krw|won|ntd|tân\s*đài\s*tệ|aud|cad|khr|riel|lak|kip|rub|bảng\s*anh|gbp|man|sen)\b|\$\s*\d+)/i
+  /(?:\b\d+[\d,.]*\s*(?:baht|bath|usd|dollar|đô|euro|eur|sgd|rmb|cny|tệ|jpy|yen|yên|krw|won|ntd|tân\s*đài\s*tệ|aud|cad|khr|riel|lak|kip|rub|bảng\s*anh|gbp|man|sen)\b|\$\s*\d+)/i,
+  /(?:người\s*việt|nguoi\s*viet|đồng\s*hương|hội|cộng\s*đồng|chợ\s*việt|du\s*học\s*sinh|xklđ)\s+(?:tại|ở|bên|tai|o)?\s*(?:đài\s*loan|nhật\s*bản|nhật|hàn\s*quốc|hàn|mỹ|úc|canada|anh|pháp|đức|ba\s*lan|séc|ch\s*séc|châu\s*âu|taiwan|japan|korea|tokyo|seoul|taipei|osaka|bangkok)/iu,
+  /\b(?:line\s*id|id\s*line|kakaotalk|kakao\s*id)\b/i
 ];
 
 // Patterns detecting celebratory / guest / attendee congratulatory posts (NOT the business owner)
@@ -280,9 +282,24 @@ export const CONGRATULATORY_PATTERNS = [
 
 export function checkCongratulatoryLead(post = {}) {
   const content = `${post.content || ''}`.normalize('NFKC');
+
+  // Exemption: If post contains strong FIRST-PERSON SHOP OWNER signals, it is NOT a guest post!
+  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|chúng\s*mình|tụi\s*mình|nhà\s*em|tôi)|tiệm\s*(?:em|mình|chúng\s*mình)|shop\s*(?:em|mình)|chúng\s*mình\s*(?:mở|bán|khai\s*trương)|quán\s*chính\s*thức|menu|giảm\s*(?:\d+%)|khuyến\s*mãi|ưu\s*đãi|\bgọi\s*ngay\b|đặt\s*bàn|kính\s*mời|mời\s*mọi\s*người|mời\s*cả\s*nhà|địa\s*chỉ\s*quán|hotline|sđt|sdt)/iu.test(content);
+
+  if (isShopOwnerSignal) {
+    const isExplicitGuest = /(?:^|[\s,;:.!?-])(?:dự lễ|tham dự lễ|đi ăn|đi tiệc|ăn tiệc|đi chúc mừng|đến chúc mừng|qua chúc mừng)\s+(?:lễ\s+)?khai trương/iu.test(content) ||
+      /(?:^|[\s,;:.!?-])(?:chúc|chuc)\s+(?:thầy|cô|anh|chị|sếp|bác|chú|dì)\s+[^\n.!?]{0,30}(?:khai trương|hồng phát)/iu.test(content);
+    if (!isExplicitGuest) {
+      return { isCongratulatory: false };
+    }
+  }
+
   for (const regex of CONGRATULATORY_PATTERNS) {
     const m = content.match(regex);
     if (m) {
+      if (isShopOwnerSignal && /^(?:chúc mừng khai trương|khai trương hồng phát)$/i.test(m[0].trim())) {
+        continue;
+      }
       return { isCongratulatory: true, reason: `Lời chúc mừng của khách: "${m[0].trim()}"` };
     }
   }
@@ -304,8 +321,8 @@ export const EVENT_GIFT_SERVICES_PATTERNS = [
   /(?:^|[\s,;:.!?-])chuyên\s+trang\s+trí\s+(?:gia\s*tiên|tiệc\s*cưới|sinh\s*nhật|khai\s*trương)/iu,
   /(?:^|[\s,;:.!?-])(?:bàn\s+gia\s+tiên|cổng\s+hoa\s+cưới|hoa\s+xe\s+cưới|hoa\s+cưới\s+cầm\s+tay)/iu,
 
-  // 3. Dịch vụ hoa: hoa khai trương, kệ hoa, lẵng hoa, giỏ hoa, hoa viếng, hoa sáp, đào tạo cắm hoa
-  /(?:^|[\s,;:.!?-])(?:hoa\s*khai\s*trương|hoa\s*khai\s*truong|kệ\s*hoa|ke\s*hoa|lẵng\s*hoa|lang\s*hoa|giỏ\s*hoa|gio\s*hoa|bó\s*hoa|bo\s*hoa)(?:[\s,;:.!?-]|$)/iu,
+  // 3. Dịch vụ hoa: tiệm hoa, hoa sáp, hoa viếng, nhận đặt/giao/sỉ hoa khai trương, đào tạo cắm hoa
+  /(?:^|[\s,;:.!?-])(?:đặt|dat|bán|ban|sỉ|si|giao|ship|cung\s*cấp|chuyên|mẫu|mau)\s+(?:hoa\s*khai\s*trương|kệ\s*hoa|lẵng\s*hoa|giỏ\s*hoa|bó\s*hoa)/iu,
   /(?:^|[\s,;:.!?-])(?:hoa\s*viếng|hoa\s*vieng|hoa\s*chia\s*buồn|hoa\s*chia\s*buon|hoa\s*sáp|hoa\s*sap|hoa\s*tiền|hoa\s*tien|hoa\s*hội\s*nghị|hoa\s*hoi\s*nghi)(?:[\s,;:.!?-]|$)/iu,
   /(?:^|[\s,;:.!?-])(?:đào\s*tạo\s*học\s*viên|dao\s*tao\s*hoc\s*vien|dạy\s*cắm\s*hoa|day\s*cam\s*hoa|học\s*cắm\s*hoa|hoc\s*cam\s*hoa)/iu,
   /(?:^|[\s,;:.!?-])(?:shop\s*hoa|tiệm\s*hoa|tiem\s*hoa)\s+(?:tươi|tuoi|sáp|sap)?(?:[\s,;:.!?-]|$)/iu,
@@ -316,11 +333,22 @@ export const EVENT_GIFT_SERVICES_PATTERNS = [
 ];
 
 export function checkEventGiftServiceLead(post = {}) {
-  const rawText = `${post.authorName || ''} ${post.content || ''}`.normalize('NFKC');
+  const content = `${post.content || ''}`.normalize('NFKC');
+  const author = `${post.authorName || ''}`.normalize('NFKC');
+  const rawText = `${author} ${content}`;
+
+  // Exemption: Quán ăn / cafe / cửa hàng bán lẻ được tặng hoa hoặc cảm ơn hoa chúc mừng
+  const isReceivingFlowers = /(?:cảm\s*ơn|cam\s*on|nhận\s*được|ngập\s*tràn|rực\s*rỡ|nhiều|tặng|tri\s*ân)\s+[^\n.!?]{0,30}(?:lẵng|kệ|giỏ|hoa|bó)/iu.test(content) ||
+    /(?:quán\s*(?:em|mình)|tiệm\s*(?:em|mình)|bún|phở|cơm|cafe|cà\s*phê|trà\s*sữa|nướng|lẩu|ăn\s*vặt|bánh\s*mì|nhậu)/iu.test(author);
+
   for (const regex of EVENT_GIFT_SERVICES_PATTERNS) {
     const m = rawText.match(regex);
     if (m) {
-      return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${m[0].trim()}"` };
+      const matchedStr = m[0].trim();
+      if (isReceivingFlowers && /(?:lẵng\s*hoa|kệ\s*hoa|giỏ\s*hoa|hoa\s*khai\s*trương|bó\s*hoa)/i.test(matchedStr)) {
+        continue;
+      }
+      return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${matchedStr}"` };
     }
   }
   return { isEventGiftService: false };
@@ -376,16 +404,21 @@ export function checkForeignLead(post = {}) {
     }
   }
 
-  const rawText = `${post.authorName || ''} ${post.content || ''} ${post.location || ''}`;
+  const rawText = `${post.authorName || ''} ${post.content || ''} ${post.location || ''} ${post.groupName || ''}`;
   if (!rawText.trim()) return { isForeign: false };
 
   // 2. Check foreign patterns
   for (const regex of FOREIGN_PATTERNS) {
     const m = rawText.match(regex);
     if (m) {
-      // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan", "lẩu thái", "trà thái"
+      // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan", "lẩu thái", "mỹ phẩm hàn quốc"
       const matched = m[0].trim();
-      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|đồ|hàng|tiêu\s*chuẩn|phong\s*cách)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(matched)) {
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(matched)) {
+        continue;
+      }
+      const idx = m.index || 0;
+      const preText = rawText.substring(Math.max(0, idx - 30), idx).toLowerCase();
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị|gốc)\s*$/i.test(preText.trim())) {
         continue;
       }
       if (/(?:lẩu|trà|nem|gỏi|súp|món|ẩm\s*thực|chua\s*cay|chuẩn\s*vị|hương\s*vị)\s+thái(?:\s*lan)?/i.test(rawText)) {

@@ -59,7 +59,8 @@ export class AILeadEvaluator {
       try {
         const aiResult = await this._callAIProvider(authorName, content, phones, config);
         if (aiResult && typeof aiResult.score === 'number') {
-          const isNegative = /\b(không phù hợp|loại trừ|cơ quan nhà nước|công an|quân đội|chính quyền|hành chính công|vận tải|đường sắt|du lịch|spa|thẩm mỹ|massage|khách sạn|bất động sản|sinh đẻ|hoa khai trương|múa lân|không xác định|chưa rõ)\b/i.test(`${aiResult.businessType || ''} ${aiResult.intent || ''} ${aiResult.reason || ''}`);
+          const isNegative = /\b(không phù hợp|loại trừ|cơ quan nhà nước|công an|quân đội|chính quyền|hành chính công|vận tải|đường sắt|du lịch|spa|thẩm mỹ|massage|khách sạn|resort|homestay|bất động sản|nhà đất|sinh đẻ|thai sản|gara|garage|sửa xe|rửa xe|giặt là|giặt ủi|giặt sấy|cắt tóc|salon tóc|barber|barbershop|cầm đồ|vay vốn|thú y|thú cưng|gym|yoga|thể hình|đoàn lân|thuê múa lân|tiệm hoa|shop hoa|hoa viếng|kcn|khu công nghiệp|nhà máy|xí nghiệp|công nhân|sa bàn|nước ngoài|đài loan|nhật bản|hàn quốc|không xác định|chưa rõ)\b/i.test(`${aiResult.businessType || ''} ${aiResult.intent || ''}`) ||
+            /\b(không phù hợp|loại trừ|nước ngoài|an sinh xã hội)\b/i.test(aiResult.reason || '');
           
           // SEARCH-P0-009: Separate acceptedLeadScore & reviewLeadScore, remove Math.max(minScore, 60)
           const acceptedThreshold = (typeof minScore === 'number' && minScore >= 0 && minScore <= 100)
@@ -970,11 +971,18 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     if (/đường sắt|duong sat|tàu hỏa|tau hoa|đoàn tàu|toa tàu|ga tàu|vận tải đường sắt|du lịch|tour du lịch|lữ hành|vé máy bay|hàng không|sân bay|du thuyền|tàu thủy|chi nhánh vận tải|tập đoàn đường sắt|tổng công ty đường sắt|tập đoàn quốc gia|ủy ban|ubnd|sở văn hóa|sở du lịch|sở giao thông/i.test(textLower)) {
       return { isQualified: false, score: 10, summary: 'Vận tải / Du lịch / Đường sắt / Cơ quan nhà nước (Đã loại trừ)', businessType: 'Không phù hợp - Vận tải/Du lịch', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Ngành giao thông vận tải đường sắt / tour du lịch / cơ quan nhà nước, không phải cửa hàng bán lẻ/F&B SMB.', provider: 'local_nlp' };
     }
-    if (/hoa khai trương|kệ hoa|giỏ hoa|lẵng hoa|đặt hoa khai trương|tiệm hoa|shop hoa/i.test(textLower)) {
-      return { isQualified: false, score: 15, summary: 'Dịch vụ cung cấp hoa chúc mừng sự kiện khai trương', businessType: 'Dịch vụ Hoa', intent: 'Dịch vụ Hoa khai trương', salesPitch: '', recommendedFeatures: '', reason: 'Dịch vụ cung cấp hoa chúc mừng khai trương, không phải cửa hàng mở mới.', provider: 'local_nlp' };
+    if (/(?:tiệm\s*hoa|shop\s*hoa|hoa\s*sáp|hoa\s*viếng|hoa\s*chia\s*buồn|đặt\s*hoa\s*khai\s*trương|cung\s*cấp\s*hoa)/i.test(textLower)) {
+      const isShopThanking = /(?:cảm\s*ơn|cam\s*on|nhận\s*được|ngập\s*tràn|rực\s*rỡ|tặng)/i.test(content) ||
+        /(?:quán|tiệm|bún|phở|cơm|cafe|cà\s*phê|trà\s*sữa|nướng|lẩu|ăn\s*vặt|bánh\s*mì|nhậu)/i.test(authorName);
+      if (!isShopThanking) {
+        return { isQualified: false, score: 15, summary: 'Dịch vụ cung cấp hoa chúc mừng sự kiện khai trương', businessType: 'Dịch vụ Hoa', intent: 'Dịch vụ Hoa khai trương', salesPitch: '', recommendedFeatures: '', reason: 'Dịch vụ cung cấp hoa chúc mừng khai trương, không phải cửa hàng mở mới.', provider: 'local_nlp' };
+      }
     }
-    if (/múa lân|lân khai trương|đoàn lân|lân sư rồng|thuê múa lân|trống hội/i.test(textLower)) {
-      return { isQualified: false, score: 15, summary: 'Đoàn lân / Dịch vụ múa lân biểu diễn sự kiện', businessType: 'Dịch vụ Múa Lân', intent: 'Dịch vụ Biểu diễn', salesPitch: '', recommendedFeatures: '', reason: 'Đoàn lân / Dịch vụ múa lân sự kiện khai trương, không phải quán mở mới.', provider: 'local_nlp' };
+    if (/(?:đoàn\s*lân|đội\s*lân|thuê\s*múa\s*lân|dịch\s*vụ\s*múa\s*lân)/i.test(textLower)) {
+      const isStoreOpeningEvent = /(?:quán|tiệm|shop|cafe|cà\s*phê|trà\s*sữa|bún|phở|cơm|lẩu|nướng|ăn\s*vặt|bánh\s*mì|menu|mua\s*1\s*tặng\s*1|giảm\s*\d+%)/i.test(textLower);
+      if (!isStoreOpeningEvent) {
+        return { isQualified: false, score: 15, summary: 'Đoàn lân / Dịch vụ múa lân biểu diễn sự kiện', businessType: 'Dịch vụ Múa Lân', intent: 'Dịch vụ Biểu diễn', salesPitch: '', recommendedFeatures: '', reason: 'Đoàn lân / Dịch vụ múa lân sự kiện khai trương, không phải quán mở mới.', provider: 'local_nlp' };
+      }
     }
     if (/nhà xe|xe khách|xe limousine|tuyến xe|chuyến xe|vé xe khách|bến xe/i.test(textLower)) {
       return { isQualified: false, score: 15, summary: 'Dịch vụ nhà xe / Vận tải hành khách', businessType: 'Vận tải / Xe khách', intent: 'Dịch vụ Vận tải', salesPitch: '', recommendedFeatures: '', reason: 'Nhà xe / Dịch vụ xe khách vận tải hành khách.', provider: 'local_nlp' };
@@ -1029,18 +1037,24 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     }
 
     // 0. Education, School Opening, Kindergarten, Academic Year Exclusions (Highest Priority)
-    if (/mùa khai trường|khai trường|khai giảng|lễ khai giảng|năm học|tựu trường|mầm non|tiểu học|thcs|thpt|đại học|cao đẳng|học viện|học sinh|sinh viên|tân sinh viên|tập thể lớp|niên khóa|bảng tên khai giảng|hoa khai giảng|phông khai giảng|bóng bay khai giảng|đơn khai trường/i.test(textLower)) {
-      return {
-        isQualified: false,
-        score: 0,
-        summary: 'Trường học / Lễ khai giảng năm học / Giáo dục (Đã loại trừ)',
-        businessType: 'Giáo dục / Trường học',
-        intent: 'Loại trừ',
-        salesPitch: '',
-        recommendedFeatures: '',
-        reason: 'Bài viết về trường học, lễ khai giảng, mùa khai trường năm học mới (Không phải quán kinh doanh F&B/Bán lẻ).',
-        provider: 'local_nlp'
-      };
+    const schoolMatches = textLower.match(/mùa khai trường|khai trường|khai giảng|lễ khai giảng|năm học mới|tựu trường|mầm non|tiểu học|thcs|thpt|trường đại học|trường cao đẳng|học viện|tập thể lớp|niên khóa|bảng tên khai giảng|hoa khai giảng|phông khai giảng|bóng bay khai giảng|đơn khai trường/i);
+    if (schoolMatches) {
+      const term = schoolMatches[0];
+      const isLandmark = isLandmarkContext(content, term);
+      const isFBRetail = /(?:quán\s+(?:cafe|cà\s*phê|trà\s*sữa|ăn|nhậu|cơm|phở|bún|nướng|lẩu|nước|ốc)|tiệm\s+(?:trà|cơm|bánh|phở|bún|nướng)|cafe|cà\s*phê|trà\s*sữa|bún\s*bò|phở|cơm\s*tấm|lẩu\s*nướng|menu\s*(?:quán|món)|giảm\s*(?:\d+%)|(?:học\s*sinh|sinh\s*viên))/i.test(textLower) && !/(?:in\s*phông|bảng\s*tên|in\s*biển|in\s*ấn|in\s*thiệp)/i.test(textLower);
+      if (!isLandmark && !isFBRetail) {
+        return {
+          isQualified: false,
+          score: 0,
+          summary: 'Trường học / Lễ khai giảng năm học / Giáo dục (Đã loại trừ)',
+          businessType: 'Giáo dục / Trường học',
+          intent: 'Loại trừ',
+          salesPitch: '',
+          recommendedFeatures: '',
+          reason: 'Bài viết về trường học, lễ khai giảng, mùa khai trường năm học mới (Không phải quán kinh doanh F&B/Bán lẻ).',
+          provider: 'local_nlp'
+        };
+      }
     }
 
     // 1. Opening / Launching Intent Keywords (Highest Intent)
@@ -1105,9 +1119,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     }
 
     if (isOpening) {
-      score = 95;
-      intent = 'Khai trương cửa hàng mới';
-      reason = `${businessType} chuẩn bị khai trương / mở cửa, nhu cầu cao về phần mềm bán hàng và in hóa đơn.`;
+      if (hasSpecificBusinessCategory) {
+        score = 95;
+        intent = 'Khai trương cửa hàng mới';
+        reason = `${businessType} chuẩn bị khai trương / mở cửa, nhu cầu cao về phần mềm bán hàng và in hóa đơn.`;
+      } else {
+        const hasRetailSignal = /(?:quán|tiệm|shop|menu|món|nước|ly|tô|đĩa|bán|giá|order|đặt\s*bàn|mua|bán\s*lẻ|sản\s*phẩm)/i.test(textLower);
+        if (hasRetailSignal) {
+          score = 85;
+          intent = 'Khai trương cửa hàng mới';
+          reason = `${businessType} chuẩn bị khai trương / mở cửa, nhu cầu cao về phần mềm bán hàng và in hóa đơn.`;
+        } else {
+          score = 35;
+          intent = 'Chưa rõ mô hình';
+          reason = 'Bài viết thông báo khai trương nhưng không rõ sản phẩm F&B hay bán lẻ.';
+        }
+      }
       salesPitch = `Chào anh/chị, em thấy quán mình chuẩn bị khai trương, bên em đang có gói hỗ trợ máy in bill và phần mềm order bàn/quét mã cho quán mới mở...`;
       recommendedFeatures = businessType.includes('F&B') 
         ? 'In bill bếp, Quản lý định lượng & Order QR' 

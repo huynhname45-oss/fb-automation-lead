@@ -777,7 +777,12 @@ class SearchEngine extends EventEmitter {
               const dirEls = Array.from(node.querySelectorAll('div[dir="auto"]'));
               const candidateTexts = dirEls
                 .map(d => (d.innerText || '').trim())
-                .filter(t => t.length > 20 && !t.startsWith('#') && !/(?:xem thêm|thích|bình luận|chia sẻ|hoạt động|gợi ý)/i.test(t));
+                .filter(t => {
+                  if (t.length < 15 || t.startsWith('#')) return false;
+                  // Only filter out exact UI button texts, not sentences containing those words
+                  const isUiButton = /^(?:xem thêm|see more|thích|like|bình luận|comment|chia sẻ|share|hoạt động|gợi ý|phản hồi|reply)[\s.…]*$/i.test(t);
+                  return !isUiButton;
+                });
               if (candidateTexts.length > 0) {
                 visibleText = candidateTexts.join('\n');
               }
@@ -1060,6 +1065,7 @@ class SearchEngine extends EventEmitter {
           const quickEval = leadFilter.evaluateLead({
             authorName: post.authorName,
             content: post.content,
+            groupName: post.groupName || '',
             location: post.feedTimeText || '',
             phones: post.phones || []
           }, filterConfig);
@@ -1152,7 +1158,8 @@ class SearchEngine extends EventEmitter {
           // Deep Lead Qualification Check on Full Content
           const deepEval = leadFilter.evaluateLead({
             authorName: post.authorName,
-            content: fullPostContent
+            content: fullPostContent,
+            groupName: post.groupName || ''
           }, filterConfig);
 
           if (!deepEval.qualified) {
@@ -1542,10 +1549,13 @@ class SearchEngine extends EventEmitter {
         if (!mainText || mainText.length < 20) {
           const postContainers = Array.from(document.querySelectorAll('div[role="dialog"] div[role="article"], div[role="main"] div[role="article"], div[role="article"]'));
           for (const pNode of postContainers) {
-            const textNodes = Array.from(pNode.querySelectorAll('div[dir="auto"]'));
             const validTexts = textNodes
               .map(t => (t.innerText || '').trim())
-              .filter(t => t.length >= 20 && !/(?:bình luận|chia sẻ|thích|phản hồi|xem thêm)/i.test(t));
+              .filter(t => {
+                if (t.length < 15 || t.startsWith('#')) return false;
+                const isUiButton = /^(?:bình luận|comment|chia sẻ|share|thích|like|phản hồi|reply|xem thêm|see more|gợi ý|hoạt động)[\s.…]*$/i.test(t);
+                return !isUiButton;
+              });
             if (validTexts.length > 0) {
               mainText = validTexts.join('\n');
               break;
