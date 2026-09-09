@@ -468,6 +468,9 @@
                                     <button class="btn btn-ghost btn-sm" id="btnScanCurrentBundle" style="display: none; height: 38px; font-size: 0.84rem; white-space: nowrap; color: var(--primary);" title="Quét bài viết tất cả các nhóm trong nhóm lớn này">
                                         🔎 Quét bài cả nhóm lớn
                                     </button>
+                                    <button class="btn btn-ghost btn-sm" id="btnScanBundleMembers" style="display: none; height: 38px; font-size: 0.84rem; white-space: nowrap; color: #10b981;" title="Quét thành viên mới 24h tất cả các nhóm trong nhóm lớn này">
+                                        👥 Quét TV cả nhóm lớn
+                                    </button>
                                     <select id="selFilterPrivacy" class="input input-styled" style="height: 38px; width: auto; font-size: 0.88rem; padding: 4px 12px;">
                                         <option value="all">Tất cả quyền riêng tư</option>
                                         <option value="public">Chỉ nhóm Công khai</option>
@@ -546,17 +549,63 @@
 
                         <div class="card-body">
                             <!-- Group Input Panel -->
-                            <div class="form-group mb-4">
-                                <label class="field-label" style="font-weight: 600;">Chọn nhóm hoặc Nhập link/ID nhóm cần quét:</label>
-                                <div class="d-flex gap-3 flex-wrap align-center mb-2">
-                                    <div style="flex: 1; min-width: 280px;">
-                                        <select id="selectMemberGroupSource" class="input input-styled" style="height: 44px;">
-                                            <option value="">-- Chọn nhóm từ danh sách nhóm đã tham gia --</option>
+                            <div class="form-group mb-4 p-4 rounded-xl" style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 14px;">
+                                <div class="d-flex align-center justify-between mb-3 flex-wrap gap-2">
+                                    <label class="field-label mb-0" style="font-weight: 700; font-size: 1rem;">
+                                        🎯 Chọn Nhóm Cần Quét Thành Viên
+                                    </label>
+                                    <div class="d-flex align-center gap-2">
+                                        <span id="selectedMemberGroupsCountBadge" class="badge" style="background: rgba(99, 102, 241, 0.15); color: var(--primary); font-weight: 600; padding: 4px 10px; border-radius: 8px;">
+                                            0 nhóm được chọn
+                                        </span>
+                                        <button type="button" class="btn btn-ghost btn-xs text-danger" id="btnClearSelectedMemberGroups" style="font-size: 0.8rem; display: none;" title="Xóa toàn bộ nhóm đã chọn">
+                                            ✕ Xóa hết
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 2 Selection Methods: Nhóm Lớn (Bundle) & Nhóm Cụ Thể -->
+                                <div class="row g-3 mb-3" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                                    <!-- 1. Chọn Nhóm Lớn (Bundle) -->
+                                    <div>
+                                        <label class="text-xs text-muted mb-1 d-block" style="font-weight: 600;">
+                                            📁 1. Chọn theo Nhóm Lớn (Quét trọn gói cả nhóm lớn):
+                                        </label>
+                                        <select id="selectMemberBundleSource" class="input input-styled" style="height: 42px; width: 100%;">
+                                            <option value="">-- Chọn Nhóm Lớn (Bundle) --</option>
                                         </select>
                                     </div>
-                                    <div style="flex: 2; min-width: 320px;">
-                                        <input type="text" id="inputMemberGroupUrls" class="input input-styled" style="height: 44px;" placeholder="Hoặc dán Link nhóm / ID nhóm (cách nhau bởi dấu phẩy nếu nhiều nhóm)...">
+
+                                    <!-- 2. Chọn Nhóm Cụ Thể (Specific Group) -->
+                                    <div>
+                                        <label class="text-xs text-muted mb-1 d-block" style="font-weight: 600;">
+                                            👥 2. Hoặc chọn Nhóm Cụ Thể (đã tham gia):
+                                        </label>
+                                        <select id="selectMemberGroupSource" class="input input-styled" style="height: 42px; width: 100%;">
+                                            <option value="">-- Chọn một nhóm cụ thể --</option>
+                                        </select>
                                     </div>
+                                </div>
+
+                                <!-- Visual Group Chips Preview -->
+                                <div class="mb-3">
+                                    <div class="d-flex align-center justify-between mb-1">
+                                        <span class="text-xs text-muted" style="font-weight: 600;">Các nhóm đang được xếp hàng quét:</span>
+                                        <button type="button" class="btn btn-ghost btn-xs text-primary" id="btnSelectAllJoinedGroupsForMemberScan" style="font-size: 0.78rem;">
+                                            ➕ Thêm tất cả nhóm đã tham gia
+                                        </button>
+                                    </div>
+                                    <div id="memberSelectedGroupsChips" class="d-flex flex-wrap gap-2" style="min-height: 40px; max-height: 130px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.02); border: 1px dashed var(--glass-border); border-radius: 8px;">
+                                        <span class="text-xs text-muted" style="line-height: 24px; font-style: italic;">Chưa có nhóm nào được chọn. Hãy chọn Nhóm Lớn hoặc Nhóm Cụ Thể ở trên, hoặc dán link/ID nhóm bên dưới.</span>
+                                    </div>
+                                </div>
+
+                                <!-- Direct text input for manual links/IDs -->
+                                <div>
+                                    <label class="text-xs text-muted mb-1 d-block" style="font-weight: 600;">
+                                        🔗 Hoặc tự nhập/dán Link hoặc Group ID (cách nhau bởi dấu phẩy nếu nhiều nhóm):
+                                    </label>
+                                    <input type="text" id="inputMemberGroupUrls" class="input input-styled" style="height: 40px; font-family: monospace; font-size: 0.85rem;" placeholder="Ví dụ: 234921342520823, https://www.facebook.com/groups/234921342520823/members...">
                                 </div>
                             </div>
 

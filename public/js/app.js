@@ -321,25 +321,48 @@ function initEventListeners() {
     const btnExportMembersExcel = document.getElementById('btnExportMembersExcel');
     if (btnExportMembersExcel) btnExportMembersExcel.addEventListener('click', handleExportMembersExcel);
 
+    const selectMemberBundleSource = document.getElementById('selectMemberBundleSource');
+    if (selectMemberBundleSource) {
+        selectMemberBundleSource.addEventListener('change', (e) => {
+            handleSelectMemberBundle(e.target.value);
+        });
+    }
+
     const selectMemberGroupSource = document.getElementById('selectMemberGroupSource');
     if (selectMemberGroupSource) {
         selectMemberGroupSource.addEventListener('change', (e) => {
-            const val = e.target.value;
-            const inputUrls = document.getElementById('inputMemberGroupUrls');
-            if (inputUrls && val) {
-                const current = inputUrls.value.trim();
-                if (!current) {
-                    inputUrls.value = val;
-                } else {
-                    const ids = current.split(',').map(s => s.trim()).filter(Boolean);
-                    if (!ids.includes(val)) {
-                        ids.push(val);
-                        inputUrls.value = ids.join(', ');
-                    }
+            handleSelectMemberSpecificGroup(e.target.value);
+        });
+    }
+
+    const btnSelectAllJoinedGroups = document.getElementById('btnSelectAllJoinedGroupsForMemberScan');
+    if (btnSelectAllJoinedGroups) btnSelectAllJoinedGroups.addEventListener('click', handleSelectAllJoinedGroupsForMemberScan);
+
+    const btnClearSelectedMemberGroups = document.getElementById('btnClearSelectedMemberGroups');
+    if (btnClearSelectedMemberGroups) btnClearSelectedMemberGroups.addEventListener('click', handleClearSelectedMemberGroups);
+
+    const inputMemberGroupUrls = document.getElementById('inputMemberGroupUrls');
+    if (inputMemberGroupUrls) {
+        inputMemberGroupUrls.addEventListener('input', () => renderMemberSelectedGroupsChips());
+        inputMemberGroupUrls.addEventListener('change', () => renderMemberSelectedGroupsChips());
+    }
+
+    const memberSelectedGroupsChips = document.getElementById('memberSelectedGroupsChips');
+    if (memberSelectedGroupsChips) {
+        memberSelectedGroupsChips.addEventListener('click', (e) => {
+            const btnRemove = e.target.closest('.btn-remove-member-chip');
+            if (btnRemove) {
+                const removeId = btnRemove.getAttribute('data-id');
+                if (removeId) {
+                    const currentIds = getSelectedMemberGroupIds().filter(id => id !== removeId);
+                    setSelectedMemberGroupIds(currentIds);
                 }
             }
         });
     }
+
+    const btnScanBundleMembers = document.getElementById('btnScanBundleMembers');
+    if (btnScanBundleMembers) btnScanBundleMembers.addEventListener('click', handleScanBundleMembers);
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -2629,15 +2652,21 @@ function renderGroupBundlesBar() {
 
     // Update scan current bundle button
     const btnScan = document.getElementById('btnScanCurrentBundle');
-    if (btnScan) {
-        if (currentBundleId !== 'all') {
-            const curBundle = bundles.find(b => b.id === currentBundleId);
-            const bundleName = curBundle ? curBundle.name : 'nhóm lớn';
+    const btnScanMembers = document.getElementById('btnScanBundleMembers');
+    if (currentBundleId !== 'all') {
+        const curBundle = bundles.find(b => b.id === currentBundleId);
+        const bundleName = curBundle ? curBundle.name : 'nhóm lớn';
+        if (btnScan) {
             btnScan.style.display = 'inline-flex';
             btnScan.innerHTML = `🔎 Quét bài "${escapeHtml(bundleName)}"`;
-        } else {
-            btnScan.style.display = 'none';
         }
+        if (btnScanMembers) {
+            btnScanMembers.style.display = 'inline-flex';
+            btnScanMembers.innerHTML = `👥 Quét TV "${escapeHtml(bundleName)}"`;
+        }
+    } else {
+        if (btnScan) btnScan.style.display = 'none';
+        if (btnScanMembers) btnScanMembers.style.display = 'none';
     }
 }
 
@@ -2798,7 +2827,10 @@ function renderGroupsUI() {
                         📁+
                     </button>
                     <button class="btn btn-ghost btn-xs btn-scan-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Chuyển sang tab Tìm kiếm để quét bài trong nhóm này">
-                        🔎 Quét
+                        🔎 Quét bài
+                    </button>
+                    <button class="btn btn-ghost btn-xs btn-scan-single-member-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Chuyển sang tab Quét Thành Viên Mới của nhóm này" style="color: #059669;">
+                        👥 Quét TV
                     </button>
                     <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-xs" title="Mở nhóm trên Facebook">
                         ↗
@@ -2967,6 +2999,16 @@ function handleGroupsTableClick(e) {
         if (navSearch) navSearch.click();
 
         showToast(`Đã chuyển sang tìm kiếm với nhóm: ${name || id}`, 'info');
+        return;
+    }
+
+    const scanMemberBtn = e.target.closest('.btn-scan-single-member-group');
+    if (scanMemberBtn) {
+        const id = scanMemberBtn.getAttribute('data-id');
+        const name = scanMemberBtn.getAttribute('data-name');
+        if (id) {
+            handleScanSingleGroupMembers(id, name);
+        }
         return;
     }
 }
@@ -3348,41 +3390,220 @@ function fallbackCopyText(text, cb) {
 // ==========================================
 
 async function populateMemberGroupsDropdown() {
-    const select = document.getElementById('selectMemberGroupSource');
-    if (!select) return;
+    const selectBundle = document.getElementById('selectMemberBundleSource');
+    const selectGroup = document.getElementById('selectMemberGroupSource');
 
-    let groups = (state.groups && Array.isArray(state.groups.list)) ? state.groups.list : [];
-    if (groups.length === 0 && window.ClientDB && typeof window.ClientDB.getGroups === 'function') {
+    // 1. Ensure groups and bundles are loaded from DB if empty
+    if ((!state.groups.list || state.groups.list.length === 0) && window.ClientDB && typeof window.ClientDB.getGroups === 'function') {
         try {
-            groups = await window.ClientDB.getGroups() || [];
+            const saved = await window.ClientDB.getGroups() || [];
+            if (saved.length > 0) state.groups.list = saved;
         } catch (e) {}
     }
 
-    select.innerHTML = '<option value="">-- Chọn nhóm từ danh sách nhóm đã tham gia --</option>';
-
-    if (groups.length > 0) {
-        groups.forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = g.id || g.url;
-            opt.textContent = `${g.name || 'Nhóm Facebook'} (${g.id || 'N/A'})${g.privacy ? ' - ' + g.privacy : ''}`;
-            select.appendChild(opt);
-        });
+    if ((!state.groups.bundles || state.groups.bundles.length === 0) && window.ClientDB && typeof window.ClientDB.getBundles === 'function') {
+        try {
+            const bSaved = await window.ClientDB.getBundles() || [];
+            if (bSaved.length > 0) state.groups.bundles = bSaved;
+        } catch (e) {}
     }
+
+    // 2. Populate Bundles dropdown
+    if (selectBundle) {
+        selectBundle.innerHTML = '<option value="">-- 📁 Chọn Nhóm Lớn (Bundle) --</option>';
+        const bundles = state.groups.bundles || [];
+        if (bundles.length > 0) {
+            bundles.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                const count = Array.isArray(b.groupIds) ? b.groupIds.length : 0;
+                opt.textContent = `📁 ${b.name} (${count} nhóm)`;
+                selectBundle.appendChild(opt);
+            });
+        }
+    }
+
+    // 3. Populate Specific Groups dropdown
+    if (selectGroup) {
+        selectGroup.innerHTML = '<option value="">-- 👥 Chọn một nhóm cụ thể --</option>';
+        const groups = state.groups.list || [];
+        if (groups.length > 0) {
+            const sorted = [...groups].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi'));
+            sorted.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id || g.url;
+                opt.textContent = `👥 ${g.name || 'Nhóm Facebook'} (${g.id || 'N/A'})${g.privacy ? ' - ' + g.privacy : ''}`;
+                selectGroup.appendChild(opt);
+            });
+        }
+    }
+
+    // 4. Initial render of chips preview based on current input value
+    renderMemberSelectedGroupsChips();
+}
+
+function getSelectedMemberGroupIds() {
+    const input = document.getElementById('inputMemberGroupUrls');
+    if (!input) return [];
+    return input.value.split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
+function setSelectedMemberGroupIds(ids = []) {
+    const input = document.getElementById('inputMemberGroupUrls');
+    const uniqueIds = Array.from(new Set(ids.map(id => String(id).trim()).filter(Boolean)));
+    if (input) {
+        input.value = uniqueIds.join(', ');
+    }
+    renderMemberSelectedGroupsChips();
+}
+
+function renderMemberSelectedGroupsChips() {
+    const chipsContainer = document.getElementById('memberSelectedGroupsChips');
+    const badge = document.getElementById('selectedMemberGroupsCountBadge');
+    const btnClear = document.getElementById('btnClearSelectedMemberGroups');
+
+    const ids = getSelectedMemberGroupIds();
+
+    if (badge) {
+        badge.textContent = `${ids.length} nhóm được chọn`;
+    }
+
+    if (btnClear) {
+        btnClear.style.display = ids.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (!chipsContainer) return;
+
+    if (ids.length === 0) {
+        chipsContainer.innerHTML = '<span class="text-xs text-muted" style="line-height: 24px; font-style: italic;">Chưa có nhóm nào được chọn. Hãy chọn Nhóm Lớn hoặc Nhóm Cụ Thể ở trên, hoặc dán link/ID nhóm bên dưới.</span>';
+        return;
+    }
+
+    const groupMap = new Map();
+    (state.groups.list || []).forEach(g => {
+        if (g.id) groupMap.set(String(g.id), g);
+        if (g.slug) groupMap.set(String(g.slug), g);
+    });
+
+    chipsContainer.innerHTML = ids.map(rawId => {
+        let cleanId = rawId;
+        if (rawId.includes('/groups/')) {
+            const m = rawId.match(/\/groups\/([^/?]+)/i);
+            if (m && m[1]) cleanId = m[1];
+        }
+        const gInfo = groupMap.get(cleanId);
+        const displayName = gInfo ? gInfo.name : cleanId;
+
+        return `
+            <span class="badge d-inline-flex align-center gap-1" style="background: rgba(99, 102, 241, 0.1); color: var(--primary); font-size: 0.82rem; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.25);">
+                <span style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(displayName)} (${cleanId})">
+                    👥 ${escapeHtml(displayName)}
+                </span>
+                <button type="button" class="btn-remove-member-chip" data-id="${escapeHtml(rawId)}" style="background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.9rem; padding: 0 2px; line-height: 1;" title="Bỏ chọn nhóm này">×</button>
+            </span>
+        `;
+    }).join('');
+}
+
+function handleSelectMemberBundle(bundleId) {
+    if (!bundleId) return;
+    const bundle = (state.groups.bundles || []).find(b => b.id === bundleId);
+    if (!bundle) return;
+
+    const bundleGroupIds = Array.isArray(bundle.groupIds) ? bundle.groupIds : [];
+    if (bundleGroupIds.length === 0) {
+        showToast(`Nhóm lớn "${bundle.name}" hiện chưa có nhóm Facebook nào!`, 'warning');
+        return;
+    }
+
+    const currentIds = getSelectedMemberGroupIds();
+    const merged = Array.from(new Set([...currentIds, ...bundleGroupIds]));
+    setSelectedMemberGroupIds(merged);
+    showToast(`Đã thêm ${bundleGroupIds.length} nhóm từ nhóm lớn "${bundle.name}"!`, 'success');
+}
+
+function handleSelectMemberSpecificGroup(groupId) {
+    if (!groupId) return;
+    const currentIds = getSelectedMemberGroupIds();
+    if (!currentIds.includes(groupId)) {
+        currentIds.push(groupId);
+        setSelectedMemberGroupIds(currentIds);
+        
+        const g = (state.groups.list || []).find(item => item.id === groupId);
+        showToast(`Đã thêm nhóm "${g ? g.name : groupId}" vào danh sách quét!`, 'info');
+    }
+    const selectGroup = document.getElementById('selectMemberGroupSource');
+    if (selectGroup) selectGroup.value = '';
+}
+
+function handleSelectAllJoinedGroupsForMemberScan() {
+    const allGroups = state.groups.list || [];
+    if (allGroups.length === 0) {
+        showToast('Chưa có nhóm nào trong danh sách nhóm đã tham gia!', 'warning');
+        return;
+    }
+    const allIds = allGroups.map(g => g.id).filter(Boolean);
+    setSelectedMemberGroupIds(allIds);
+    showToast(`Đã thêm toàn bộ ${allIds.length} nhóm đã tham gia vào danh sách quét!`, 'success');
+}
+
+function handleClearSelectedMemberGroups() {
+    setSelectedMemberGroupIds([]);
+    const selBundle = document.getElementById('selectMemberBundleSource');
+    const selGroup = document.getElementById('selectMemberGroupSource');
+    if (selBundle) selBundle.value = '';
+    if (selGroup) selGroup.value = '';
+    showToast('Đã xóa danh sách nhóm chọn!', 'info');
+}
+
+function handleScanSingleGroupMembers(groupId, groupName = '') {
+    const navMembers = document.getElementById('navMembers');
+    if (navMembers) navMembers.click();
+
+    setTimeout(() => {
+        setSelectedMemberGroupIds([groupId]);
+        showToast(`Đã chuyển sang Quét Thành Viên Mới cho nhóm: ${groupName || groupId}!`, 'info');
+    }, 150);
+}
+
+function handleScanBundleMembers() {
+    const curBundleId = state.groups.selectedBundleId;
+    if (!curBundleId || curBundleId === 'all') {
+        showToast('Vui lòng chọn một nhóm lớn cụ thể trước!', 'warning');
+        return;
+    }
+
+    const bundle = (state.groups.bundles || []).find(b => b.id === curBundleId);
+    if (!bundle || !bundle.groupIds || bundle.groupIds.length === 0) {
+        showToast('Nhóm lớn này hiện chưa có nhóm Facebook nào!', 'warning');
+        return;
+    }
+
+    const navMembers = document.getElementById('navMembers');
+    if (navMembers) navMembers.click();
+
+    setTimeout(() => {
+        const selBundle = document.getElementById('selectMemberBundleSource');
+        if (selBundle) selBundle.value = bundle.id;
+        setSelectedMemberGroupIds(bundle.groupIds);
+        showToast(`Đã nạp ${bundle.groupIds.length} nhóm từ nhóm lớn "${bundle.name}" sẵn sàng quét!`, 'success');
+    }, 150);
 }
 
 async function handleStartScanMembers() {
     if (state.members.isScanning) return;
 
-    const inputGroupUrls = document.getElementById('inputMemberGroupUrls');
-    const rawInput = (inputGroupUrls ? inputGroupUrls.value : '').trim();
+    const groupUrls = getSelectedMemberGroupIds();
 
-    if (!rawInput) {
-        showToast('Vui lòng chọn hoặc nhập ít nhất 1 đường link hoặc ID nhóm để quét!', 'warning');
-        if (inputGroupUrls) inputGroupUrls.focus();
+    if (!groupUrls || groupUrls.length === 0) {
+        showToast('Vui lòng chọn Nhóm Lớn hoặc Nhóm Cụ Thể, hoặc nhập link/ID nhóm để quét!', 'warning');
+        const inputUrls = document.getElementById('inputMemberGroupUrls');
+        if (inputUrls) inputUrls.focus();
         return;
     }
 
-    const groupUrls = rawInput.split(',').map(s => s.trim()).filter(Boolean);
     const chkExcludeSales = document.getElementById('chkMemberExcludeSales');
     const chkDeepPhone = document.getElementById('chkMemberDeepPhone');
     const inputMax = document.getElementById('inputMaxMembersPerGroup');
@@ -3411,18 +3632,29 @@ async function handleStartScanMembers() {
             logBox.innerHTML = '<div style="color: #6366f1;">🚀 Bắt đầu quét thành viên mới gia nhập trong 24h...</div>';
         }
         if (statusBadge) {
-            statusBadge.innerHTML = '<span class="loading-spinner"></span> Đang kết nối tới Facebook Group...';
+            statusBadge.innerHTML = `<span class="loading-spinner"></span> Đang kết nối tới ${groupUrls.length} nhóm Facebook...`;
+        }
+
+        let cookie = '';
+        if (window.ClientDB && typeof window.ClientDB.getSession === 'function') {
+            const session = await window.ClientDB.getSession();
+            cookie = session?.cookie || '';
+        }
+        if (!cookie) {
+            cookie = localStorage.getItem('fb_cookie') || localStorage.getItem('fb_client_session') || '';
         }
 
         const res = await api('POST', '/api/members/scan', {
             groupUrls,
             excludeSales,
             deepPhoneSearch,
-            maxMembersPerGroup
+            maxMembersPerGroup,
+            cookie,
+            clientId: getClientId()
         });
 
-        if (res && res.status === 'started') {
-            showToast('Đã bắt đầu tiến trình quét thành viên nhóm!', 'info');
+        if (res && res.status) {
+            showToast(`Đã bắt đầu tiến trình quét cho ${groupUrls.length} nhóm Facebook!`, 'info');
             startPollingMemberStatus();
         } else {
             throw new Error(res.message || 'Không thể bắt đầu quét');

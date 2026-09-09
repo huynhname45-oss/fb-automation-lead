@@ -14,9 +14,19 @@ router.post('/scan', async (req, res) => {
     const {
       groupUrls = [],
       filters = {},
+      excludeSales,
+      deepPhoneSearch,
+      maxMembersPerGroup,
       cookie = '',
       clientId = 'default'
     } = req.body || {};
+
+    const effectiveFilters = {
+      excludeSales: excludeSales !== undefined ? excludeSales : (filters.excludeSales !== undefined ? filters.excludeSales : true),
+      deepPhoneSearch: deepPhoneSearch !== undefined ? deepPhoneSearch : (filters.deepPhoneSearch !== undefined ? filters.deepPhoneSearch : true),
+      maxMembersPerGroup: maxMembersPerGroup || filters.maxMembersPerGroup || 60,
+      ...filters
+    };
 
     if (!Array.isArray(groupUrls) || groupUrls.length === 0) {
       return res.status(400).json({
@@ -46,7 +56,7 @@ router.post('/scan', async (req, res) => {
       groupUrlsOrIds: groupUrls,
       clientId,
       cookie: effectiveCookie,
-      filters
+      filters: effectiveFilters
     }).catch(err => {
       logger.error({ err: err.message, clientId }, 'Lỗi tiến trình scanGroups');
     });
