@@ -10,29 +10,22 @@ export const DEFAULT_AI_PROMPT_CONTEXT = `Bạn là chuyên gia thẩm định k
 Mục tiêu của bạn là phân tích bài viết Facebook để xác định xem người đăng có phải là CHỦ CỬA HÀNG / QUÁN ĐỘC LẬP (SMB) đang chuẩn bị khai trương hoặc đang kinh doanh cần phần mềm bán hàng hay không.
 
 QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
-1. ĐIỂM CAO (80 - 100 điểm) - CHẮC CHẮN LÀ KHÁCH TIỀM NĂNG:
-   - Các quán F&B (quán cafe, trà sữa, quán ăn, nhà hàng, quán nhậu, tiệm bánh, bida, sinh tố, chè...).
-   - Các cửa hàng bán lẻ & dịch vụ độc lập (shop thời trang, mỹ phẩm, tiệm tạp hóa, siêu thị mini, phụ kiện, mẹ & bé, tiệm nail, spa, salon tóc...).
-   - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, CHẠY THỬ (Cực kỳ cần máy in bill, phần mềm bán hàng, quản lý bàn/kho).
+1. ĐIỂM CAO (70 - 100 điểm) - KHÁCH TIỀM NĂNG RÕ RÀNG:
+   - Các quán F&B (quán cafe, trà sữa, quán ăn, quán cơm, bún phở, lẩu nướng, quán nhậu, tiệm bánh, bida, sinh tố, chè...).
+   - Các cửa hàng bán lẻ & dịch vụ độc lập SMB (shop thời trang, mỹ phẩm, tiệm tạp hóa, siêu thị mini, phụ kiện, mẹ & bé, pet shop, tiệm hoa, tiệm nail, spa, salon tóc, phòng tập, sửa xe...).
+   - THÔNG BÁO KHAI TRƯƠNG, SẮP MỞ CỬA, MỞ CHI NHÁNH MỚI, ĐANG BÁN HÀNG (Rất cần máy in bill, phần mềm bán hàng, quản lý bàn/kho/doanh thu).
 
-2. ĐIỂM VỪA (50 - 79 điểm) - TIỀM NĂNG:
+2. ĐIỂM VỪA (35 - 69 điểm) - CẦN XEM LẠI (TIỀM NĂNG HOẶC CẦN XÁC MINH):
    - Cửa hàng/quán độc lập đang TUYỂN THU NGÂN, nhân viên bán hàng, quản lý kho, hoặc SANG NHƯỢNG quán.
-   - Bài viết nhắc đến phần mềm POS đối thủ (KiotViet, Sapo, MISA, Haravan, iPOS...), hỏi mua máy tính tiền, thanh lý máy in bill, hoặc hỏi tư vấn phần mềm bán hàng.
+   - Bài viết nhắc đến phần mềm POS (KiotViet, Sapo, MISA, Haravan, iPOS...), hỏi mua máy tính tiền, thanh lý máy in bill, hoặc hỏi tư vấn phần mềm bán hàng.
+   - Bài viết dịch vụ hoặc kinh doanh nhỏ lẻ cần kiểm tra thêm nhu cầu thực tế.
 
-3. ĐIỂM THẤP (0 - 49 điểm) - BẮT BUỘC LOẠI BỎ (KHÔNG PHẢI KHÁCH MỤC TIÊU):
-   - Chuỗi lớn / Franchise quy mô lớn (Phúc Long, Highlands, WinMart, KFC, Lotte, XanhSM...).
-   - Nhà thuốc / Tiệm thuốc tây / Quầy thuốc.
-   - Khách sạn / Hotel / Resort / Homestay / Nhà nghỉ.
-   - Bất động sản / Căn hộ / Phòng trọ / Cho thuê nhà đất.
-   - Dịch vụ Sinh đẻ / Gói thai sản / Khám sản phụ khoa / Bệnh viện phụ sản / Chăm sóc mẹ và bé sau sinh / Tắm bé / Thông tắc tia sữa.
-   - Dịch vụ Quà tặng & Giỏ trái cây: Giỏ trái cây nhập khẩu, Giỏ hoa quả, Giỏ quà biếu, Hộp quà biếu tặng khai trương, tân gia, sinh nhật, đặt giỏ quà, lên giỏ quà, quà biếu khai trương.
-   - Dịch vụ Decor & Cưới hỏi: Trang trí gia tiên, Decor tiệc cưới, Rạp cưới, Mâm quả cưới hỏi Rồng - Phụng, Quả dạm ngõ, Cổng hoa cưới, Trang trí xe hoa, Hoa bàn gia tiên.
-   - Dịch vụ In ấn sự kiện: In thiệp mời khai trương/hội nghị, In phong bì thư, In kẹp file, In voucher, In thiệp cưới, xưởng in ấn phẩm.
-   - Dịch vụ Hoa sự kiện & Đào tạo: Kệ hoa khai trương, Giỏ hoa chúc mừng, Lẵng hoa, Hoa viếng/chia buồn, Hoa sáp, Hoa tiền, Đào tạo học viên cắm hoa, Dạy cắm hoa.
-   - Dịch vụ Hoa khai trương / Kệ hoa / Giỏ hoa chúc mừng.
-   - Dịch vụ Múa Lân khai trương / Đoàn lân / Lân sư rồng.
-   - Nhà xe / Xe khách / Tuyến xe / Vé xe limousine.
-   - Bài tuyển dụng đa cấp, việc làm online, bài viết đời sống cá nhân không kinh doanh.`;
+3. ĐIỂM THẤP (0 - 34 điểm) - BẮT BUỘC LOẠI BỎ (SPAM / KHÔNG KINH DOANH):
+   - Các bên cung cấp dịch vụ phụ trợ sự kiện khai trương (bán hoa sáp, hoa tiền, lẵng hoa/kệ hoa khai trương, giỏ quà, giỏ trái cây, mâm quả, múa lân, in ấn thiệp/backdrop) quảng cáo sản phẩm của họ -> BẮT BUỘC LOẠI BỎ (REJECTED), không phải chủ cơ sở mở mới.
+   - Bài tuyển dụng lừa đảo, đa cấp, việc làm online tại nhà.
+   - Bài viết rác, ảnh gia đình, meme, đời sống cá nhân không kinh doanh.
+   - Bài viết hoàn toàn ở nước ngoài (không có số điện thoại hay địa chỉ tại Việt Nam).
+   - Nhà máy, xí nghiệp, khu công nghiệp (KCN), xuất khẩu hàng loạt.`;
 
 const DEFAULT_CONFIG = {
   headless: false,
@@ -40,7 +33,11 @@ const DEFAULT_CONFIG = {
   maxPosts: 50,
   excludeEnterpriseChains: true,
   excludePosCompetitors: false,
-  excludeUnsupportedIndustries: true,
+  excludeUnsupportedIndustries: false,
+  excludeRealEstate: false,
+  excludeHotels: false,
+  excludeBeautySpa: false,
+  excludeEventGifts: true,
   requireMobilePhoneOnly: true,
   requirePhoneOnly: false,
   excludeKeywords: '',
@@ -52,10 +49,9 @@ const DEFAULT_CONFIG = {
   groqApiKey: '',
   groqModel: 'qwen/qwen3.8-27b',
   // `minLeadScore` is retained for backward compatibility with old UI/configs.
-  // New decisions use the explicit accepted/review thresholds below.
-  minLeadScore: 75,
-  acceptedLeadScore: 75,
-  reviewLeadScore: 45,
+  minLeadScore: 60,
+  acceptedLeadScore: 60,
+  reviewLeadScore: 35,
   aiPromptContext: DEFAULT_AI_PROMPT_CONTEXT,
   defaultFilters: {
     recentPosts: true,

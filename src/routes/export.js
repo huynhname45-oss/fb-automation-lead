@@ -19,7 +19,7 @@ router.post('/excel-stream', async (req, res) => {
     const sourcePosts = (Array.isArray(req.body?.results) && req.body.results.length > 0)
       ? req.body.results
       : (searchEngine.results && searchEngine.results.length > 0 ? searchEngine.results : []);
-    const includeReview = req.body?.includeReview === true;
+    const includeReview = req.body?.includeReview !== false;
     const posts = sourcePosts.filter(post =>
       post?.decision !== 'REJECTED' &&
       (includeReview || (post?.decision !== 'REVIEW' && post?.status !== 'Cần kiểm tra'))
@@ -50,7 +50,7 @@ router.post('/excel', async (req, res) => {
     const sourcePosts = (Array.isArray(req.body?.results) && req.body.results.length > 0)
       ? req.body.results
       : (searchEngine.results && searchEngine.results.length > 0 ? searchEngine.results : []);
-    const includeReview = req.body?.includeReview === true;
+    const includeReview = req.body?.includeReview !== false;
     const posts = sourcePosts.filter(post =>
       post?.decision !== 'REJECTED' &&
       (includeReview || (post?.decision !== 'REVIEW' && post?.status !== 'Cần kiểm tra'))

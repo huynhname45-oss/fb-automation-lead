@@ -40,6 +40,12 @@ test('Lead Filter & Local NLP: Strictly reject fruit gift baskets, wedding decor
       authorName: 'HT & fruits',
       content: 'GIỎ TRÁI CÂY NHẬP KHẨU – MÓN QUÀ NHỎ, TÌNH CẢM LỚN. Có thể dùng để biếu bố mẹ, thăm người thân, tặng đối tác, khách hàng, khai trương, sinh nhật... Đặt giỏ: 0383 127 193',
       phones: ['0383127193']
+    },
+    {
+      title: 'Hoa Sáp Bàu Bàng (Shop nhận làm hoa sáp, hoa tiền, hoa khai trương theo yêu cầu)',
+      authorName: 'Hoa Sáp Bàu Bàng',
+      content: 'Shop nhận làm hoa theo yêu cầu: • Bó hoa sáp, giỏ hoa sáp • Hoa tiền, hoa khai trương, hoa tỏ tình • Hộp quà trái tim, hoa tốt nghiệp. Zalo/Hotline: 0978 123 456',
+      phones: ['0978123456']
     }
   ];
 
@@ -48,11 +54,18 @@ test('Lead Filter & Local NLP: Strictly reject fruit gift baskets, wedding decor
     const directCheck = checkEventGiftServiceLead(post);
     assert.equal(directCheck.isEventGiftService, true, `Expected checkEventGiftServiceLead to flag: ${post.title}`);
 
-    // 2. evaluateLead (deterministic rule filter)
-    const ruleEval = leadFilter.evaluateLead(post, { excludeUnsupportedIndustries: true });
-    assert.equal(ruleEval.qualified, false, `Expected leadFilter to reject: ${post.title}`);
+    // 2. evaluateLead (deterministic rule filter) - MUST return leadQuality: 'rejected'
+    const ruleEval = leadFilter.evaluateLead(post, { excludeEventGifts: true });
+    assert.equal(ruleEval.qualified, false, `Expected leadFilter to disqualify: ${post.title}`);
+    assert.equal(ruleEval.leadQuality, 'rejected', `Expected leadFilter to HARD REJECT: ${post.title}`);
+    assert.equal(ruleEval.qualityBadge, 'Loại trừ', `Expected qualityBadge 'Loại trừ': ${post.title}`);
 
-    // 3. Local NLP Fallback
+    // 3. evaluateLead with default options (excludeEventGifts defaults to true in config)
+    const ruleEvalDefault = leadFilter.evaluateLead(post);
+    assert.equal(ruleEvalDefault.qualified, false, `Expected leadFilter default to disqualify: ${post.title}`);
+    assert.equal(ruleEvalDefault.leadQuality, 'rejected', `Expected leadFilter default to HARD REJECT: ${post.title}`);
+
+    // 4. Local NLP Fallback
     const localEval = aiLeadEvaluator._localNLPEvaluate(post.authorName, post.content, post.phones);
     assert.equal(localEval.isQualified, false, `Expected Local NLP to reject: ${post.title}`);
     assert.equal(localEval.score, 0, `Expected Local NLP score to be 0 for: ${post.title}`);

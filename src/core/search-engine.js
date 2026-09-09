@@ -4,7 +4,7 @@ import configManager from './config-manager.js';
 import logger from './logger.js';
 import { processResults, generateExcerpt, generateSummary } from './data-processor.js';
 import { getCanonicalPostKey } from './history-manager.js';
-import { extractPhonesFromText, mergePhoneEvidence, mergePhoneEvidenceCollections } from './phone-validator.js';
+import { extractPhonesFromText, mergePhoneEvidence, mergePhoneEvidenceCollections, isJobApplicantComment } from './phone-validator.js';
 import { extractLocationDetailed } from './location-extractor.js';
 import leadFilter from './lead-filter.js';
 import ocrManager from './ocr-manager.js';
@@ -608,6 +608,33 @@ export function isAuthorCommentMatch({ commentAuthorName = '', commentText = '',
   return false;
 }
 
+/**
+ * Comprehensive check for post author comments or authentic owner referral comments.
+ * Strictly verifies ownership while rejecting job applicant spam.
+ */
+export function isAuthorOrOwnerCommentMatch({ commentAuthorName = '', commentText = '', targetAuthorName = '' } = {}) {
+  // 1. Check direct author match (author badge or exact display name match)
+  if (isAuthorCommentMatch({ commentAuthorName, commentText, targetAuthorName })) {
+    return { isMatch: true, reason: 'author_direct' };
+  }
+
+  const cleanCommentText = (commentText || '').trim();
+
+  // 2. Reject if comment is from a job applicant or casual job seeker
+  if (isJobApplicantComment(cleanCommentText)) {
+    return { isMatch: false, reason: 'job_applicant_excluded' };
+  }
+
+  // 3. Match explicit owner / manager / hotline contact referral signals
+  const ownerSignalPattern = /(?:liên\s*(?:hệ|lạc)\s*(?:qua\s*)?zalo\s*(?:trực\s*tiếp\s*)?(?:cho\s*)?|gọi\s*(?:trực\s*tiếp\s*)?(?:cho\s*)?|alo\s*(?:trực\s*tiếp\s*)?(?:cho\s*)?|sđt\s*(?:của\s*)?)(?:anh\s*chủ|chị\s*chủ|chủ\s*quán|chủ\s*tiệm|quản\s*lý|hotline|quán)|(?:zalo\s*(?:trực\s*tiếp\s*)?(?:anh\s*chủ|chị\s*chủ|chủ\s*quán|quản\s*lý|hotline))|(?:anh\s*chủ|chị\s*chủ|chủ\s*quán)\s*(?:đang\s*chờ|bảo|nhờ|dặn|liên\s*hệ)|(?:hotline|sđt)\s*(?:quán|chính\s*thức)/iu;
+
+  if (ownerSignalPattern.test(cleanCommentText)) {
+    return { isMatch: true, reason: 'owner_referral' };
+  }
+
+  return { isMatch: false, reason: 'not_matched' };
+}
+
 export function createReviewRecord({
   post = {},
   authorKey = '',
@@ -729,14 +756,18 @@ class SearchEngine extends EventEmitter {
     }
 
     const filterConfig = {
-      excludeEnterpriseChains: configManager.get('excludeEnterpriseChains') !== false,
-      excludePosCompetitors: configManager.get('excludePosCompetitors') === true,
-      excludeUnsupportedIndustries: configManager.get('excludeUnsupportedIndustries') !== false,
+      excludeEnterpriseChains: filters.excludeEnterpriseChains !== undefined ? !!filters.excludeEnterpriseChains : (configManager.get('excludeEnterpriseChains') !== false),
+      excludePosCompetitors: filters.excludePosCompetitors !== undefined ? !!filters.excludePosCompetitors : (configManager.get('excludePosCompetitors') === true),
+      excludeRealEstate: filters.excludeRealEstate !== undefined ? !!filters.excludeRealEstate : (configManager.get('excludeRealEstate') === true),
+      excludeHotels: filters.excludeHotels !== undefined ? !!filters.excludeHotels : (configManager.get('excludeHotels') === true),
+      excludeBeautySpa: filters.excludeBeautySpa !== undefined ? !!filters.excludeBeautySpa : (configManager.get('excludeBeautySpa') === true),
+      excludeEventGifts: filters.excludeEventGifts !== undefined ? !!filters.excludeEventGifts : (configManager.get('excludeEventGifts') === true),
+      excludeUnsupportedIndustries: filters.excludeUnsupportedIndustries !== undefined ? !!filters.excludeUnsupportedIndustries : (configManager.get('excludeUnsupportedIndustries') === true),
       requireMobilePhoneOnly: configManager.get('requireMobilePhoneOnly') !== false,
       requirePhoneOnly: filters.requirePhoneOnly !== undefined ? !!filters.requirePhoneOnly : (configManager.get('requirePhoneOnly') === true)
     };
 
-    logger.info(`⚙️ [BỘ LỌC LEAD SMB]: Chuỗi lớn: ${filterConfig.excludeEnterpriseChains ? 'CHẶN' : 'BỎ QUA'} | Ngành Hotel/BĐS/Sinh nở: ${filterConfig.excludeUnsupportedIndustries ? 'CHẶN' : 'BỎ QUA'} | Chỉ lấy bài có SĐT: ${filterConfig.requirePhoneOnly ? 'BẬT (Bắt buộc có SĐT)' : 'TẮT (Lấy cả bài không SĐT)'}`);
+    logger.info(`⚙️ [BỘ LỌC LEAD]: Chuỗi lớn: ${filterConfig.excludeEnterpriseChains ? 'BẬT' : 'TẮT'} | BĐS: ${filterConfig.excludeRealEstate ? 'CHẶN' : 'BỎ QUA'} | Hotel: ${filterConfig.excludeHotels ? 'CHẶN' : 'BỎ QUA'} | Spa: ${filterConfig.excludeBeautySpa ? 'CHẶN' : 'BỎ QUA'} | Chỉ lấy bài có SĐT: ${filterConfig.requirePhoneOnly ? 'BẬT' : 'TẮT'}`);
 
     let page;
 
@@ -1251,8 +1282,9 @@ class SearchEngine extends EventEmitter {
             phones: post.phones || []
           }, filterConfig);
 
-          if (!quickEval.qualified) {
-            logger.info(`❌ [LOẠI TRỪ LEAD] BỎ QUA [${post.authorName}]: ${quickEval.reason}`);
+          if (quickEval.leadQuality === 'rejected') {
+            logger.info(`❌ [LOẠI TRỪ SPAM/ĐỐI THỦ] BỎ QUA [${post.authorName}]: ${quickEval.reason}`);
+            this.rejectedCount++;
             continue;
           }
 
@@ -1287,8 +1319,9 @@ class SearchEngine extends EventEmitter {
             groupName: post.groupName || ''
           }, filterConfig);
 
-          if (!deepEval.qualified) {
-            logger.info(`❌ [LOẠI TRỪ LEAD] BỎ QUA [${post.authorName}]: ${deepEval.reason}`);
+          if (deepEval.leadQuality === 'rejected') {
+            logger.info(`❌ [LOẠI TRỪ SPAM/ĐỐI THỦ] BỎ QUA [${post.authorName}]: ${deepEval.reason}`);
+            this.rejectedCount++;
             continue;
           }
 
@@ -1327,6 +1360,23 @@ class SearchEngine extends EventEmitter {
             );
           }
 
+          // Trường hợp 2: SĐT từ bình luận chính chủ hoặc bình luận chỉ dẫn hotline/chủ quán
+          if (postVerification && Array.isArray(postVerification.commentPhones) && postVerification.commentPhones.length > 0) {
+            phoneEvidence = mergePhoneEvidence(
+              phoneEvidence,
+              postVerification.commentPhones.map(phone => ({
+                phone,
+                verified: true,
+                authorMatched: true,
+                rawSnippet: 'Bình luận chính chủ / liên hệ hotline bài viết'
+              })),
+              'post_comment',
+              0.98,
+              'SĐT từ bình luận chính chủ / liên hệ hotline của bài viết',
+              evidenceMetadata
+            );
+          }
+
           let locationResult = extractLocationDetailed({
             content: fullPostContent + (post.groupName ? `\nNhóm: ${post.groupName}` : ''),
             authorName: post.authorName
@@ -1349,13 +1399,21 @@ class SearchEngine extends EventEmitter {
             location: detectedLocation
           }, filterConfig);
 
-          if (!aiEval.isQualified) {
+          if (aiEval.decision === 'REJECTED' || aiEval.errorCode === 'AI_UNAVAILABLE') {
             if (aiEval.errorCode === 'AI_UNAVAILABLE') {
               // Tự động chuyển tiếp sang Local NLP khi API AI bị giới hạn tần suất (429) hoặc lỗi mạng
               const localEval = aiLeadEvaluator._localNLPEvaluate(post.authorName, fullPostContent, currentPhones);
-              if (localEval.isQualified) {
+              const acceptedScore = filterConfig.acceptedLeadScore ?? filterConfig.minLeadScore ?? 60;
+              const reviewScore = filterConfig.reviewLeadScore ?? 35;
+              if (localEval.isQualified || localEval.score >= reviewScore) {
+                const isHigh = localEval.score >= acceptedScore;
                 logger.info(`⚡ [LOCAL NLP DUYỆT LEAD - ${localEval.score}/100] [${post.authorName}] | Ngành: ${localEval.businessType} (AI tạm thời bận)`);
-                Object.assign(aiEval, localEval, { isQualified: true, decision: 'ACCEPTED' });
+                Object.assign(aiEval, localEval, { 
+                  isQualified: isHigh, 
+                  decision: isHigh ? 'ACCEPTED' : 'REVIEW',
+                  leadQuality: isHigh ? 'high' : 'review',
+                  qualityBadge: isHigh ? 'Tiềm năng cao' : 'Cần xem lại'
+                });
               } else {
                 logger.info(`❌ [LOCAL NLP LOẠI TRỪ SỚM] BỎ QUA [${post.authorName}] - Điểm: ${localEval.score}/100 - Lý do: ${localEval.reason}`);
                 this.rejectedCount++;
@@ -1460,7 +1518,11 @@ class SearchEngine extends EventEmitter {
           const cleanPostUrl = post.postLink ? getCleanCanonicalFacebookUrl(post.postLink) : '';
           const cleanProfileUrl = post.profileLink ? getCleanCanonicalFacebookUrl(post.profileLink) : '';
 
-          logger.info(`🤖 [AI DUYỆT LEAD - ${aiEval.score}/100] [${post.authorName}] | Ngành: ${aiEval.businessType} | Mục đích: ${aiEval.intent}`);
+          const isHighQuality = aiEval.decision === 'ACCEPTED' || aiEval.leadQuality === 'high';
+          const evalLeadQuality = isHighQuality ? 'high' : 'review';
+          const evalQualityBadge = aiEval.qualityBadge || (isHighQuality ? 'Tiềm năng cao' : 'Cần xem lại');
+
+          logger.info(`🤖 [AI DUYỆT LEAD - ${aiEval.score}/100] [${evalQualityBadge}] [${post.authorName}] | Ngành: ${aiEval.businessType} | Mục đích: ${aiEval.intent}`);
 
           const itemKey = getCanonicalPostKey({ postLink: cleanPostUrl, authorName: post.authorName, content: fullPostContent });
           // Lưu bài viết đã được AI duyệt vào danh sách kết quả
@@ -1492,8 +1554,11 @@ class SearchEngine extends EventEmitter {
             phones: phones,
             verifiedPhones: verifiedPhones,
             phoneEvidence: phoneEvidence,
-            decision: 'ACCEPTED',
-            decisionReasons: ['AI_ACCEPTED'],
+            decision: isHighQuality ? 'ACCEPTED' : 'REVIEW',
+            leadQuality: evalLeadQuality,
+            qualityBadge: evalQualityBadge,
+            qualityReason: aiEval.reason || deepEval.reason || quickEval.reason || '',
+            decisionReasons: isHighQuality ? ['AI_ACCEPTED'] : ['AI_REVIEW'],
             status: 'Mới tạo',
             supportingPosts: []
           };
@@ -1539,17 +1604,25 @@ class SearchEngine extends EventEmitter {
             acceptedAuthorIndex.set(authorKey, task.results.length);
             if (!isClientIsolated) {
               this.results.push(cleanPostObj);
-              this.acceptedCount++;
-              this.found = this.acceptedCount;
+              if (isHighQuality) {
+                this.acceptedCount++;
+              } else {
+                this.reviewCount++;
+              }
+              this.found = this.results.length;
             }
             task.results.push(cleanPostObj);
-            task.acceptedCount++;
-            task.found = task.acceptedCount;
+            if (isHighQuality) {
+              task.acceptedCount++;
+            } else {
+              task.reviewCount++;
+            }
+            task.found = task.results.length;
           }
           this.emit('progress', this.getProgress(clientId));
 
           const phoneLogStr = phones.length > 0 ? `SĐT: [${phones.join(', ')}]` : `[CHƯA CÓ SĐT - NHẮN TIN FB]`;
-          logger.info(`⚡ [THÀNH CÔNG] [${task.found}/${targetAccepted}] ${phoneLogStr} | Điểm: ${aiEval.score}/100 | Ngành: ${aiEval.businessType} | Tác giả: ${post.authorName}`);
+          logger.info(`⚡ [THÀNH CÔNG] [${task.found}/${targetAccepted}] [${evalQualityBadge}] ${phoneLogStr} | Điểm: ${aiEval.score}/100 | Ngành: ${aiEval.businessType} | Tác giả: ${post.authorName}`);
         }
 
         if (!foundNewCandidateInThisBatch) {
@@ -1564,9 +1637,9 @@ class SearchEngine extends EventEmitter {
         // =========================================================================
         // BƯỚC 4: CUỘN TRANG TIẾP TỤC CHO ĐẾN KHI ĐỦ BÀI (SEARCH-P0-001)
         // =========================================================================
-        const clientAccepted = isClientIsolated ? task.acceptedCount : this.acceptedCount;
+        const clientFound = isClientIsolated ? task.results.length : this.results.length;
         const isTaskStopped = isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped);
-        if (clientAccepted < targetAccepted && !isTaskStopped) {
+        if (clientFound < targetAccepted && !isTaskStopped) {
           scrollAttempts++;
           await this._smoothScrollDown(page, 2500);
           await delay(crawlDelay);
@@ -1574,13 +1647,13 @@ class SearchEngine extends EventEmitter {
       }
 
       const processedResults = processResults(this.results);
-      const finalAccepted = isClientIsolated ? task.acceptedCount : this.acceptedCount;
+      const finalFound = isClientIsolated ? task.results.length : this.results.length;
       const isTaskStopped = isClientIsolated ? task.isStopped : (this.isStopped || task.isStopped);
       
-      if (finalAccepted < targetAccepted && !isTaskStopped) {
+      if (finalFound < targetAccepted && !isTaskStopped) {
         this.finishedReason = 'all_posts_exhausted';
         task.finishedReason = 'all_posts_exhausted';
-        logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${finalAccepted}/${targetAccepted} bài đạt chuẩn).`);
+        logger.info(`ℹ️ Đã quét hết toàn bộ bài viết khả dụng trên Facebook cho từ khóa "${keyword}" trong 24 giờ qua (Facebook không còn bài viết mới nào khác để tải thêm, tìm thấy ${finalFound}/${targetAccepted} bài đạt chuẩn).`);
       } else if (!isTaskStopped) {
         this.finishedReason = 'target_reached';
         task.finishedReason = 'target_reached';
@@ -1589,7 +1662,9 @@ class SearchEngine extends EventEmitter {
         task.finishedReason = 'user_stopped';
       }
 
-      logger.info(`🎉 HOÀN TẤT! ${finalAccepted}/${targetAccepted} lead được duyệt, ${this.reviewCount} bài cần kiểm tra; đã thu thập ${task.results.length} bản ghi cho client [${clientId}].`);
+      const finalHigh = isClientIsolated ? task.acceptedCount : this.acceptedCount;
+      const finalReview = isClientIsolated ? task.reviewCount : this.reviewCount;
+      logger.info(`🎉 HOÀN TẤT! Đã thu thập ${finalFound}/${targetAccepted} bài viết (${finalHigh} tiềm năng cao, ${finalReview} cần xem lại) cho client [${clientId}].`);
 
       this.status = this.isStopped ? 'stopped' : 'idle';
       task.status = task.isStopped ? 'stopped' : 'idle';
@@ -1646,6 +1721,26 @@ class SearchEngine extends EventEmitter {
       await delay(Math.min(crawlDelay, 2000));
 
       await this._expandSeeMore(inspectPage);
+
+      // Cuộn nhẹ xuống để kích hoạt lazy render của phần bình luận Facebook
+      try {
+        await inspectPage.mouse.wheel(0, 800);
+        await delay(700);
+
+        // Bấm nút "Xem thêm bình luận" / "Xem các bình luận trước" nếu có
+        await inspectPage.evaluate(() => {
+          const clickables = Array.from(document.querySelectorAll('div[role="button"], span[role="button"], a[role="button"], span, a'));
+          for (const el of clickables) {
+            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+            if (/^(?:xem thêm \d+ bình luận|xem thêm bình luận|xem các bình luận trước|xem tất cả \d+ bình luận|view \d+ more comments|view more comments|view previous comments)$/i.test(txt) ||
+                txt.includes('xem thêm bình luận') || txt.includes('view more comments')) {
+              try { el.click(); } catch (e) {}
+            }
+          }
+        });
+        await delay(500);
+        await this._expandSeeMore(inspectPage);
+      } catch (scrollErr) {}
 
       const pageData = await inspectPage.evaluate((authorName) => {
         let creationTime = '';
@@ -1708,45 +1803,36 @@ class SearchEngine extends EventEmitter {
             .trim();
         }
 
-        // Extract comments ONLY from the author of the post. "Pinned" is not an
-        // ownership signal because page/group admins may pin another person's comment.
-        const commentEls = Array.from(document.querySelectorAll('div[aria-label*="Bình luận"], div[aria-label*="Comment"], ul li, div[role="article"] ul li'));
-        const authorCommentTexts = [];
+        // Trích xuất danh sách bình luận thô từ Facebook Comet
+        const commentContainers = Array.from(document.querySelectorAll(
+          'div[aria-label*="Bình luận"], div[aria-label*="Comment"], div[role="article"] ul li, ul li, div[data-visualcompletion="ignore-dynamic"]'
+        ));
 
-        for (const el of commentEls) {
-          const rawText = (el.innerText || '').trim();
+        const rawComments = [];
+        for (const el of commentContainers) {
+          const rawText = (el.innerText || el.textContent || '').trim();
           if (rawText.length < 5 || rawText.startsWith('Thích') || rawText.startsWith('Phản hồi') || rawText.includes('Facebook Account')) {
             continue;
           }
 
-          // Check if this comment is from the author (SEARCH-P0-014)
-          const hasAuthorBadge = /(?:^|\s|[^\p{L}\p{N}])(?:tác giả|tac gia|author|người tạo bài viết|người tạo|nguoi tao)(?:\s|$|[^\p{L}\p{N}])/iu.test(rawText);
-          
-          let isSameAuthor = false;
-          if (authorName && authorName.trim().length >= 2) {
-            const authorAnchor = el.querySelector('a[role="link"], a[href]');
-            const commentAuthorName = (authorAnchor?.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-            const targetAuthorNameNorm = authorName.replace(/\s+/g, ' ').trim().toLowerCase();
-            if (commentAuthorName && commentAuthorName === targetAuthorNameNorm) {
-              isSameAuthor = true;
-            }
-          }
+          // Lấy tên tác giả bình luận (bỏ qua thẻ avatar rỗng text)
+          const anchors = Array.from(el.querySelectorAll('a[role="link"], a[href], span[dir="auto"], strong, h3, h4'))
+            .map(a => (a.textContent || '').trim())
+            .filter(t => t.length > 0 && !/^(?:thích|like|phản hồi|reply|chia sẻ|share|\d+\s*(?:h|m|d|giờ|phút|ngày)|tác giả|author|người tạo)$/i.test(t));
 
-          if (hasAuthorBadge || isSameAuthor) {
-            const cleanCommentText = rawText
-              .replace(/\b(Tác giả|Author|Người tạo bài viết|Người tạo|Đã ghim|Pinned)\b/gi, '')
-              .replace(/\b(Thích|Phản hồi|Chia sẻ|Like|Reply|Share|\d+\s*(giờ|phút|ngày|h|m|d))\b/gi, '')
-              .replace(/\s+/g, ' ')
-              .trim();
+          const commentAuthor = anchors[0] || '';
+          const ariaLabel = el.getAttribute('aria-label') || '';
 
-            if (cleanCommentText.length > 5 && !authorCommentTexts.includes(cleanCommentText)) {
-              authorCommentTexts.push(cleanCommentText);
-            }
-          }
-        }
+          // Nhãn tác giả
+          const hasBadge = /(?:^|\s|[^\p{L}\p{N}])(?:tác giả|tac gia|author|người tạo bài viết|người tạo|nguoi tao)(?:\s|$|[^\p{L}\p{N}])/iu.test(rawText) ||
+            /(?:tác giả|author|người tạo)/i.test(ariaLabel);
 
-        if (authorCommentTexts.length > 0) {
-          mainText += '\n' + authorCommentTexts.slice(0, 3).join('\n');
+          rawComments.push({
+            author: commentAuthor,
+            ariaLabel,
+            hasBadge,
+            text: rawText
+          });
         }
 
         mainText = mainText
@@ -1768,13 +1854,60 @@ class SearchEngine extends EventEmitter {
             if (bgMatch) src = bgMatch[1];
           }
           if (src && (src.includes('scontent') || src.includes('fbcdn')) && 
-              !src.includes('rsrc.php') && !src.includes('emoji') && !src.includes('/static.xx/')) {
+              !src.includes('rsrc.php') && !src.includes('emoji') && !src.includes('/static.xx/') &&
+              !src.includes('p50x50') && !src.includes('s150x150') && !src.includes('p32x32') && !src.includes('p24x24')) {
+            const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+            if (rect && (rect.width < 100 || rect.height < 100)) {
+              continue;
+            }
             if (!imageUrls.includes(src)) imageUrls.push(src);
           }
         }
 
-        return { creationTime, metaTime, fullContent: mainText.trim(), imageUrls };
+        return { creationTime, metaTime, fullContent: mainText.trim(), imageUrls, rawComments };
       }, targetAuthorName);
+
+      // Lọc và trích xuất SĐT từ các bình luận chính chủ hoặc chỉ dẫn hotline/chủ quán
+      const verifiedCommentPhones = new Set();
+      const verifiedCommentTexts = [];
+
+      for (const c of (pageData.rawComments || [])) {
+        const matchRes = isAuthorOrOwnerCommentMatch({
+          commentAuthorName: c.author,
+          commentText: c.text,
+          targetAuthorName
+        });
+
+        let isAuthorMatch = matchRes.isMatch;
+        if (!isAuthorMatch && targetAuthorName) {
+          const normTarget = targetAuthorName.toLowerCase().trim();
+          if ((c.ariaLabel && c.ariaLabel.toLowerCase().includes(normTarget)) ||
+              (c.text && c.text.toLowerCase().trim().startsWith(normTarget))) {
+            isAuthorMatch = true;
+          }
+        }
+
+        if (isAuthorMatch && !isJobApplicantComment(c.text)) {
+          const pList = extractPhonesFromText(c.text);
+          if (pList.length > 0) {
+            pList.forEach(p => verifiedCommentPhones.add(p));
+            logger.info(`💬 [SĐT BÌNH LUẬN CHÍNH CHỦ] Tìm thấy SĐT [${pList.join(', ')}] từ bình luận của [${c.author || targetAuthorName}] (${matchRes.reason || 'verified'})`);
+          }
+          const cleanCommentText = c.text
+            .replace(/\b(Tác giả|Author|Người tạo bài viết|Người tạo|Đã ghim|Pinned)\b/gi, '')
+            .replace(/\b(Thích|Phản hồi|Chia sẻ|Like|Reply|Share|\d+\s*(giờ|phút|ngày|h|m|d))\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (cleanCommentText.length > 5 && !verifiedCommentTexts.includes(cleanCommentText)) {
+            verifiedCommentTexts.push(cleanCommentText);
+          }
+        }
+      }
+
+      let combinedFullContent = pageData.fullContent || rawFeedContent;
+      if (verifiedCommentTexts.length > 0) {
+        combinedFullContent += '\n' + verifiedCommentTexts.slice(0, 4).join('\n');
+      }
 
       let exactTimeSec = pageData.creationTime ? parseInt(pageData.creationTime, 10) : null;
       let formattedDate = '';
@@ -1807,8 +1940,13 @@ class SearchEngine extends EventEmitter {
         const year = d.getFullYear();
         formattedDate = `${hours}:${mins} ${day}/${month}/${year}`;
       } else {
-        const fallback = resolveTimeResult({ timeText: rawFeedTimeText, rawContent: pageData.fullContent || rawFeedContent, recencyHours });
-        return { ...fallback, imageUrls: pageData.imageUrls || [] };
+        const fallback = resolveTimeResult({ timeText: rawFeedTimeText, rawContent: combinedFullContent, recencyHours });
+        return { 
+          ...fallback, 
+          imageUrls: pageData.imageUrls || [], 
+          commentPhones: Array.from(verifiedCommentPhones),
+          fullContent: combinedFullContent
+        };
       }
 
       return { 
@@ -1821,7 +1959,8 @@ class SearchEngine extends EventEmitter {
         isWithin24h,
         withinRequestedWindow,
         formattedDate, 
-        fullContent: pageData.fullContent || rawFeedContent,
+        fullContent: combinedFullContent,
+        commentPhones: Array.from(verifiedCommentPhones),
         imageUrls: pageData.imageUrls || [] 
       };
     } catch (e) {
@@ -2099,6 +2238,70 @@ class SearchEngine extends EventEmitter {
                 confidence: 0.95,
                 verified: true
               };
+            }
+          }
+
+          // G1) Kiểm tra Tab About / Thông tin liên hệ cơ bản (Nơi Facebook lưu chính thức trường Số điện thoại đăng ký)
+          if (foundPhones.size === 0 && profileUrl) {
+            try {
+              let aboutUrl = '';
+              if (profileUrl.includes('/profile.php?id=')) {
+                aboutUrl = profileUrl.replace(/[?&]sk=[^&]+/i, '') + '&sk=about_contact_and_basic_info';
+              } else {
+                const cleanBase = profileUrl.split('?')[0].replace(/\/+$/, '');
+                aboutUrl = `${cleanBase}/about_contact_and_basic_info`;
+              }
+
+              logger.info(`🔍 [THÔNG TIN LIÊN HỆ PROFILE] Đang kiểm tra tab About của [${targetAuthorName || 'Tác giả'}]: ${aboutUrl}`);
+              await profilePage.goto(aboutUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+              await delay(1200);
+
+              const aboutData = await profilePage.evaluate(() => {
+                const contactNodes = Array.from(document.querySelectorAll(
+                  'div[data-pagelet*="ProfileAbout"], div[role="main"] div[dir="auto"], span[dir="ltr"], a[href^="tel:"], a[href*="zalo.me/"], a[href*="wa.me/"]'
+                ));
+                const texts = [];
+                const links = [];
+                for (const el of contactNodes) {
+                  if (el.tagName === 'A') {
+                    const href = el.getAttribute('href') || '';
+                    if (href) links.push(href);
+                  }
+                  const txt = (el.innerText || el.textContent || '').trim();
+                  if (txt.length > 3 && txt.length < 200) {
+                    texts.push(txt);
+                  }
+                }
+                return { texts, links };
+              });
+
+              if (aboutData) {
+                if (Array.isArray(aboutData.links)) {
+                  for (const l of aboutData.links) {
+                    extractPhonesFromText(l, { isOCR: false }).forEach(p => foundPhones.add(p));
+                  }
+                }
+                if (Array.isArray(aboutData.texts)) {
+                  for (const t of aboutData.texts) {
+                    extractPhonesFromText(t, { isOCR: false }).forEach(p => foundPhones.add(p));
+                  }
+                }
+
+                if (foundPhones.size > 0) {
+                  const phones = Array.from(foundPhones);
+                  logger.info(`✔ Tìm thấy ${phones.length} SĐT chính chủ từ tab Thông tin liên hệ cơ bản (About) của [${targetAuthorName || 'Tác giả'}]: [${phones.join(', ')}]`);
+                  return {
+                    phones,
+                    location: detectedLoc,
+                    locationResult,
+                    source: 'profile_about_contact',
+                    confidence: 0.98,
+                    verified: true
+                  };
+                }
+              }
+            } catch (aboutErr) {
+              logger.debug({ err: aboutErr.message }, 'Lỗi khi đọc tab About profile');
             }
           }
 

@@ -17,6 +17,7 @@ const state = {
     selectedKeys: new Set(),
     dateFilter: { query: '', fromDate: null, toDate: null, status: 'all', active: false },
     aiScoreFilter: 'all',
+    leadQualityFilter: 'all',
     pollingInterval: null,
     members: {
         isScanning: false,
@@ -494,6 +495,56 @@ function initEventListeners() {
     setupStatPillFilter('statPillDuplicate', 'Trùng lead');
     setupStatPillFilter('statPillNone', 'Không có nhu cầu');
 
+    function setupQualityPillFilter(pillId, targetQuality) {
+        const pill = document.getElementById(pillId);
+        if (!pill) return;
+
+        const triggerFilter = () => {
+            const current = state.leadQualityFilter || 'all';
+            const nextQuality = (current === targetQuality && targetQuality !== 'all') ? 'all' : targetQuality;
+            state.leadQualityFilter = nextQuality;
+            state.pagination.currentPage = 1;
+
+            const filterQualitySelect = document.getElementById('filterQualitySelect');
+            if (filterQualitySelect) {
+                filterQualitySelect.value = nextQuality;
+            }
+
+            const btnReset = document.getElementById('btnResetDateFilter');
+            if (btnReset) {
+                btnReset.style.display = (nextQuality !== 'all' || (state.dateFilter.status && state.dateFilter.status !== 'all') || (state.aiScoreFilter && state.aiScoreFilter !== 'all') || state.dateFilter.query || state.dateFilter.fromDate || state.dateFilter.toDate) ? 'inline-flex' : 'none';
+            }
+
+            renderTable();
+        };
+
+        pill.addEventListener('click', triggerFilter);
+        pill.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                triggerFilter();
+            }
+        });
+    }
+
+    setupQualityPillFilter('statPillHighQuality', 'high');
+    setupQualityPillFilter('statPillReviewQuality', 'review');
+
+    const filterQualitySelect = document.getElementById('filterQualitySelect');
+    if (filterQualitySelect) {
+        filterQualitySelect.addEventListener('change', (e) => {
+            state.leadQualityFilter = e.target.value;
+            state.pagination.currentPage = 1;
+
+            const btnReset = document.getElementById('btnResetDateFilter');
+            if (btnReset) {
+                btnReset.style.display = (e.target.value !== 'all' || (state.dateFilter.status && state.dateFilter.status !== 'all') || (state.aiScoreFilter && state.aiScoreFilter !== 'all') || state.dateFilter.query || state.dateFilter.fromDate || state.dateFilter.toDate) ? 'inline-flex' : 'none';
+            }
+
+            renderTable();
+        });
+    }
+
     const filterAiScoreSelect = document.getElementById('filterAiScoreSelect');
     if (filterAiScoreSelect) {
         filterAiScoreSelect.addEventListener('change', (e) => {
@@ -502,7 +553,7 @@ function initEventListeners() {
             
             const btnReset = document.getElementById('btnResetDateFilter');
             if (btnReset) {
-                btnReset.style.display = (e.target.value !== 'all' || (state.dateFilter.status && state.dateFilter.status !== 'all') || state.dateFilter.query || state.dateFilter.fromDate || state.dateFilter.toDate) ? 'inline-flex' : 'none';
+                btnReset.style.display = (e.target.value !== 'all' || (state.leadQualityFilter && state.leadQualityFilter !== 'all') || (state.dateFilter.status && state.dateFilter.status !== 'all') || state.dateFilter.query || state.dateFilter.fromDate || state.dateFilter.toDate) ? 'inline-flex' : 'none';
             }
             
             renderTable();
@@ -788,7 +839,15 @@ function getFilteredAndSortedResults() {
         });
     }
 
-    // 3. Filter by AI Score (all / high / medium)
+    // 3. Filter by Lead Quality (all / high / review)
+    const selectedQuality = state.leadQualityFilter || 'all';
+    if (selectedQuality === 'high') {
+        list = list.filter(item => item.leadQuality === 'high' || item.decision === 'ACCEPTED' || (typeof item.aiScore === 'number' && item.aiScore >= 60));
+    } else if (selectedQuality === 'review') {
+        list = list.filter(item => item.leadQuality === 'review' || item.decision === 'REVIEW' || (typeof item.aiScore === 'number' && item.aiScore < 60));
+    }
+
+    // 4. Filter by AI Score (all / high / medium)
     const selectedAiScore = state.aiScoreFilter || 'all';
     if (selectedAiScore === 'high') {
         list = list.filter(item => (typeof item.aiScore === 'number' ? item.aiScore >= 80 : false));
@@ -796,7 +855,7 @@ function getFilteredAndSortedResults() {
         list = list.filter(item => (typeof item.aiScore === 'number' ? (item.aiScore >= 50 && item.aiScore < 80) : false));
     }
 
-    // 4. Filter by Date & Time Range
+    // 5. Filter by Date & Time Range
     if (state.dateFilter.active && (state.dateFilter.fromDate || state.dateFilter.toDate)) {
         let fromTs = 0;
         let toTs = Infinity;
@@ -828,10 +887,11 @@ function handleApplyDateFilter() {
     const fromVal = document.getElementById('filterFromDate').value;
     const toVal = document.getElementById('filterToDate').value;
     const statusVal = document.getElementById('filterStatusSelect') ? document.getElementById('filterStatusSelect').value : 'all';
+    const qualityVal = document.getElementById('filterQualitySelect') ? document.getElementById('filterQualitySelect').value : 'all';
     const aiScoreVal = document.getElementById('filterAiScoreSelect') ? document.getElementById('filterAiScoreSelect').value : 'all';
     const queryVal = document.getElementById('filterKeywordInput') ? document.getElementById('filterKeywordInput').value.trim() : '';
 
-    if (!fromVal && !toVal && statusVal === 'all' && aiScoreVal === 'all' && !queryVal) {
+    if (!fromVal && !toVal && statusVal === 'all' && qualityVal === 'all' && aiScoreVal === 'all' && !queryVal) {
         showToast('Vui lòng nhập từ khóa, thời gian hoặc chọn bộ lọc để lọc', 'warning');
         return;
     }
@@ -839,6 +899,7 @@ function handleApplyDateFilter() {
     state.dateFilter.fromDate = fromVal;
     state.dateFilter.toDate = toVal;
     state.dateFilter.status = statusVal;
+    state.leadQualityFilter = qualityVal;
     state.dateFilter.query = queryVal;
     state.aiScoreFilter = aiScoreVal;
     state.dateFilter.active = true;
@@ -856,12 +917,15 @@ function handleResetDateFilter() {
     document.getElementById('filterToDate').value = '';
     const filterStatusSelect = document.getElementById('filterStatusSelect');
     if (filterStatusSelect) filterStatusSelect.value = 'all';
+    const filterQualitySelect = document.getElementById('filterQualitySelect');
+    if (filterQualitySelect) filterQualitySelect.value = 'all';
     const filterAiScoreSelect = document.getElementById('filterAiScoreSelect');
     if (filterAiScoreSelect) filterAiScoreSelect.value = 'all';
     const filterKeywordInput = document.getElementById('filterKeywordInput');
     if (filterKeywordInput) filterKeywordInput.value = '';
 
     state.dateFilter = { query: '', fromDate: null, toDate: null, status: 'all', active: false };
+    state.leadQualityFilter = 'all';
     state.aiScoreFilter = 'all';
     
     const btnReset = document.getElementById('btnResetDateFilter');
@@ -1309,6 +1373,10 @@ async function handleStartSearch(e) {
     const timeRange = document.getElementById('selTimeRange')?.value || '24h';
     const recentPosts = (timeRange === '24h');
     const requirePhoneOnly = document.getElementById('chkRequirePhoneOnly')?.checked || false;
+    const excludeRealEstate = document.getElementById('chkExcludeRealEstate')?.checked || false;
+    const excludeHotels = document.getElementById('chkExcludeHotels')?.checked || false;
+    const excludeBeautySpa = document.getElementById('chkExcludeBeautySpa')?.checked || false;
+    const excludeEventGifts = document.getElementById('chkExcludeEventGifts')?.checked || false;
 
     if (!keyword) {
         showToast('Vui lòng nhập từ khóa tìm kiếm', 'warning');
@@ -1321,7 +1389,17 @@ async function handleStartSearch(e) {
     const payload = {
         keyword,
         maxPosts,
-        filters: { recentPosts, timeRange, datePosted, excludeKeywords, requirePhoneOnly },
+        filters: { 
+            recentPosts, 
+            timeRange, 
+            datePosted, 
+            excludeKeywords, 
+            requirePhoneOnly,
+            excludeRealEstate,
+            excludeHotels,
+            excludeBeautySpa,
+            excludeEventGifts
+        },
         cookie: clientCookie || undefined,
         existingKeys: existingSignatures.keys,
         clientId: getClientId()
@@ -1575,7 +1653,7 @@ async function fetchResultsHistory() {
     } catch (e) {}
 }
 
-let _prevStatCounts = { total: -1, new: -1, lead: -1, duplicate: -1, none: -1 };
+let _prevStatCounts = { total: -1, highQuality: -1, reviewQuality: -1, new: -1, lead: -1, duplicate: -1, none: -1 };
 
 /**
  * Cập nhật số liệu thống kê Realtime & Trạng thái Active trên các huy hiệu (Stat Pills)
@@ -1587,8 +1665,14 @@ function updateStatPills() {
     let statLeadCount = 0;
     let statDuplicateCount = 0;
     let statNoneCount = 0;
+    let statHighQualityCount = 0;
+    let statReviewQualityCount = 0;
 
     allStoredResults.forEach(item => {
+        const isHigh = item.leadQuality === 'high' || item.decision === 'ACCEPTED' || (typeof item.aiScore === 'number' && item.aiScore >= 60);
+        if (isHigh) statHighQualityCount++;
+        else statReviewQualityCount++;
+
         const s = item.status || 'Mới tạo';
         if (s === 'Mới tạo') statNewCount++;
         else if (s === 'Đã nhập lead') statLeadCount++;
@@ -1599,6 +1683,8 @@ function updateStatPills() {
 
     const currentCounts = {
         total: statTotalCount,
+        highQuality: statHighQualityCount,
+        reviewQuality: statReviewQualityCount,
         new: statNewCount,
         lead: statLeadCount,
         duplicate: statDuplicateCount,
@@ -1606,6 +1692,7 @@ function updateStatPills() {
     };
 
     const currentFilterStatus = state.dateFilter.status || 'all';
+    const currentQuality = state.leadQualityFilter || 'all';
 
     function setPillUI(elId, count, labelHtml, countKey, isActive) {
         const el = document.getElementById(elId);
@@ -1627,7 +1714,9 @@ function updateStatPills() {
         }
     }
 
-    setPillUI('statPillTotal', statTotalCount, `📊 Tổng: <strong>${statTotalCount}</strong> bài`, 'total', currentFilterStatus === 'all');
+    setPillUI('statPillTotal', statTotalCount, `📊 Tổng: <strong>${statTotalCount}</strong> bài`, 'total', currentFilterStatus === 'all' && currentQuality === 'all');
+    setPillUI('statPillHighQuality', statHighQualityCount, `🟢 <strong>${statHighQualityCount}</strong> Cao`, 'highQuality', currentQuality === 'high');
+    setPillUI('statPillReviewQuality', statReviewQualityCount, `🟡 <strong>${statReviewQualityCount}</strong> Xem lại`, 'reviewQuality', currentQuality === 'review');
     setPillUI('statPillNew', statNewCount, `🆕 <strong>${statNewCount}</strong> Mới`, 'new', currentFilterStatus === 'Mới tạo');
     setPillUI('statPillLead', statLeadCount, `📥 <strong>${statLeadCount}</strong> Lead`, 'lead', currentFilterStatus === 'Đã nhập lead');
     setPillUI('statPillDuplicate', statDuplicateCount, `⚠️ <strong>${statDuplicateCount}</strong> Trùng`, 'duplicate', currentFilterStatus === 'Trùng lead');
@@ -1740,6 +1829,12 @@ function renderTable() {
 
         const statusVal = item.status || 'Mới tạo';
 
+        const isHighLead = item.leadQuality === 'high' || item.decision === 'ACCEPTED' || (typeof item.aiScore === 'number' && item.aiScore >= 60);
+        const qualityBadgeText = item.qualityBadge || (isHighLead ? 'Tiềm năng cao' : 'Cần xem lại');
+        const qualityBadge = isHighLead
+            ? `<span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); font-weight: 500; font-size: 11px; padding: 3px 7px; border-radius: 4px; white-space: nowrap;" title="${escapeHtml(item.qualityReason || item.aiReason || 'Khách hàng tiềm năng hợp lệ')}">🟢 ${escapeHtml(qualityBadgeText)}</span>`
+            : `<span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); font-weight: 500; font-size: 11px; padding: 3px 7px; border-radius: 4px; white-space: nowrap;" title="${escapeHtml(item.qualityReason || item.aiReason || 'Cần xem xét thêm thông tin')}">🟡 ${escapeHtml(qualityBadgeText)}</span>`;
+
         tr.innerHTML = `
             <td class="text-center">
                 <input type="checkbox" class="row-checkbox custom-checkbox" data-key="${escapeHtml(key)}" ${isChecked ? 'checked' : ''}>
@@ -1753,6 +1848,7 @@ function renderTable() {
                     <option value="Không có nhu cầu" ${statusVal === 'Không có nhu cầu' ? 'selected' : ''}>❌ Không có nhu cầu</option>
                 </select>
             </td>
+            <td class="text-center">${qualityBadge}</td>
             <td><strong>${escapeHtml(item.authorName || 'N/A')}</strong></td>
             <td>${locationDisplay}</td>
             <td>${phoneDisplay}</td>
@@ -1876,7 +1972,7 @@ async function handleExport() {
         const response = await fetch('/api/export/excel-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ results: exportData, exportConfig })
+            body: JSON.stringify({ results: exportData, exportConfig, includeReview: true })
         });
 
         if (!response.ok) {

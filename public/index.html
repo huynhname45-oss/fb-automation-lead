@@ -209,21 +209,48 @@
                                      </div>
                                      
                                      <div class="filter-col" style="min-width: 140px;">
-                                         <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
-                                         <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000" style="width: 100%;">
+                                          <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
+                                          <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000" style="width: 100%;">
+                                      </div>
+                                 </div>
+
+                                 <!-- Tùy chọn Loại trừ Ngành đặc thù (Mặc định không chọn để tránh bỏ sót lead) -->
+                                 <div class="filter-industry-exclusions mb-4 p-3" style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.12); border-radius: 8px;">
+                                     <div class="d-flex align-center justify-between flex-wrap gap-2 mb-2">
+                                         <span class="text-xs font-semibold text-muted" style="text-transform: uppercase; letter-spacing: 0.5px;">
+                                             🛡️ Tùy chọn Loại trừ Ngành (Bỏ trống = Lấy toàn bộ ngành không bỏ sót):
+                                         </span>
                                      </div>
-                                </div>
-                                
-                                <div class="action-buttons mt-4">
-                                    <button type="submit" class="btn btn-purple-full" id="btnSearch">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                        Bắt đầu Tìm & Crawl SĐT Thành Công
-                                    </button>
-                                    <button type="button" class="btn btn-danger w-full" id="btnStopSearch" style="display: none;">
-                                        Dừng lại
-                                    </button>
-                                </div>
-                            </form>
+                                     <div class="d-flex align-center flex-wrap gap-3">
+                                         <label class="checkbox-label text-xs" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                             <input type="checkbox" id="chkExcludeRealEstate" class="custom-checkbox">
+                                             <span>Bất động sản / Phòng trọ</span>
+                                         </label>
+                                         <label class="checkbox-label text-xs" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                             <input type="checkbox" id="chkExcludeHotels" class="custom-checkbox">
+                                             <span>Khách sạn / Homestay</span>
+                                         </label>
+                                         <label class="checkbox-label text-xs" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                             <input type="checkbox" id="chkExcludeBeautySpa" class="custom-checkbox">
+                                             <span>Spa / Thẩm mỹ / Nail</span>
+                                         </label>
+                                         <label class="checkbox-label text-xs" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                             <input type="checkbox" id="chkExcludeEventGifts" class="custom-checkbox">
+                                             <span>Giỏ quà / Hoa sự kiện</span>
+                                         </label>
+                                     </div>
+                                 </div>
+                                 
+                                 <div class="action-buttons mt-4">
+                                     <button type="submit" class="btn btn-purple-full" id="btnSearch">
+                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                         Bắt đầu Tìm & Crawl SĐT Thành Công
+                                     </button>
+                                     <button type="button" class="btn btn-danger w-full" id="btnStopSearch" style="display: none;">
+                                         Dừng lại
+                                     </button>
+                                 </div>
+                             </form>
                             
                             <div class="search-progress-container mt-4" id="searchProgressSection" style="display: none;">
                                 <div class="progress-info">
@@ -248,6 +275,8 @@
                                     </div>
                                     <div class="stat-badge-group">
                                         <span class="stat-pill stat-pill-total" id="statPillTotal" role="button" tabindex="0" title="Bấm để xem toàn bộ danh sách bài viết">📊 Tổng: <strong>0</strong> bài</span>
+                                        <span class="stat-pill stat-pill-lead" id="statPillHighQuality" role="button" tabindex="0" style="background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.3); color: #4ade80;" title="Bấm để lọc bài Tiềm năng cao">🟢 <strong>0</strong> Cao</span>
+                                        <span class="stat-pill stat-pill-duplicate" id="statPillReviewQuality" role="button" tabindex="0" style="background: rgba(234, 179, 8, 0.15); border-color: rgba(234, 179, 8, 0.3); color: #fde047;" title="Bấm để lọc bài Cần xem lại">🟡 <strong>0</strong> Xem lại</span>
                                         <span class="stat-pill stat-pill-new" id="statPillNew" role="button" tabindex="0" title="Bấm để lọc nhanh bài Mới tạo">🆕 <strong>0</strong> Mới</span>
                                         <span class="stat-pill stat-pill-lead" id="statPillLead" role="button" tabindex="0" title="Bấm để lọc nhanh bài Đã nhập lead">📥 <strong>0</strong> Lead</span>
                                         <span class="stat-pill stat-pill-duplicate" id="statPillDuplicate" role="button" tabindex="0" title="Bấm để lọc nhanh bài Trùng lead">⚠️ <strong>0</strong> Trùng</span>
@@ -261,6 +290,15 @@
                                 <!-- Dòng 3: Khung bộ lọc (Tìm kiếm, Trạng thái, Ngày giờ, Lọc) -->
                                 <div class="date-filter-container d-flex align-center wrap-gap">
                                     <input type="text" id="filterKeywordInput" class="input-date-sm" placeholder="🔎 Tìm SĐT, tên tác giả..." style="width: 210px;" title="Tìm kiếm nhanh theo Số điện thoại hoặc Tên người đăng">
+
+                                    <div class="d-flex align-center gap-2">
+                                        <span class="text-xs text-muted">Chất lượng:</span>
+                                        <select id="filterQualitySelect" class="input-date-sm" title="Lọc theo phân loại chất lượng lead">
+                                            <option value="all">Tất cả chất lượng</option>
+                                            <option value="high">🟢 Tiềm năng cao</option>
+                                            <option value="review">🟡 Cần xem lại</option>
+                                        </select>
+                                    </div>
 
                                     <div class="d-flex align-center gap-2">
                                         <span class="text-xs text-muted">Trạng thái:</span>
@@ -322,7 +360,8 @@
                                                     <input type="checkbox" id="selectAllCheckbox" class="custom-checkbox" title="Chọn tất cả bài viết">
                                                 </th>
                                                 <th width="45px" class="text-center">STT</th>
-                                                <th width="140px">TRẠNG THÁI</th>
+                                                <th width="130px">TRẠNG THÁI</th>
+                                                <th width="120px">CHẤT LƯỢNG</th>
                                                 <th width="160px">TÊN NGƯỜI ĐĂNG</th>
                                                 <th width="120px">TỈNH THÀNH</th>
                                                 <th width="130px">SỐ ĐIỆN THOẠI</th>

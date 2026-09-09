@@ -283,23 +283,17 @@ export const CONGRATULATORY_PATTERNS = [
 export function checkCongratulatoryLead(post = {}) {
   const content = `${post.content || ''}`.normalize('NFKC');
 
-  // Exemption: If post contains strong FIRST-PERSON SHOP OWNER signals, it is NOT a guest post!
-  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|chúng\s*mình|tụi\s*mình|nhà\s*em|tôi)|tiệm\s*(?:em|mình|chúng\s*mình)|shop\s*(?:em|mình)|chúng\s*mình\s*(?:mở|bán|khai\s*trương)|quán\s*chính\s*thức|menu|giảm\s*(?:\d+%)|khuyến\s*mãi|ưu\s*đãi|\bgọi\s*ngay\b|đặt\s*bàn|kính\s*mời|mời\s*mọi\s*người|mời\s*cả\s*nhà|địa\s*chỉ\s*quán|hotline|sđt|sdt)/iu.test(content);
+  // Exemption: Strong shop owner / business signals (pricing, menu, discounts, address, gratitude, invitations)
+  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|chúng\s*mình|tụi\s*mình|nhà\s*em|tôi)|tiệm\s*(?:em|mình|chúng\s*mình)|shop\s*(?:em|mình)|chúng\s*mình\s*(?:mở|bán|khai\s*trương)|quán\s*chính\s*thức|menu|thực\s*đơn|bảng\s*giá|đồng\s*giá|giảm\s*(?:\d+%)|khuyến\s*mãi|ưu\s*đãi|\bgọi\s*ngay\b|đặt\s*bàn|kính\s*mời|mời\s*mọi\s*người|mời\s*cả\s*nhà|thân\s*mời|ghé\s*quán|ghé\s*tiệm|ủng\s*hộ\s*quán|cảm\s*ơn\s*(?:mọi\s*người|cả\s*nhà|quý\s*khách|anh\s*chị|bạn\s*bè)|địa\s*chỉ\s*(?:quán|tiệm|cửa\s*hàng|ở|tại)?|hotline|sđt|sdt|ship\s*tận\s*nơi|order)/iu.test(content);
 
+  // If there are shop owner signals, it is definitive that the post is from the shop owner/seller, NOT a guest
   if (isShopOwnerSignal) {
-    const isExplicitGuest = /(?:^|[\s,;:.!?-])(?:dự lễ|tham dự lễ|đi ăn|đi tiệc|ăn tiệc|đi chúc mừng|đến chúc mừng|qua chúc mừng)\s+(?:lễ\s+)?khai trương/iu.test(content) ||
-      /(?:^|[\s,;:.!?-])(?:chúc|chuc)\s+(?:thầy|cô|anh|chị|sếp|bác|chú|dì)\s+[^\n.!?]{0,30}(?:khai trương|hồng phát)/iu.test(content);
-    if (!isExplicitGuest) {
-      return { isCongratulatory: false };
-    }
+    return { isCongratulatory: false };
   }
 
   for (const regex of CONGRATULATORY_PATTERNS) {
     const m = content.match(regex);
     if (m) {
-      if (isShopOwnerSignal && /^(?:chúc mừng khai trương|khai trương hồng phát)$/i.test(m[0].trim())) {
-        continue;
-      }
       return { isCongratulatory: true, reason: `Lời chúc mừng của khách: "${m[0].trim()}"` };
     }
   }
@@ -323,13 +317,16 @@ export const EVENT_GIFT_SERVICES_PATTERNS = [
 
   // 3. Dịch vụ hoa: tiệm hoa, hoa sáp, hoa viếng, nhận đặt/giao/sỉ hoa khai trương, đào tạo cắm hoa
   /(?:^|[\s,;:.!?-])(?:đặt|dat|bán|ban|sỉ|si|giao|ship|cung\s*cấp|chuyên|mẫu|mau)\s+(?:hoa\s*khai\s*trương|kệ\s*hoa|lẵng\s*hoa|giỏ\s*hoa|bó\s*hoa)/iu,
-  /(?:^|[\s,;:.!?-])(?:hoa\s*viếng|hoa\s*vieng|hoa\s*chia\s*buồn|hoa\s*chia\s*buon|hoa\s*sáp|hoa\s*sap|hoa\s*tiền|hoa\s*tien|hoa\s*hội\s*nghị|hoa\s*hoi\s*nghi)(?:[\s,;:.!?-]|$)/iu,
+  /(?:^|[\s,;:.!?-])(?:hoa\s*viếng|hoa\s*vieng|hoa\s*chia\s*buồn|hoa\s*chia\s*buon|hoa\s*sáp|hoa\s*sap|hoa\s*tiền|hoa\s*tien|hoa\s*hội\s*nghị|hoa\s*hoi\s*nghi|hoa\s*tỏ\s*tình|hoa\s*tốt\s*nghiệp|hoa\s*kỷ\s*yếu|hoa\s*bánh\s*kẹo|bó\s*hoa\s*sáp|bó\s*hoa\s*tiền)(?:[\s,;:.!?-]|$)/iu,
   /(?:^|[\s,;:.!?-])(?:đào\s*tạo\s*học\s*viên|dao\s*tao\s*hoc\s*vien|dạy\s*cắm\s*hoa|day\s*cam\s*hoa|học\s*cắm\s*hoa|hoc\s*cam\s*hoa)/iu,
   /(?:^|[\s,;:.!?-])(?:shop\s*hoa|tiệm\s*hoa|tiem\s*hoa)\s+(?:tươi|tuoi|sáp|sap)?(?:[\s,;:.!?-]|$)/iu,
 
   // 4. In thiệp mời, phong bì, kẹp file, ấn phẩm sự kiện
   /(?:^|[\s,;:.!?-])(?:in|in\s*ấn)\s+(?:thiệp\s*mời|thiep\s*moi|thiệp\s*cưới|thiep\s*cuoi|phong\s*bì|phong\s*bi|kẹp\s*file|kep\s*file|voucher|tờ\s*rơi|to\s*roi|ấn\s*phẩm|an\s*pham)/iu,
-  /(?:^|[\s,;:.!?-])in\s+thiệp\s+mời\s+(?:sự\s+kiện|khai\s+trương|hội\s+nghị)/iu
+  /(?:^|[\s,;:.!?-])in\s+thiệp\s+mời\s+(?:sự\s+kiện|khai\s+trương|hội\s+nghị)/iu,
+
+  // 5. Múa lân sư rồng khai trương, âm thanh ánh sáng, backdrop, sân khấu
+  /(?:^|[\s,;:.!?-])(?:đoàn\s*lân|đội\s*lân|múa\s*lân|mua\s*lan|lân\s*sư\s*rồng|trống\s*hội|thuê\s*múa\s*lân|dịch\s*vụ\s*múa\s*lân|âm\s*thanh\s*ánh\s*sáng|thuê\s*loa\s*kéo|cho\s*thuê\s*rạp|backdrop\s*khai\s*trương|thi\s*công\s*backdrop)/iu
 ];
 
 export function checkEventGiftServiceLead(post = {}) {
@@ -337,15 +334,23 @@ export function checkEventGiftServiceLead(post = {}) {
   const author = `${post.authorName || ''}`.normalize('NFKC');
   const rawText = `${author} ${content}`;
 
-  // Exemption: Quán ăn / cafe / cửa hàng bán lẻ được tặng hoa hoặc cảm ơn hoa chúc mừng
+  // Exemption 1: Quán ăn / cafe / cửa hàng bán lẻ được tặng hoa hoặc cảm ơn hoa chúc mừng
   const isReceivingFlowers = /(?:cảm\s*ơn|cam\s*on|nhận\s*được|ngập\s*tràn|rực\s*rỡ|nhiều|tặng|tri\s*ân)\s+[^\n.!?]{0,30}(?:lẵng|kệ|giỏ|hoa|bó)/iu.test(content) ||
     /(?:quán\s*(?:em|mình)|tiệm\s*(?:em|mình)|bún|phở|cơm|cafe|cà\s*phê|trà\s*sữa|nướng|lẩu|ăn\s*vặt|bánh\s*mì|nhậu)/iu.test(author);
+
+  // Exemption 2: Quán F&B / bán lẻ khai trương có tiết mục múa lân biểu diễn rộn ràng
+  const isStoreHostingLionDance = !/(?:đoàn\s*lân|đội\s*lân|dịch\s*vụ\s*múa\s*lân|cho\s*thuê\s*múa\s*lân|nhận\s*show)/iu.test(author) &&
+    /(?:quán|tiệm|bún|phở|cơm|cafe|cà\s*phê|trà\s*sữa|nướng|lẩu|ăn\s*vặt|bánh\s*mì|nhậu|bida|karaoke)/iu.test(rawText) &&
+    /(?:có\s*(?:tiết\s*mục\s+|chương\s*trình\s+|biểu\s*diễn\s+)?múa\s*lân|đón\s*lân|xem\s*múa\s*lân|khai\s*mạc\s+rộn\s*ràng)/iu.test(content);
 
   for (const regex of EVENT_GIFT_SERVICES_PATTERNS) {
     const m = rawText.match(regex);
     if (m) {
       const matchedStr = m[0].trim();
       if (isReceivingFlowers && /(?:lẵng\s*hoa|kệ\s*hoa|giỏ\s*hoa|hoa\s*khai\s*trương|bó\s*hoa)/i.test(matchedStr)) {
+        continue;
+      }
+      if (isStoreHostingLionDance && /(?:múa\s*lân|lân\s*sư\s*rồng|trống\s*hội)/i.test(matchedStr)) {
         continue;
       }
       return { isEventGiftService: true, reason: `Dịch vụ quà tặng / giỏ quả / hoa / decor / in ấn sự kiện: "${matchedStr}"` };
@@ -404,8 +409,26 @@ export function checkForeignLead(post = {}) {
     }
   }
 
+  // 1.1 Exemption: If post has a verified Vietnamese phone number (09x, 03x, 07x, 08x, 05x, or +84),
+  // it is definitively a local Vietnamese business! Food origins (Mì cay Hàn Quốc, Trà sữa Đài Loan, Bò Mỹ, Lẩu Thái...) are NOT foreign!
+  const hasVnPhone = phones.some(p => {
+    const digits = String(p).replace(/[^\d]/g, '');
+    return /^(?:03|05|07|08|09)\d{8}$/.test(digits) || /^84(?:3|5|7|8|9)\d{8}$/.test(digits);
+  });
+
   const rawText = `${post.authorName || ''} ${post.content || ''} ${post.location || ''} ${post.groupName || ''}`;
   if (!rawText.trim()) return { isForeign: false };
+
+  // Check if post is explicitly located in an overseas country/city or for overseas diaspora
+  const isExplicitOverseas = /(?:tại|ở|bên|khu\s*vực|địa\s*chỉ)\s+(?:tokyo|osaka|nagoya|fukuoka|shin-okubo|nhật\s*bản|seoul|busan|hàn\s*quốc|đài\s*loan|taiwan|đài\s*bắc|đài\s*trung|cao\s*hùng|california|houston|texas|sydney|melbourne|bangkok|thái\s*lan|campuchia|phnom\s*penh)|\b(?:kiều\s*bào|việt\s*kiều|xklđ|tu\s*nghiệp\s*sinh|line\s*id|id\s*line|kakaotalk)\b/i.test(rawText);
+
+  // If has VN phone or local VN address signals, and NOT an explicit overseas location, it is a local Vietnamese business!
+  // Food origins (Mì cay Hàn Quốc, Trà sữa Đài Loan, Bò Mỹ, Lẩu Thái...) are NOT foreign!
+  const hasVnAddressSignal = /(?:hà\s*nội|ha\s*noi|hồ\s*chí\s*minh|ho\s*chi\s*minh|tphcm|sài\s*gòn|sai\s*gon|đà\s*nẵng|da\s*nang|hải\s*phòng|hai\s*phong|cần\s*thơ|can\s*tho|bình\s*dương|binh\s*duong|đồng\s*nai|dong\s*nai|cầu\s*giấy|cau\s*giay|ba\s*đình|đống\s*đa|thanh\s*xuân|hoàn\s*kiếm|hai\s*bà\s*trưng|hoàng\s*mai|tây\s*hồ|bắc\s*từ\s*liêm|nam\s*từ\s*liêm|quận\s*\d+|phường|quận|huyện|đường|phố|ngõ|hẻm|địa\s*chỉ|ship\s*toàn\s*quốc)/i.test(rawText);
+
+  if (!isExplicitOverseas && (hasVnPhone || hasVnAddressSignal)) {
+    return { isForeign: false };
+  }
 
   // 2. Check foreign patterns
   for (const regex of FOREIGN_PATTERNS) {
@@ -413,12 +436,12 @@ export function checkForeignLead(post = {}) {
     if (m) {
       // Exclude food/product origin phrases like "bò úc", "thịt bò mỹ", "trà sữa đài loan", "lẩu thái", "mỹ phẩm hàn quốc"
       const matched = m[0].trim();
-      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(matched)) {
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị|ẩm\s*thực|món|quán|tiệm|mì\s*cay)\s+(?:úc|mỹ|nhật|hàn|đài)/i.test(matched)) {
         continue;
       }
       const idx = m.index || 0;
       const preText = rawText.substring(Math.max(0, idx - 30), idx).toLowerCase();
-      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị|gốc)\s*$/i.test(preText.trim())) {
+      if (/(?:bò|thịt|nho|táo|cam|sữa|trà\s*sữa|mỹ\s*phẩm|quần\s*áo|đồ|hàng|tiêu\s*chuẩn|phong\s*cách|chuẩn\s*vị|hương\s*vị|gốc|món|ẩm\s*thực|mì\s*cay)\s*$/i.test(preText.trim())) {
         continue;
       }
       if (/(?:lẩu|trà|nem|gỏi|súp|món|ẩm\s*thực|chua\s*cay|chuẩn\s*vị|hương\s*vị)\s+thái(?:\s*lan)?/i.test(rawText)) {
@@ -461,10 +484,28 @@ export class LeadFilter {
     if (foreignCheck.isForeign) {
       return {
         qualified: false,
+        leadQuality: 'review',
+        qualityBadge: 'Cần xem lại',
         category: 'foreign_location',
         matchedTerm: foreignCheck.reason,
-        reason: `Khách hàng / Cửa hàng ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi triển khai POS tại Việt Nam.`
+        reason: `Khách hàng / Cửa hàng ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi kinh doanh tại Việt Nam.`
       };
+    }
+
+    // 0.4. Event & Supporting Services Check (Bán hoa sáp, giỏ quà, hoa khai trương, decor, in ấn, múa lân)
+    // Always exclude by default when excludeEventGifts !== false (or excludeUnsupportedIndustries is true)
+    if (config.excludeEventGifts !== false || config.excludeUnsupportedIndustries === true) {
+      const eventGiftCheck = checkEventGiftServiceLead(post);
+      if (eventGiftCheck.isEventGiftService) {
+        return {
+          qualified: false,
+          leadQuality: 'rejected',
+          qualityBadge: 'Loại trừ',
+          category: 'event_gift_service',
+          matchedTerm: eventGiftCheck.reason,
+          reason: `Dịch vụ phụ trợ / Bán hoa khai trương / Giỏ quà / Decor / Múa lân (${eventGiftCheck.reason}).`
+        };
+      }
     }
 
     // 0.5. Guest / Congratulatory Post Check (Khách mời / Bạn bè chúc mừng khai trương)
@@ -472,6 +513,8 @@ export class LeadFilter {
     if (congratCheck.isCongratulatory) {
       return {
         qualified: false,
+        leadQuality: 'review',
+        qualityBadge: 'Cần xem lại',
         category: 'guest_congratulations',
         matchedTerm: congratCheck.reason,
         reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`
@@ -483,9 +526,11 @@ export class LeadFilter {
     if (industrialCheck.isIndustrial) {
       return {
         qualified: false,
+        leadQuality: 'review',
+        qualityBadge: 'Cần xem lại',
         category: 'industrial_manufacturing',
         matchedTerm: industrialCheck.reason,
-        reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (${industrialCheck.reason}), không phải cửa hàng F&B/Bán lẻ SMB.`
+        reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (${industrialCheck.reason}).`
       };
     }
 
@@ -495,8 +540,12 @@ export class LeadFilter {
     const entities = this.getEntities();
 
     const excludeEnterprise = config.excludeEnterpriseChains !== false;
-    const excludeCompetitors = config.excludePosCompetitors !== false;
-    const excludeUnsupported = config.excludeUnsupportedIndustries !== false;
+    const excludeCompetitors = config.excludePosCompetitors === true;
+    const excludeRealEstate = config.excludeRealEstate === true;
+    const excludeHotels = config.excludeHotels === true;
+    const excludeBeautySpa = config.excludeBeautySpa === true;
+    const excludeEventGifts = config.excludeEventGifts === true;
+    const excludeUnsupported = config.excludeUnsupportedIndustries === true;
     const requireMobileOnly = config.requireMobilePhoneOnly !== false;
 
     // 1. Enterprise / Large Chain Check (Highest Priority)
@@ -505,9 +554,11 @@ export class LeadFilter {
       if (matchedChain) {
         return {
           qualified: false,
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
           category: 'enterprise_chain',
           matchedTerm: matchedChain.term,
-          reason: `Chuỗi lớn / Doanh nghiệp quy mô lớn: "${matchedChain.term}"`
+          reason: `Nghi vấn chuỗi lớn / Doanh nghiệp quy mô lớn: "${matchedChain.term}"`
         };
       }
     }
@@ -518,6 +569,8 @@ export class LeadFilter {
       if (matchedCompetitor) {
         return {
           qualified: false,
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
           category: 'pos_competitor',
           matchedTerm: matchedCompetitor.term,
           reason: `Đối thủ phần mềm POS / Bài bán hàng đối thủ: "${matchedCompetitor.term}"`
@@ -525,34 +578,82 @@ export class LeadFilter {
       }
     }
 
-    // 3. Unsupported Industry Check (Hotel, Resort, Real Estate, Hospitals, Gifts, Event Decor, Florals, Printing...)
-    if (excludeUnsupported) {
-      const eventGiftCheck = checkEventGiftServiceLead(post);
-      if (eventGiftCheck.isEventGiftService) {
+    // 3. Granular Industry Check (Only exclude when user explicitly enabled corresponding toggle)
+    if (excludeRealEstate) {
+      const matchedRE = findMatchedNegativeEntity(post.authorName, post.content, [
+        'bất động sản', 'bat dong san', 'bđs', 'nhà đất', 'nha dat', 'mua bán nhà', 'bán đất',
+        'cho thuê nhà', 'cho thuê phòng', 'cho thuê phòng trọ', 'phòng trọ', 'phong tro',
+        'căn hộ', 'can ho', 'chung cư', 'chung cu', 'shophouse', 'condotel', 'officetel',
+        'cho thuê văn phòng', 'sàn văn phòng', 'mở bán dự án', 'dự án bất động sản'
+      ]);
+      if (matchedRE) {
         return {
           qualified: false,
-          category: 'event_gift_service',
-          matchedTerm: eventGiftCheck.reason,
-          reason: `Dịch vụ phụ trợ / Giỏ quà / Hoa sự kiện / Decor / In ấn (${eventGiftCheck.reason}), không phải cơ sở kinh doanh SMB mở mới.`
-        };
-      }
-
-      const matchedIndustry = findMatchedNegativeEntity(post.authorName, post.content, entities.unsupportedIndustries);
-      if (matchedIndustry) {
-        return {
-          qualified: false,
-          category: 'unsupported_industry',
-          matchedTerm: matchedIndustry.term,
-          reason: `Ngành hàng không phù hợp với POS SMB: "${matchedIndustry.term}"`
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
+          category: 'real_estate',
+          matchedTerm: matchedRE.term,
+          reason: `Ngành Bất động sản / Nhà đất / Phòng trọ: "${matchedRE.term}"`
         };
       }
     }
 
-    // 4. Spam / Scam / MLM / Online Jobs Check
+    if (excludeHotels) {
+      const matchedHotel = findMatchedNegativeEntity(post.authorName, post.content, [
+        'khách sạn', 'khach san', 'hotel', 'resort', 'nhà nghỉ', 'nha nghi', 'homestay',
+        'villa', 'motel', 'tour du lịch', 'công ty du lịch', 'vé máy bay', 'lữ hành'
+      ]);
+      if (matchedHotel) {
+        return {
+          qualified: false,
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
+          category: 'hotels',
+          matchedTerm: matchedHotel.term,
+          reason: `Ngành Khách sạn / Homestay / Du lịch: "${matchedHotel.term}"`
+        };
+      }
+    }
+
+    if (excludeBeautySpa) {
+      const matchedSpa = findMatchedNegativeEntity(post.authorName, post.content, [
+        'spa', 'tiệm spa', 'thẩm mỹ viện', 'massage', 'gội đầu dưỡng sinh', 'dưỡng sinh',
+        'phun xăm', 'nối mi', 'triệt lông', 'tiệm nail', 'nail', 'tiệm cắt tóc', 'salon tóc',
+        'hair salon', 'barber', 'barbershop', 'uốn tóc', 'nhuộm tóc'
+      ]);
+      if (matchedSpa) {
+        return {
+          qualified: false,
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
+          category: 'beauty_spa',
+          matchedTerm: matchedSpa.term,
+          reason: `Ngành Spa / Thẩm mỹ / Salon tóc / Nail: "${matchedSpa.term}"`
+        };
+      }
+    }
+
+    if (excludeUnsupported) {
+      const matchedIndustry = findMatchedNegativeEntity(post.authorName, post.content, entities.unsupportedIndustries);
+      if (matchedIndustry) {
+        return {
+          qualified: false,
+          leadQuality: 'review',
+          qualityBadge: 'Cần xem lại',
+          category: 'unsupported_industry',
+          matchedTerm: matchedIndustry.term,
+          reason: `Ngành hàng loại trừ: "${matchedIndustry.term}"`
+        };
+      }
+    }
+
+    // 4. Spam / Scam / MLM / Online Jobs Check (Hard Drop for illegal/scam spam)
     const matchedSpam = findMatchedNegativeEntity(post.authorName, post.content, entities.spamKeywords);
     if (matchedSpam) {
       return {
         qualified: false,
+        leadQuality: 'rejected',
+        qualityBadge: 'Spam',
         category: 'spam_job',
         matchedTerm: matchedSpam.term,
         reason: `Bài tuyển dụng đa cấp / việc làm online: "${matchedSpam.term}"`
@@ -565,14 +666,19 @@ export class LeadFilter {
       if (!hasAnyMobile) {
         return {
           qualified: false,
+          leadQuality: 'rejected',
+          qualityBadge: 'Số cố định',
           category: 'non_mobile_phone',
           matchedTerm: post.phones.join(', '),
           reason: `Danh sách SĐT không có số di động cá nhân (chỉ có số cố định/tổng đài): [${post.phones.join(', ')}]`
         };
       }
     }
+
     return {
       qualified: true,
+      leadQuality: 'high',
+      qualityBadge: 'Tiềm năng cao',
       category: 'qualified_smb_lead',
       matchedTerm: '',
       reason: 'Khách hàng mục tiêu hợp lệ (Hộ kinh doanh / Quán độc lập SMB)'

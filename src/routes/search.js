@@ -15,7 +15,11 @@ const searchRequestSchema = z.object({
     datePosted: z.string().default('any'),
     excludeKeywords: z.union([z.array(z.string()), z.string()]).optional().default([]),
     requirePhoneOnly: z.boolean().optional().default(false),
-    timeRange: z.string().optional().default('24h')
+    timeRange: z.string().optional().default('24h'),
+    excludeRealEstate: z.boolean().optional().default(false),
+    excludeHotels: z.boolean().optional().default(false),
+    excludeBeautySpa: z.boolean().optional().default(false),
+    excludeEventGifts: z.boolean().optional().default(false)
   }).default({})
 });
 

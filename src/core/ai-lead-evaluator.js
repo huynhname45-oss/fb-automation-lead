@@ -37,19 +37,21 @@ export class AILeadEvaluator {
     const phones = Array.isArray(post.phones) ? post.phones : [];
     const minScore = typeof config.acceptedLeadScore === 'number'
       ? config.acceptedLeadScore
-      : (config.minLeadScore ?? 75);
+      : (config.minLeadScore ?? 60);
 
     // First: Run Deterministic Negative Rule Filter (Fast elimination of obvious enterprise/competitor/spam)
     const ruleEval = leadFilter.evaluateLead({ authorName, content, phones }, config);
     if (!ruleEval.qualified) {
       return {
-        isQualified: false,
-        score: 10,
-        summary: `Bài viết thuộc danh mục loại trừ: ${ruleEval.reason}`,
-        businessType: 'Không phù hợp',
-        intent: 'Loại trừ',
+        isQualified: ruleEval.leadQuality === 'review', // Allow 'review' to proceed for phone extraction
+        score: ruleEval.leadQuality === 'review' ? 50 : 10,
+        summary: `Bài viết: ${ruleEval.reason}`,
+        businessType: 'Cần xem lại',
+        intent: 'Cần kiểm tra',
         reason: ruleEval.reason,
-        decision: 'REJECTED',
+        decision: ruleEval.leadQuality === 'rejected' ? 'REJECTED' : 'REVIEW',
+        leadQuality: ruleEval.leadQuality,
+        qualityBadge: ruleEval.qualityBadge || 'Cần xem lại',
         provider: 'rule_engine'
       };
     }
@@ -59,22 +61,41 @@ export class AILeadEvaluator {
       try {
         const aiResult = await this._callAIProvider(authorName, content, phones, config);
         if (aiResult && typeof aiResult.score === 'number') {
-          const isNegative = /\b(không phù hợp|loại trừ|cơ quan nhà nước|công an|quân đội|chính quyền|hành chính công|vận tải|đường sắt|du lịch|spa|thẩm mỹ|massage|khách sạn|resort|homestay|bất động sản|nhà đất|sinh đẻ|thai sản|gara|garage|sửa xe|rửa xe|giặt là|giặt ủi|giặt sấy|cắt tóc|salon tóc|barber|barbershop|cầm đồ|vay vốn|thú y|thú cưng|gym|yoga|thể hình|đoàn lân|thuê múa lân|tiệm hoa|shop hoa|hoa viếng|kcn|khu công nghiệp|nhà máy|xí nghiệp|công nhân|sa bàn|nước ngoài|đài loan|nhật bản|hàn quốc|không xác định|chưa rõ)\b/i.test(`${aiResult.businessType || ''} ${aiResult.intent || ''}`) ||
-            /\b(không phù hợp|loại trừ|nước ngoài|an sinh xã hội)\b/i.test(aiResult.reason || '');
+          const negativeList = [
+            'cơ quan nhà nước', 'công an', 'quân đội', 'chính quyền', 'hành chính công',
+            'đa cấp', 'cờ bạc', 'tài xỉu', 'lừa đảo', 'việc làm online'
+          ];
+          if (config.excludeRealEstate) negativeList.push('bất động sản', 'nhà đất', 'phòng trọ', 'căn hộ', 'chung cư');
+          if (config.excludeHotels) negativeList.push('khách sạn', 'resort', 'homestay', 'nhà nghỉ', 'du lịch');
+          if (config.excludeBeautySpa) negativeList.push('spa', 'thẩm mỹ', 'massage', 'salon tóc', 'tiệm nail', 'barber');
+          if (config.excludeEventGifts !== false) negativeList.push('hoa khai trương', 'hoa sáp', 'hoa tiền', 'kệ hoa', 'lẵng hoa', 'giỏ trái cây', 'giỏ quà', 'mâm quả', 'decor gia tiên', 'múa lân', 'backdrop');
+          if (config.excludeEnterpriseChains !== false) negativeList.push('chuỗi lớn');
+
+          const negRegex = new RegExp(`\\b(?:${negativeList.join('|')})\\b`, 'i');
+          const combinedAiCheck = `${aiResult.businessType || ''} ${aiResult.intent || ''} ${aiResult.reason || ''}`;
+          const isNegative = negRegex.test(combinedAiCheck);
           
-          // SEARCH-P0-009: Separate acceptedLeadScore & reviewLeadScore, remove Math.max(minScore, 60)
           const acceptedThreshold = (typeof minScore === 'number' && minScore >= 0 && minScore <= 100)
             ? minScore
-            : (config.acceptedLeadScore ?? config.minLeadScore ?? 75);
-          const reviewThreshold = config.reviewLeadScore ?? 45;
+            : (config.acceptedLeadScore ?? config.minLeadScore ?? 60);
+          const reviewThreshold = config.reviewLeadScore ?? 35;
 
-          if (isNegative || aiResult.score < acceptedThreshold) {
+          if (isNegative || aiResult.score < reviewThreshold) {
             aiResult.isQualified = false;
-            aiResult.decision = (aiResult.score >= reviewThreshold && !isNegative) ? 'REVIEW' : 'REJECTED';
+            aiResult.decision = 'REJECTED';
+            aiResult.leadQuality = 'rejected';
+            aiResult.qualityBadge = 'Điểm thấp';
             aiResult.score = isNegative ? Math.min(aiResult.score, 15) : aiResult.score;
+          } else if (aiResult.score < acceptedThreshold) {
+            aiResult.isQualified = false;
+            aiResult.decision = 'REVIEW';
+            aiResult.leadQuality = 'review';
+            aiResult.qualityBadge = 'Cần xem lại';
           } else {
             aiResult.isQualified = true;
             aiResult.decision = 'ACCEPTED';
+            aiResult.leadQuality = 'high';
+            aiResult.qualityBadge = 'Tiềm năng cao';
           }
           return aiResult;
         }

@@ -344,6 +344,46 @@ export function isGibberishOrNoise(text = '') {
 }
 
 /**
+ * Detects whether a comment is from a job applicant or casual commenter asking to apply.
+ * Prevents extracting an applicant's phone number as the business owner's contact.
+ */
+export function isJobApplicantComment(text = '') {
+  if (!text || typeof text !== 'string') return false;
+  const clean = text.toLowerCase().replace(/\s+/g, ' ').trim();
+  const applicantPattern = /(?:xin\s*việc|xin\s*viec|tìm\s*việc|tim\s*viec|ứng\s*tuyển|ung\s*tuyen|xin\s*(?:đi\s*)?làm|xin\s*lam|xin\s*(?:1\s*)?(?:vé|suất|chỗ|chân)|thử\s*việc)|(?:em|mình|minh|cháu|chau|e)\s*(?:muốn|cần|xin)?\s*(?:làm|chân|đi\s*làm)|(?:sđt|sdt|số)\s*(?:của\s*)?(?:em|mình|cháu|e)\s*(?:là|la|:)?|inbox\s*(?:em|mình|e)|đã\s*(?:nhắn\s*tin|inbox|ib|nt\s*zalo|gửi\s*cv)/iu;
+  return applicantPattern.test(clean);
+}
+
+const VN_DIGIT_WORDS = {
+  'không': '0', 'khong': '0', 'ko': '0',
+  'một': '1', 'mot': '1', 'mốt': '1',
+  'hai': '2',
+  'ba': '3',
+  'bốn': '4', 'bon': '4', 'tư': '4',
+  'năm': '5', 'nam': '5', 'lăm': '5',
+  'sáu': '6', 'sau': '6',
+  'bảy': '7', 'bay': '7',
+  'tám': '8', 'tam': '8',
+  'chín': '9', 'chin': '9'
+};
+
+/**
+ * Decodes Vietnamese verbal number words (e.g. "không chín không ba...") into digits
+ */
+export function decodeVietnameseWordsToPhone(text = '') {
+  if (!text || typeof text !== 'string') return '';
+  return text.replace(/\b(?:không|khong|ko|một|mot|mốt|hai|ba|bốn|bon|tư|năm|nam|lăm|sáu|sau|bảy|bay|tám|tam|chín|chin|\d)[\s.\-_/]*(?:(?:không|khong|ko|một|mot|mốt|hai|ba|bốn|bon|tư|năm|nam|lăm|sáu|sau|bảy|bay|tám|tam|chín|chin|\d)[\s.\-_/]*){8,9}\b/gi, (match) => {
+    let digits = '';
+    const tokens = match.toLowerCase().split(/[\s.\-_/]+/).filter(Boolean);
+    for (const tok of tokens) {
+      if (/^\d+$/.test(tok)) digits += tok;
+      else if (VN_DIGIT_WORDS[tok]) digits += VN_DIGIT_WORDS[tok];
+    }
+    return digits.length >= 10 ? ' ' + digits + ' ' : match;
+  });
+}
+
+/**
  * Robust Vietnamese Phone Extractor
  * Strictly filters out false positives from dates, prices, dimensions, and OCR noise.
  */
@@ -352,6 +392,17 @@ export function extractPhonesFromText(text = '', options = { isOCR: false }) {
 
   // Step 0: Clean invisible/zero-width chars
   let clean = cleanInvisibleCharacters(text);
+
+  // Step 0.5: Preserve phone numbers inside Zalo and WhatsApp URLs before generic URL stripping
+  clean = clean
+    .replace(/https?:\/\/(?:www\.)?zalo\.me\/([0-9+]+)/gi, ' zalo $1 ')
+    .replace(/https?:\/\/(?:www\.)?wa\.me\/([0-9+]+)/gi, ' zalo $1 ')
+    .replace(/zalo\.me\/([0-9+]+)/gi, ' zalo $1 ')
+    .replace(/wa\.me\/([0-9+]+)/gi, ' zalo $1 ')
+    .replace(/tel:([0-9+]+)/gi, ' tel $1 ');
+
+  // Step 0.8: Decode Vietnamese verbal numbers (e.g. "không chín không ba...")
+  clean = decodeVietnameseWordsToPhone(clean);
 
   // Step 1: Remove URLs, emails, and Facebook internal tracking tokens
   clean = clean

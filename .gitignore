@@ -3,6 +3,8 @@ node_modules/
 browsers/
 node.exe
 cloudflared.exe
+FB_Automation.exe
+*.exe
 *.zip
 
 # Runtime & User Data
