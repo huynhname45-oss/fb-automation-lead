@@ -2554,8 +2554,9 @@ function renderGroupBundlesBar() {
     container.querySelectorAll('.bundle-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             const bId = chip.getAttribute('data-bundle-id');
-            if (bId) {
+            if (bId && bId !== state.groups.selectedBundleId) {
                 state.groups.selectedBundleId = bId;
+                state.groups.selectedGroupIds.clear();
                 applyGroupFilters();
                 renderGroupBundlesBar();
                 renderGroupsUI();
@@ -2579,7 +2580,7 @@ function renderGroupBundlesBar() {
 
 function updateBulkActionBar() {
     const bar = document.getElementById('groupsBulkActionBar');
-    const countText = document.getElementById('selectedGroupsCountText');
+    const countText = document.getElementById('groupsSelectedCountText') || document.getElementById('selectedGroupsCountText');
     const btnRemove = document.getElementById('btnBulkRemoveFromCurrentBundle');
 
     const count = state.groups.selectedGroupIds ? state.groups.selectedGroupIds.size : 0;
