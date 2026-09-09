@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanCandidate, extractNameFromHtml } from '../../src/core/session-manager.js';
 
@@ -65,3 +65,10 @@ test('ACCOUNT-NAME-005: extractNameFromHtml does NOT extract "Lỗi" from mbasic
   `;
   assert.equal(extractNameFromHtml(errorHtml), '');
 });
+
+test('ACCOUNT-NAME-006: cleanCandidate decodes HTML entities into Unicode text', () => {
+  assert.equal(cleanCandidate('Tr&#x1ea7;n Hu&#x1ef3;nh'), 'Trần Huỳnh');
+  assert.equal(cleanCandidate('&#272;&#7863;ng Di&#7877;m'), 'Đặng Diễm');
+  assert.equal(cleanCandidate('Nguy&#7877;n V&#259;n A &amp; B'), 'Nguyễn Văn A & B');
+});
+

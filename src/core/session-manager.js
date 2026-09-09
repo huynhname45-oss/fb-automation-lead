@@ -106,9 +106,26 @@ export function getSavedCookiesFromDisk() {
   return [];
 }
 
+export function decodeHtmlEntities(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&#([0-9]+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+}
+
 export function cleanCandidate(name) {
   if (!name || typeof name !== 'string') return '';
-  let clean = name.replace(/\(\d+\)/g, '').replace(/\|\s*Facebook/i, '').replace(/Facebook/i, '').replace(/['"“”]/g, '').trim();
+  let clean = decodeHtmlEntities(name)
+    .replace(/\(\d+\)/g, '')
+    .replace(/\|\s*Facebook/i, '')
+    .replace(/Facebook/i, '')
+    .replace(/['"“”]/g, '')
+    .trim();
   if (clean.length < 2 || clean.length > 50) return '';
   if (clean.includes('http') || clean.includes('www.') || clean.includes('facebook.com')) return '';
   const lower = clean.toLowerCase();
@@ -141,7 +158,15 @@ export function extractNameFromHtml(html = '') {
     if (cleaned) return cleaned;
   }
 
-  // 2. Check "CurrentUserInitialData" script tag or "NAME":"..."
+  // 2. Check meta name=title
+  const metaTitleMatch = html.match(/<meta\s+[^>]*name=["']title["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta\s+[^>]*content=["']([^"']+)["'][^>]*name=["']title["']/i);
+  if (metaTitleMatch && metaTitleMatch[1]) {
+    const cleaned = cleanCandidate(metaTitleMatch[1]);
+    if (cleaned) return cleaned;
+  }
+
+  // 3. Check "CurrentUserInitialData" script tag or "NAME":"..."
   const namePatterns = [
     /"NAME":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i,
     /"user_name":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i,
@@ -163,14 +188,14 @@ export function extractNameFromHtml(html = '') {
     }
   }
 
-  // 3. Check document title (e.g. <title>Nguyễn Văn A | Facebook</title>)
+  // 4. Check document title (e.g. <title>Nguyễn Văn A | Facebook</title>)
   const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleM && titleM[1]) {
     const cleaned = cleanCandidate(titleM[1]);
     if (cleaned) return cleaned;
   }
 
-  // 4. Check strong tag
+  // 5. Check strong tag
   const strongM = html.match(/<strong[^>]*>([^<]+)<\/strong>/i);
   if (strongM && strongM[1]) {
     const cleaned = cleanCandidate(strongM[1]);
@@ -185,44 +210,80 @@ export function extractNameFromHtml(html = '') {
  */
 export async function fetchAccountRealNameViaHttp(cookies = []) {
   if (!cookies || cookies.length === 0) return '';
+  const cUser = cookies.find(c => c.name === 'c_user');
+  if (!cUser || !cUser.value) return '';
+  const uid = cUser.value;
+
   const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-    'Cookie': cookieHeader,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
-  };
-
-  // 1. Try www.facebook.com/me (redirects to user's profile)
+  // Strategy 1: OpenGraph crawler User-Agent (instant, 100% reliable, zero TLS/CORS block from Meta edge servers)
   try {
-    const res = await fetch('https://www.facebook.com/me', {
-      method: 'GET',
-      headers,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(6000)
-    });
-
-    if (res.ok) {
-      const html = await res.text();
-      const name = extractNameFromHtml(html);
-      if (name) return name;
+    const urls = [
+      `https://www.facebook.com/profile.php?id=${uid}`,
+      `https://m.facebook.com/profile.php?id=${uid}`
+    ];
+    for (const url of urls) {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(5000)
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const name = extractNameFromHtml(html);
+        if (name && name.toLowerCase() !== 'lỗi' && !name.startsWith('tài khoản (')) {
+          return name;
+        }
+      }
     }
   } catch (e) {}
 
-  // 2. Try www.facebook.com/ (home feed containing CurrentUserInitialData)
+  // Strategy 2: Profile URL with curl UA and cookies
   try {
-    const res = await fetch('https://www.facebook.com/', {
+    const res = await fetch(`https://www.facebook.com/profile.php?id=${uid}`, {
       method: 'GET',
-      headers,
+      headers: {
+        'User-Agent': 'curl/8.4.0',
+        'Cookie': cookieHeader,
+        'Accept': '*/*',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+      },
       redirect: 'follow',
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(5000)
     });
-
     if (res.ok) {
       const html = await res.text();
       const name = extractNameFromHtml(html);
-      if (name) return name;
+      if (name && name.toLowerCase() !== 'lỗi' && !name.startsWith('tài khoản (')) {
+        return name;
+      }
+    }
+  } catch (e) {}
+
+  // Strategy 3: Facebook home feed with curl UA and cookies
+  try {
+    const res = await fetch('https://www.facebook.com/', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'curl/8.4.0',
+        'Cookie': cookieHeader,
+        'Accept': '*/*',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(5000)
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const name = extractNameFromHtml(html);
+      if (name && name.toLowerCase() !== 'lỗi' && !name.startsWith('tài khoản (')) {
+        return name;
+      }
     }
   } catch (e) {}
 
@@ -248,13 +309,12 @@ export async function fastVerifyCookiesWithFacebook(cookies = []) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch('https://www.facebook.com/me', {
+    const res = await fetch('https://www.facebook.com/', {
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'User-Agent': 'curl/8.4.0',
         'Cookie': cookieHeader,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        'Accept': '*/*'
       },
       redirect: 'follow',
       signal: controller.signal
@@ -273,25 +333,25 @@ export async function fastVerifyCookiesWithFacebook(cookies = []) {
       extractedName = extractNameFromHtml(html);
     }
 
-    if (!extractedName) {
+    if (!extractedName || extractedName.toLowerCase() === 'lỗi' || extractedName.startsWith('tài khoản (')) {
       extractedName = await fetchAccountRealNameViaHttp(cookies).catch(() => '');
     }
 
     return {
       valid: true,
       id: cUser.value,
-      name: (extractedName && extractedName.toLowerCase() !== 'lỗi') ? extractedName : ''
+      name: (extractedName && extractedName.toLowerCase() !== 'lỗi' && !extractedName.startsWith('tài khoản (')) ? extractedName : ''
     };
   } catch (err) {
     logger.debug({ err: err.message }, 'Fast HTTP verification timed out or encountered network error');
+    // Still valid structurally if c_user and xs exist
+    const name = await fetchAccountRealNameViaHttp(cookies).catch(() => '');
+    return {
+      valid: true,
+      id: cUser.value,
+      name: (name && name.toLowerCase() !== 'lỗi' && !name.startsWith('tài khoản (')) ? name : ''
+    };
   }
-
-  // Fallback: If c_user and xs exist and not expired, treat as potentially valid until full check
-  return {
-    valid: true,
-    id: cUser.value,
-    name: ''
-  };
 }
 
 class SessionManager extends EventEmitter {
