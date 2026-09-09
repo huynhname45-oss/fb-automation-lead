@@ -319,4 +319,28 @@ test('MEMBER-OWN-PHONE-001: sanitizeProfileHtml strips scripts and filters own p
   assert.equal(sanitized.includes('shop mình chuyên đầm thiết kế'), true);
 });
 
+test('MEMBER-SVG-PHONE-001: sanitizeProfileHtml strips SVG tags preventing Facebook logo vector 0911164094 from matching', async () => {
+  const { sanitizeProfileHtml } = await import('../../src/core/member-scanner.js');
+  const { extractPhonesFromText } = await import('../../src/core/phone-validator.js');
+
+  // Exact SVG path from Facebook's official brand logo rendered in header/navigation
+  const fbLogoSvg = '<svg viewBox="0 0 36 36"><path d="M20.188 31.5v-11.5h3.883l.582-4.5h-4.465v-2.871c0-1.303.362-2.191 2.23-2.191l2.383-.001V6.411c-.413-.055-1.83-.178-3.479-.178-3.442 0-5.798 2.101-5.798 5.959V15.5h-3.882v4.5h3.882v11.5h4.941 0-4.09 1.116-4.09 4.025V18h5.883l-1.008 5.5h-4.867v12.37a18.183 18.183 0 0 1-6.53-.399Z" style="fill: var(--always-white)"></path></svg>';
+  
+  // 1. Without sanitization, the raw SVG vector coordinates match phantom phone 0911164094
+  const rawPhones = extractPhonesFromText(fbLogoSvg);
+  assert.equal(rawPhones.includes('0911164094'), true);
+
+  // 2. With sanitizeProfileHtml, SVG markup is completely stripped and no phantom phone is extracted
+  const sanitized = sanitizeProfileHtml(fbLogoSvg);
+  const cleanPhones = extractPhonesFromText(sanitized);
+  assert.equal(cleanPhones.length, 0);
+
+  // 3. Authentic phone in user content is preserved accurately
+  const pageWithRealPhone = `${fbLogoSvg}<div><span>Liên hệ đặt bàn: 0988.123.456</span></div>`;
+  const sanitizedWithReal = sanitizeProfileHtml(pageWithRealPhone);
+  const realPhones = extractPhonesFromText(sanitizedWithReal);
+  assert.deepEqual(realPhones, ['0988123456']);
+});
+
+
 

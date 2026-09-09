@@ -125,10 +125,24 @@ export function isSystemRoleOrInvalidName(name = '') {
  */
 export function sanitizeProfileHtml(html = '') {
   if (!html || typeof html !== 'string') return '';
-  // Remove all <script>...</script> tags to avoid picking up viewer account metadata (e.g. CurrentUserInitialData)
+  // 1. Remove all <script>...</script> tags to avoid picking up viewer account metadata (e.g. CurrentUserInitialData)
   let clean = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
+  // 2. Remove all <style>...</style> tags
   clean = clean.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
-  return clean;
+  // 3. Remove all <svg>...</svg> vector elements (CRITICAL: prevents Facebook logo path coordinates '0-4.09 1.116-4.09 4' from matching '0911164094')
+  clean = clean.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ');
+  // 4. Strip all remaining HTML tags
+  clean = clean.replace(/<[^>]+>/g, ' ');
+  // 5. Decode common HTML entities
+  clean = clean
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  // 6. Collapse consecutive whitespace
+  return clean.replace(/\s+/g, ' ').trim();
 }
 
 export const VENDOR_NAME_KEYWORDS = [
@@ -154,13 +168,19 @@ export function isSalesOrSoftwareVendorName(name = '') {
   return false;
 }
 
+function extractValidProvince(rawText = '') {
+  if (!rawText || typeof rawText !== 'string') return '';
+  const p = normalizeProvinceName(rawText);
+  return (p && p !== '—') ? p : '';
+}
+
 /**
  * Fast inspection of candidate member via lightweight HTTP requests (20x faster than Playwright page loads)
  * Queries contact info, bio, timeline, and about sections
  */
 export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSales = true, deepPhoneSearch = true, groupId = '', ownPhones = new Set() } = {}) {
   let phone = '';
-  let province = normalizeProvinceName(member.subtitleText) || '';
+  let province = extractValidProvince(member.subtitleText);
 
   const headers = {
     'User-Agent': 'curl/8.4.0',
@@ -177,17 +197,17 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
         const resGrp = await fetch(groupUserUrl, { headers, signal: AbortSignal.timeout(5000) });
         if (resGrp.ok) {
           const grpHtml = await resGrp.text();
-          const evalGrp = evaluateMemberContent(grpHtml.substring(0, 20000));
+          const cleanGrpHtml = sanitizeProfileHtml(grpHtml);
+          const evalGrp = evaluateMemberContent(cleanGrpHtml.substring(0, 20000));
           if (evalGrp.isNegative) {
             return { isNegative: true, reason: evalGrp.reason, phone: '', province: '' };
           }
           if (!phone) {
-            const cleanGrpHtml = sanitizeProfileHtml(grpHtml);
             const grpPhones = extractPhonesFromText(cleanGrpHtml).filter(p => !ownPhones.has(p));
             if (grpPhones.length > 0) phone = grpPhones[0];
           }
           if (!province) {
-            province = normalizeProvinceName(grpHtml) || '';
+            province = extractValidProvince(cleanGrpHtml);
           }
         }
       } catch (e) {}
@@ -200,17 +220,17 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
     const resContact = await fetch(contactUrl, { headers, signal: AbortSignal.timeout(5000) });
     if (resContact.ok) {
       const contactHtml = await resContact.text();
+      const cleanContactHtml = sanitizeProfileHtml(contactHtml);
 
       // Check Sales in About
       if (excludeSales) {
-        const evalContact = evaluateMemberContent(contactHtml.substring(0, 10000));
+        const evalContact = evaluateMemberContent(cleanContactHtml.substring(0, 10000));
         if (evalContact.isNegative) {
           return { isNegative: true, reason: evalContact.reason, phone: '', province: '' };
         }
       }
 
       // Extract Phone (strictly filter out logged-in user's own phone)
-      const cleanContactHtml = sanitizeProfileHtml(contactHtml);
       const foundPhones = extractPhonesFromText(cleanContactHtml).filter(p => !ownPhones.has(p));
       if (foundPhones.length > 0) {
         phone = foundPhones[0];
@@ -218,7 +238,7 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
 
       // Extract Province
       if (!province) {
-        province = normalizeProvinceName(contactHtml) || '';
+        province = extractValidProvince(cleanContactHtml);
       }
     }
   } catch (e) {}
@@ -229,10 +249,11 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
     const resProfile = await fetch(profileUrl, { headers, signal: AbortSignal.timeout(5000) });
     if (resProfile.ok) {
       const profileHtml = await resProfile.text();
+      const cleanProfileHtml = sanitizeProfileHtml(profileHtml);
 
       // Check Sales in Bio & Posts
       if (excludeSales) {
-        const evalProfile = evaluateMemberContent(profileHtml.substring(0, 15000));
+        const evalProfile = evaluateMemberContent(cleanProfileHtml.substring(0, 15000));
         if (evalProfile.isNegative) {
           return { isNegative: true, reason: evalProfile.reason, phone: '', province: '' };
         }
@@ -240,7 +261,6 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
 
       // Extract Phone if not found yet (strictly filter out logged-in user's own phone)
       if (!phone) {
-        const cleanProfileHtml = sanitizeProfileHtml(profileHtml);
         const foundPhones = extractPhonesFromText(cleanProfileHtml).filter(p => !ownPhones.has(p));
         if (foundPhones.length > 0) {
           phone = foundPhones[0];
@@ -249,7 +269,7 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
 
       // Extract Province if not found yet
       if (!province) {
-        province = normalizeProvinceName(profileHtml) || '';
+        province = extractValidProvince(cleanProfileHtml);
       }
     }
   } catch (e) {}
@@ -268,13 +288,13 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
       });
       if (resOg.ok) {
         const ogHtml = await resOg.text();
+        const cleanOgHtml = sanitizeProfileHtml(ogHtml);
         if (!phone) {
-          const cleanOgHtml = sanitizeProfileHtml(ogHtml);
           const ogPhones = extractPhonesFromText(cleanOgHtml).filter(p => !ownPhones.has(p));
           if (ogPhones.length > 0) phone = ogPhones[0];
         }
         if (!province) {
-          province = normalizeProvinceName(ogHtml) || '';
+          province = extractValidProvince(cleanOgHtml);
         }
       }
     } catch (e) {}
@@ -566,7 +586,8 @@ export class MemberScanner extends EventEmitter {
           });
           if (selfRes.ok) {
             const selfHtml = await selfRes.text();
-            const detectedOwn = extractPhonesFromText(selfHtml);
+            const cleanSelf = sanitizeProfileHtml(selfHtml);
+            const detectedOwn = extractPhonesFromText(cleanSelf);
             detectedOwn.forEach(p => ownPhones.add(p));
             if (detectedOwn.length > 0) {
               logger.info(`[MEMBER-SCANNER] Đã nhận diện SĐT tài khoản chủ (sẽ loại trừ khỏi kết quả): ${detectedOwn.join(', ')}`);
