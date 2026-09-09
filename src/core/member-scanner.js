@@ -620,6 +620,17 @@ export class MemberScanner extends EventEmitter {
     return { success: false, message: 'Không có tiến trình quét nào đang chạy.' };
   }
 
+  clearLogs(clientId = 'default') {
+    let state = this.activeScans.get(clientId);
+    if (!state && this.activeScans.size === 1) {
+      state = this.activeScans.values().next().value;
+    }
+    if (state && Array.isArray(state.logs)) {
+      state.logs = [];
+    }
+    return { success: true, message: 'Đã xóa nhật ký tiến trình.' };
+  }
+
   /**
    * Main scan function
    */

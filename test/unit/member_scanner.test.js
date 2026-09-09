@@ -536,6 +536,32 @@ test('MEMBER-COVER-OCR-005: inspectMemberViaFastHttp rejects member whose cover 
   }
 });
 
+test('MEMBER-CLEAR-LOGS-001: MemberScanner.clearLogs clears in-memory logs for active scans', async () => {
+  const { MemberScanner } = await import('../../src/core/member-scanner.js');
+  const scanner = new MemberScanner();
+  
+  // Set up mock active scan state
+  scanner.activeScans.set('test-client', {
+    status: 'scanning',
+    logs: [
+      { timestamp: Date.now() - 1000, message: 'Log 1', type: 'info' },
+      { timestamp: Date.now(), message: 'Log 2', type: 'success' }
+    ]
+  });
 
+  assert.equal(scanner.activeScans.get('test-client').logs.length, 2);
 
+  const res = scanner.clearLogs('test-client');
+  assert.equal(res.success, true);
+  assert.equal(scanner.activeScans.get('test-client').logs.length, 0);
 
+  // Test single active scan fallback
+  scanner.activeScans.clear();
+  scanner.activeScans.set('single-session', {
+    status: 'scanning',
+    logs: [{ timestamp: Date.now(), message: 'Log A', type: 'info' }]
+  });
+  const resFallback = scanner.clearLogs('default');
+  assert.equal(resFallback.success, true);
+  assert.equal(scanner.activeScans.get('single-session').logs.length, 0);
+});

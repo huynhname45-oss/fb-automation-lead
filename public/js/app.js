@@ -23,7 +23,8 @@ const state = {
         isScanning: false,
         leads: [],
         pollingInterval: null,
-        deletedIds: new Set()
+        deletedIds: new Set(),
+        clearedLogsAt: 0
     }
 };
 
@@ -400,6 +401,9 @@ function initEventListeners() {
             }
         });
     }
+
+    const btnClearMemberScanLog = document.getElementById('btnClearMemberScanLog');
+    if (btnClearMemberScanLog) btnClearMemberScanLog.addEventListener('click', handleClearMemberScanLog);
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -3990,10 +3994,13 @@ async function handleStartScanMembers() {
             btnStop.style.display = 'inline-flex';
             btnStop.disabled = false;
         }
+        const logContainer = document.getElementById('memberScanLogContainer');
+        if (logContainer) logContainer.style.display = 'block';
         if (logBox) {
             logBox.style.display = 'block';
             logBox.innerHTML = '<div style="color: #6366f1;">🚀 Bắt đầu quét thành viên mới gia nhập trong 24h...</div>';
         }
+        state.members.clearedLogsAt = 0;
         if (statusBadge) {
             statusBadge.innerHTML = `<span class="loading-spinner"></span> Đang kết nối tới ${groupUrls.length} nhóm Facebook...`;
         }
@@ -4133,26 +4140,40 @@ function updateMemberScanUI(status) {
 
     // Update live log box
     const logBox = document.getElementById('memberScanLogBox');
+    const logContainer = document.getElementById('memberScanLogContainer');
     if (logBox && Array.isArray(status.logs) && status.logs.length > 0) {
-        const logHtml = status.logs.slice(-30).map(l => {
-            let time = '';
-            let message = '';
-            let color = 'var(--text-secondary)';
-            if (typeof l === 'object' && l !== null) {
-                time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString('vi-VN') : new Date().toLocaleTimeString('vi-VN');
-                message = l.message || '';
-                if (l.type === 'success') color = '#10b981';
-                else if (l.type === 'warning') color = '#f59e0b';
-                else if (l.type === 'error') color = '#ef4444';
-                else if (l.type === 'info') color = '#6366f1';
-            } else {
-                message = String(l || '');
-                time = new Date().toLocaleTimeString('vi-VN');
-            }
-            return `<div style="color: ${color}; margin-bottom: 3px; line-height: 1.4;">[${time}] ${escapeHtml(message)}</div>`;
-        }).join('');
-        logBox.innerHTML = logHtml;
-        logBox.scrollTop = logBox.scrollHeight;
+        const clearedAt = state.members.clearedLogsAt || 0;
+        const validLogs = status.logs.filter(l => {
+            const t = typeof l === 'object' && l !== null ? (l.timestamp || 0) : 0;
+            return t >= clearedAt;
+        });
+
+        if (validLogs.length > 0) {
+            if (logContainer) logContainer.style.display = 'block';
+            else logBox.style.display = 'block';
+
+            const logHtml = validLogs.slice(-30).map(l => {
+                let time = '';
+                let message = '';
+                let color = 'var(--text-secondary)';
+                if (typeof l === 'object' && l !== null) {
+                    time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString('vi-VN') : new Date().toLocaleTimeString('vi-VN');
+                    message = l.message || '';
+                    if (l.type === 'success') color = '#10b981';
+                    else if (l.type === 'warning') color = '#f59e0b';
+                    else if (l.type === 'error') color = '#ef4444';
+                    else if (l.type === 'info') color = '#6366f1';
+                } else {
+                    message = String(l || '');
+                    time = new Date().toLocaleTimeString('vi-VN');
+                }
+                return `<div style="color: ${color}; margin-bottom: 3px; line-height: 1.4;">[${time}] ${escapeHtml(message)}</div>`;
+            }).join('');
+            logBox.innerHTML = logHtml;
+            logBox.scrollTop = logBox.scrollHeight;
+        } else if (clearedAt > 0) {
+            logBox.innerHTML = '<div style="color: var(--text-muted); font-style: italic; padding: 4px 0;">Nhật ký đã được xóa.</div>';
+        }
     }
 
     // Render table
@@ -4375,5 +4396,14 @@ async function handleExportMembersExcel() {
     }
 }
 
-
-
+async function handleClearMemberScanLog() {
+    const logBox = document.getElementById('memberScanLogBox');
+    if (logBox) {
+        logBox.innerHTML = '<div style="color: var(--text-muted); font-style: italic; padding: 4px 0;">Nhật ký đã được xóa.</div>';
+    }
+    state.members.clearedLogsAt = Date.now();
+    try {
+        await api('POST', '/api/members/clear-logs', { clientId: getClientId() });
+    } catch (_) {}
+    showToast('Đã xóa toàn bộ nội dung nhật ký quét!', 'info');
+}

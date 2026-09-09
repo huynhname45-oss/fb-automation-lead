@@ -111,6 +111,20 @@ router.post('/stop', (req, res) => {
 });
 
 /**
+ * POST /api/members/clear-logs
+ * Clear in-memory live logs for member scanner
+ */
+router.post('/clear-logs', (req, res) => {
+  try {
+    const { clientId = 'default' } = req.body || {};
+    const result = memberScanner.clearLogs(clientId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/members/export
  * Export qualified leads to styled Excel (.xlsx) file
  */

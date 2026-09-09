@@ -690,7 +690,17 @@
                             </div>
 
                             <!-- Live Log Box -->
-                            <div id="memberScanLogBox" class="p-3 mb-4 rounded-lg" style="display: none; background: rgba(0,0,0,0.04); border: 1px solid var(--glass-border); border-radius: 10px; max-height: 120px; overflow-y: auto; font-family: monospace; font-size: 0.82rem; line-height: 1.6;">
+                            <div id="memberScanLogContainer" class="mb-4" style="display: none;">
+                                <div class="d-flex align-center justify-between mb-1" style="padding: 0 4px;">
+                                    <span class="text-xs text-muted font-mono" style="font-weight: 600;">
+                                        📋 Nhật ký tiến trình (Live Logs):
+                                    </span>
+                                    <button type="button" class="btn btn-ghost btn-xs text-danger" id="btnClearMemberScanLog" style="font-size: 0.78rem; padding: 2px 8px; height: 26px;" title="Xóa toàn bộ nội dung nhật ký">
+                                        🗑️ Xóa log
+                                    </button>
+                                </div>
+                                <div id="memberScanLogBox" class="p-3 rounded-lg" style="background: rgba(0,0,0,0.04); border: 1px solid var(--glass-border); border-radius: 10px; max-height: 140px; overflow-y: auto; font-family: monospace; font-size: 0.82rem; line-height: 1.6;">
+                                </div>
                             </div>
 
                             <!-- Results Table -->
