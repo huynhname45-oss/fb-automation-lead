@@ -169,3 +169,51 @@ test('MEMBER-EXCEL-001: MemberScanner.exportToExcelBuffer produces styled Excel 
   assert.equal(row3.getCell(4).value, ''); // Empty phone is preserved as empty
 });
 
+test('MEMBER-JSON-001: safeParseGraphQLResponses cleans for (;;); prefixes and parses JSON', async () => {
+  const { safeParseGraphQLResponses } = await import('../../src/core/member-scanner.js');
+  const mockPayload = 'for (;;);{"data":{"node":{"id":"1000999888","name":"Le Van C"}}}\n{"data":{"group":{"id":"192165486264058"}}}';
+  const parsed = safeParseGraphQLResponses(mockPayload);
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].data.node.id, '1000999888');
+  assert.equal(parsed[0].data.node.name, 'Le Van C');
+});
+
+test('MEMBER-JSON-002: extractMembersFromAnyJson extracts member nodes from GraphQL edges and Comet SSR', async () => {
+  const { extractMembersFromAnyJson } = await import('../../src/core/member-scanner.js');
+  const mockGraphqlData = {
+    data: {
+      group: {
+        id: '192165486264058',
+        new_members: {
+          edges: [
+            {
+              node: {
+                id: '1000123456789',
+                name: 'Nguyễn Văn Chủ Quán',
+                subtitle_text: { text: 'Đã tham gia 2 giờ trước' }
+              }
+            },
+            {
+              node: {
+                id: '1000987654321',
+                name: 'Trần Thị Chủ Tiệm',
+                subtitle_text: { text: 'Tham gia 5 giờ trước' }
+              }
+            }
+          ]
+        }
+      }
+    }
+  };
+
+  const members = extractMembersFromAnyJson(mockGraphqlData, '192165486264058');
+  assert.equal(members.length, 2);
+  assert.equal(members[0].memberId, '1000123456789');
+  assert.equal(members[0].name, 'Nguyễn Văn Chủ Quán');
+  assert.equal(members[0].joinedTimeText, 'Đã tham gia 2 giờ trước');
+  assert.equal(members[0].groupUserUrl, 'https://www.facebook.com/groups/192165486264058/user/1000123456789/');
+
+  assert.equal(members[1].memberId, '1000987654321');
+  assert.equal(members[1].name, 'Trần Thị Chủ Tiệm');
+});
+

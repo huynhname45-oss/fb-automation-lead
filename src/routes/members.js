@@ -37,16 +37,15 @@ router.post('/scan', async (req, res) => {
 
     // Check session or cookie
     let effectiveCookie = cookie;
-    if (!effectiveCookie && clientId && sessionManager.clientSessions?.has(clientId)) {
-      effectiveCookie = sessionManager.clientSessions.get(clientId)?.cookie || '';
+    if (!effectiveCookie) {
+      effectiveCookie = sessionManager.getAnyActiveCookie(clientId);
     }
-    if (!effectiveCookie && sessionManager.clientSessions?.size > 0) {
-      for (const sess of sessionManager.clientSessions.values()) {
-        if (sess?.cookie) {
-          effectiveCookie = sess.cookie;
-          break;
-        }
-      }
+
+    if (!effectiveCookie) {
+      return res.status(400).json({
+        success: false,
+        error: 'Chưa phát hiện Cookie Facebook! Meta chặn xem danh sách thành viên nếu không có phiên đăng nhập. Vui lòng vào tab Cài đặt để nạp Cookie Facebook của bạn trước khi quét!'
+      });
     }
 
     const currentProgress = memberScanner.getProgress(clientId);

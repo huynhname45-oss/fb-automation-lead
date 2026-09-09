@@ -40,9 +40,16 @@ export function parseCookieInput(cookieInput) {
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     try {
       const parsed = JSON.parse(trimmed);
+      // If object has a `cookie` or `cookies` field (e.g. from fb_client_session)
+      if (parsed.cookie && typeof parsed.cookie === 'string') {
+        return parseCookieInput(parsed.cookie);
+      }
+      if (Array.isArray(parsed.cookies)) {
+        return parseCookieInput(JSON.stringify(parsed.cookies));
+      }
       const list = [];
       for (const [key, val] of Object.entries(parsed)) {
-        if (key && val) {
+        if (key && val && typeof val === 'string' && key !== 'id' && key !== 'user' && key !== 'updatedAt') {
           list.push({
             name: key.trim(),
             value: String(val).trim(),
@@ -475,12 +482,25 @@ class SessionManager extends EventEmitter {
         name: finalName
       };
 
-      // Store ONLY in memory for this specific clientId
+      // Store in memory for this specific clientId
       this.clientSessions.set(clientId, {
         status: 'active',
         user: clientInfo,
+        cookie: cookieInput,
         lastChecked: Date.now()
       });
+
+      // Persist session to disk for auto-recovery across server restarts
+      try {
+        await fsPromises.mkdir(path.dirname(SESSION_FILE), { recursive: true });
+        await fsPromises.writeFile(SESSION_FILE, JSON.stringify({
+          cookie: cookieInput,
+          user: clientInfo,
+          savedAt: new Date().toISOString()
+        }, null, 2), 'utf-8');
+      } catch (diskErr) {
+        logger.debug({ err: diskErr.message }, 'Failed to persist cookie to session file');
+      }
 
       return {
         success: true,
@@ -706,14 +726,26 @@ class SessionManager extends EventEmitter {
         name: currentName
       };
 
+      const effectiveCookieToSave = cookieInput || this.clientSessions.get(clientId)?.cookie;
       if (clientId) {
         this.clientSessions.set(clientId, {
           status: 'active',
           user: clientInfo,
-          cookie: cookieInput || this.clientSessions.get(clientId)?.cookie,
+          cookie: effectiveCookieToSave,
           lastChecked: Date.now()
         });
       }
+
+      try {
+        if (effectiveCookieToSave) {
+          await fsPromises.mkdir(path.dirname(SESSION_FILE), { recursive: true });
+          await fsPromises.writeFile(SESSION_FILE, JSON.stringify({
+            cookie: effectiveCookieToSave,
+            user: clientInfo,
+            savedAt: new Date().toISOString()
+          }, null, 2), 'utf-8');
+        }
+      } catch (diskErr) {}
 
       return {
         active: true,
@@ -727,6 +759,24 @@ class SessionManager extends EventEmitter {
     }
   }
 
+  getAnyActiveCookie(clientId = 'default') {
+    if (clientId && this.clientSessions.has(clientId)) {
+      const c = this.clientSessions.get(clientId)?.cookie;
+      if (c) return c;
+    }
+    for (const sess of this.clientSessions.values()) {
+      if (sess?.cookie) return sess.cookie;
+    }
+    try {
+      if (fs.existsSync(SESSION_FILE)) {
+        const raw = fs.readFileSync(SESSION_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.cookie) return parsed.cookie;
+      }
+    } catch (e) {}
+    return '';
+  }
+
   getStatus(clientId = 'default') {
     if (clientId && this.clientSessions.has(clientId)) {
       const session = this.clientSessions.get(clientId);
@@ -736,6 +786,21 @@ class SessionManager extends EventEmitter {
         user: session.user || null
       };
     }
+
+    // Auto check if disk session exists
+    try {
+      if (fs.existsSync(SESSION_FILE)) {
+        const raw = fs.readFileSync(SESSION_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.cookie && parsed.user) {
+          return {
+            status: 'active',
+            lastChecked: parsed.savedAt ? new Date(parsed.savedAt).getTime() : null,
+            user: parsed.user
+          };
+        }
+      }
+    } catch (e) {}
 
     return {
       status: 'none',

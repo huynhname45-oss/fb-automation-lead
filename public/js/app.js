@@ -3636,12 +3636,28 @@ async function handleStartScanMembers() {
         }
 
         let cookie = '';
-        if (window.ClientDB && typeof window.ClientDB.getSession === 'function') {
+        if (state.session && state.session.cookie) {
+            cookie = state.session.cookie;
+        }
+        if (!cookie && window.ClientDB && typeof window.ClientDB.getSession === 'function') {
             const session = await window.ClientDB.getSession();
             cookie = session?.cookie || '';
         }
         if (!cookie) {
-            cookie = localStorage.getItem('fb_cookie') || localStorage.getItem('fb_client_session') || '';
+            const rawClient = localStorage.getItem('fb_client_session');
+            if (rawClient) {
+                try {
+                    const parsed = JSON.parse(rawClient);
+                    cookie = parsed?.cookie || '';
+                } catch (e) {}
+            }
+        }
+        if (!cookie) {
+            cookie = localStorage.getItem('fb_cookie') || '';
+        }
+
+        if (!cookie) {
+            throw new Error('Chưa có Cookie Facebook! Meta chặn xem thành viên nếu không đăng nhập. Vui lòng vào tab Cài đặt để nạp Cookie Facebook của bạn trước!');
         }
 
         const res = await api('POST', '/api/members/scan', {
