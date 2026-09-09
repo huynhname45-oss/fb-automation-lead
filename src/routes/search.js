@@ -14,7 +14,8 @@ const searchRequestSchema = z.object({
     recentPosts: z.boolean().default(true),
     datePosted: z.string().default('any'),
     excludeKeywords: z.union([z.array(z.string()), z.string()]).optional().default([]),
-    requirePhoneOnly: z.boolean().optional().default(false)
+    requirePhoneOnly: z.boolean().optional().default(false),
+    timeRange: z.string().optional().default('24h')
   }).default({})
 });
 

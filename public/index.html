@@ -172,8 +172,18 @@
                                 
                                 <div class="filter-row mb-4">
                                     <div class="filter-col">
+                                        <label class="filter-label-top" for="selTimeRange">⏱️ Thời gian đăng bài</label>
+                                        <select id="selTimeRange" class="select select-styled" style="font-weight: 500;">
+                                            <option value="24h" selected>24 giờ qua (1 ngày)</option>
+                                            <option value="3d">3 ngày gần nhất (72h)</option>
+                                            <option value="7d">1 tuần gần nhất (7 ngày)</option>
+                                            <option value="any">Bất kỳ thời gian</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="filter-col" id="colRecentPostsToggle">
                                         <span class="filter-label-inline font-semibold">Bài viết gần đây</span>
-                                        <label class="toggle-container" title="Bài viết gần đây (Mặc định: tự động lọc bài viết trong vòng 24 giờ qua)">
+                                        <label class="toggle-container" title="Bật bộ lọc 'Bài viết mới đây' trên Facebook (Chỉ áp dụng cho mốc 24h)">
                                             <input type="checkbox" id="filterRecentPosts" class="toggle-switch" checked>
                                             <span class="toggle-slider"></span>
                                         </label>

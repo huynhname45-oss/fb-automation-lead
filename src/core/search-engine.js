@@ -205,8 +205,33 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
     };
   }
 
+  // 5.1. Relative weeks (e.g. "1 tuần", "1 week")
+  const weekMatch = cleanTime.match(/(?:^|\s)(\d+)\s*(?:tuần|tuan|weeks?|w)(?:\s|$|[^\p{L}\p{N}])/iu);
+  if (weekMatch) {
+    const weeks = parseInt(weekMatch[1], 10);
+    const diffHours = weeks * 7 * 24;
+    const targetTs = nowTs - diffHours * 3600 * 1000;
+    return {
+      status: 'range',
+      publishedAt: new Date(targetTs).toISOString(),
+      earliestAt: new Date(targetTs - 24 * 3600 * 1000).toISOString(),
+      latestAt: new Date(targetTs + 24 * 3600 * 1000).toISOString(),
+      source: 'feed_text',
+      confidence: 0.8,
+      withinRequestedWindow: recencyHours >= 168 && diffHours <= recencyHours,
+      isWithin24h: false,
+      formattedDate: timeText,
+      fullContent: rawContent
+    };
+  }
+
   // 6. Definite Old indicators (> weeks, months, years, old calendar years)
-  if (/(?:^|\s)(?:\d+\s*(?:tuần|tuan|weeks?|tháng|thang|months?|năm|nam|years?)|năm 202[0-5])(?:\s|$|[^\p{L}\p{N}])/iu.test(cleanTime)) {
+  const isOldWeek = recencyHours >= 168
+    ? /(?:^|\s)(?:[2-9]|\d{2,})\s*(?:tuần|tuan|weeks?)(?:\s|$|[^\p{L}\p{N}])/iu.test(cleanTime)
+    : /(?:^|\s)\d+\s*(?:tuần|tuan|weeks?)(?:\s|$|[^\p{L}\p{N}])/iu.test(cleanTime);
+  const isOldMonthYear = /(?:^|\s)(?:\d+\s*(?:tháng|thang|months?|năm|nam|years?)|năm 202[0-5])(?:\s|$|[^\p{L}\p{N}])/iu.test(cleanTime);
+
+  if (isOldWeek || isOldMonthYear) {
     return {
       status: 'range',
       publishedAt: null,
@@ -708,11 +733,36 @@ class SearchEngine extends EventEmitter {
       await delay(1500);
 
       // 3. Toggle "Bài viết mới đây" (Recent Posts)
-      const enableRecent = filters.recentPosts !== false;
+      // Chỉ bật "Bài viết mới đây" khi chọn mốc 24h. Các mốc khác (3 ngày, 1 tuần, bất kỳ) không bật để tránh Facebook ẩn bài cũ hơn 24h.
+      let targetRecencyHours = 24;
+      let enableRecent = true;
+
+      if (filters.timeRange === '3d') {
+        targetRecencyHours = 72;
+        enableRecent = false;
+      } else if (filters.timeRange === '7d') {
+        targetRecencyHours = 168;
+        enableRecent = false;
+      } else if (filters.timeRange === 'any') {
+        targetRecencyHours = 99999;
+        enableRecent = false;
+      } else if (filters.timeRange === '24h') {
+        targetRecencyHours = 24;
+        enableRecent = true;
+      } else if (filters.recentPosts === false) {
+        targetRecencyHours = 240;
+        enableRecent = false;
+      } else {
+        targetRecencyHours = 24;
+        enableRecent = true;
+      }
+
       if (enableRecent) {
-        logger.info('3. Kích hoạt bộ lọc: Bật nút gạt "Bài viết mới đây" (Recent posts)...');
+        logger.info('3. Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây" (Mốc 24h)...');
         await this._applyRecentPostsToggle(page, true);
         await delay(1500);
+      } else {
+        logger.info(`3. Bỏ qua nút gạt "Bài viết mới đây" trên Facebook (Khoảng thời gian: ${filters.timeRange || 'mở rộng'})...`);
       }
 
       // 4. Select "Ngày đăng" (Date Posted - Year)
@@ -1051,46 +1101,34 @@ class SearchEngine extends EventEmitter {
           // aggregated later instead of being discarded before enrichment.
           const authorKey = getCanonicalAuthorKey(post);
 
-          // Quick Exclude Keywords Check on feed preview
-          if (excludeKeywords.length > 0) {
-            const previewText = (post.content || '').toLowerCase();
-            const matchedQuickEx = excludeKeywords.find(kw => previewText.includes(kw));
-            if (matchedQuickEx) {
-              logger.info(`❌ [TỪ KHÓA LOẠI TRỪ] BỎ QUA bài viết của [${post.authorName}] vì chứa từ khóa loại bỏ: "${matchedQuickEx}"`);
-              continue;
-            }
-          }
-
-          // Quick Lead Qualification Check (Chuỗi lớn, Đối thủ POS, Ngành không phù hợp, Nước ngoài)
-          const quickEval = leadFilter.evaluateLead({
-            authorName: post.authorName,
-            content: post.content,
-            groupName: post.groupName || '',
-            location: post.feedTimeText || '',
-            phones: post.phones || []
-          }, filterConfig);
-
-          if (!quickEval.qualified) {
-            logger.info(`❌ [LOẠI TRỪ LEAD] BỎ QUA [${post.authorName}]: ${quickEval.reason}`);
-            continue;
-          }
-
           // =========================================================================
-          // BƯỚC 1: KIỂM TRA THỜI GIAN ĐĂNG BÀI - CHỈ LẤY BÀI DƯỚI 24H (SEARCH-P0-002)
+          // BƯỚC 1: ƯU TIÊN KIỂM TRA THỜI GIAN BÀI VIẾT TRƯỚC TIÊN (Time Priority Check)
           // =========================================================================
           const feedTimeLower = (post.feedTimeText || '').toLowerCase().trim();
 
-          // Loại bỏ ngay lập tức tại bảng tin nếu bài viết hiển thị từ 2 ngày trở lên, tuần, tháng, năm hoặc >= 25 giờ
-          const isExplicitlyOver24h = /(?:\b(?:[2-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower) ||
-            /\b(?:2[5-9]|[3-9]\d|\d{3,})\s*(?:giờ|gio|h)\b/iu.test(feedTimeLower);
+          // 1.1. Loại bỏ nhanh tại bảng tin nếu thời gian vượt quá mốc đã chọn (24h, 3 ngày, 1 tuần)
+          let isExplicitlyOverWindow = false;
+          let overWindowMsg = '';
 
-          if (enableRecent && isExplicitlyOver24h) {
-            logger.info(`⏩ [BỎ QUA BÀI > 24H] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - Loại ngay tại bảng tin.`);
-            this.rejectedCount++;
+          if (targetRecencyHours <= 24) {
+            isExplicitlyOverWindow = /(?:\b(?:[2-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower) ||
+              /\b(?:2[5-9]|[3-9]\d|\d{3,})\s*(?:giờ|gio|h)\b/iu.test(feedTimeLower);
+            overWindowMsg = 'Bài viết > 24 giờ';
+          } else if (targetRecencyHours <= 72) {
+            isExplicitlyOverWindow = /(?:\b(?:[4-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b\d+\s*(?:tuần|tuan|tháng|thang|năm|nam)\b)/iu.test(feedTimeLower) ||
+              /\b(?:7[3-9]|[8-9]\d|\d{3,})\s*(?:giờ|gio|h)\b/iu.test(feedTimeLower);
+            overWindowMsg = 'Bài viết > 3 ngày (72h)';
+          } else if (targetRecencyHours <= 168) {
+            isExplicitlyOverWindow = /(?:\b(?:[8-9]|\d{2,})\s*(?:ngày|ngay|days?|d)\b|\b(?:[2-9]|\d{2,})\s*(?:tuần|tuan)\b|\b\d+\s*(?:tháng|thang|năm|nam)\b)/iu.test(feedTimeLower);
+            overWindowMsg = 'Bài viết > 1 tuần (7 ngày)';
+          }
+
+          if (isExplicitlyOverWindow) {
+            logger.info(`⏩ [BỎ QUA DO QUÁ THỜI GIAN] [${post.authorName}] (${post.feedTimeText || 'Cũ'}) - ${overWindowMsg}. Loại ngay tại bảng tin.`);
+            if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
             continue;
           }
 
-          const targetRecencyHours = enableRecent ? 24 : 240;
           let postVerification = resolveTimeResult({
             timeText: post.feedTimeText,
             rawContent: post.content,
@@ -1116,9 +1154,9 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          if (enableRecent && (!postVerification.isWithin24h && !postVerification.withinRequestedWindow)) {
-            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc 24 giờ qua!`);
-            this.rejectedCount++;
+          if (targetRecencyHours < 99999 && (!postVerification.withinRequestedWindow && postVerification.status !== 'unknown')) {
+            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc mốc ${targetRecencyHours}h đã chọn!`);
+            if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
             continue;
           }
 
@@ -1126,9 +1164,36 @@ class SearchEngine extends EventEmitter {
             const selectedYearMatch = matchesSelectedYear(postVerification, filters.datePosted);
             if (selectedYearMatch !== true) {
               logger.info(`❌ [BỘ LỌC NĂM] BỎ QUA [${post.authorName}] vì không thuộc năm ${filters.datePosted}.`);
-              this.rejectedCount++;
+              if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
               continue;
             }
+          }
+
+          // =========================================================================
+          // BƯỚC 2: SAU KHI ĐẠT TIÊU CHUẨN THỜI GIAN -> KIỂM TRA NỘI DUNG & TỪ KHÓA
+          // =========================================================================
+          // Quick Exclude Keywords Check on feed preview
+          if (excludeKeywords.length > 0) {
+            const previewText = (post.content || '').toLowerCase();
+            const matchedQuickEx = excludeKeywords.find(kw => previewText.includes(kw));
+            if (matchedQuickEx) {
+              logger.info(`❌ [TỪ KHÓA LOẠI TRỪ] BỎ QUA bài viết của [${post.authorName}] vì chứa từ khóa loại bỏ: "${matchedQuickEx}"`);
+              continue;
+            }
+          }
+
+          // Quick Lead Qualification Check (Chuỗi lớn, Đối thủ POS, Ngành không phù hợp, Nước ngoài)
+          const quickEval = leadFilter.evaluateLead({
+            authorName: post.authorName,
+            content: post.content,
+            groupName: post.groupName || '',
+            location: post.feedTimeText || '',
+            phones: post.phones || []
+          }, filterConfig);
+
+          if (!quickEval.qualified) {
+            logger.info(`❌ [LOẠI TRỪ LEAD] BỎ QUA [${post.authorName}]: ${quickEval.reason}`);
+            continue;
           }
 
           const fullPostContent = (postVerification.fullContent && postVerification.fullContent.length >= (post.content || '').length)
