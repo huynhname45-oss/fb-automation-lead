@@ -918,10 +918,11 @@ async function checkSessionStatus() {
                     isClientSession: true
                 });
 
-                // Tự động kiểm tra và nâng cấp tên thật nếu hiện đang là ID "Tài khoản (...)"
-                if (!clientSession.user?.name || clientSession.user.name.startsWith('Tài khoản (')) {
+                // Tự động kiểm tra và nâng cấp tên thật nếu hiện đang là ID "Tài khoản (...)" hoặc "Lỗi"
+                const currentAccName = clientSession.user?.name || '';
+                if (!currentAccName || currentAccName.startsWith('Tài khoản (') || currentAccName.toLowerCase() === 'lỗi' || currentAccName.toLowerCase() === 'error') {
                     api('POST', '/api/session/verify', { cookie: clientSession.cookie, clientId: getClientId() }).then(res => {
-                        if (res && res.user && res.user.name && !res.user.name.startsWith('Tài khoản (')) {
+                        if (res && res.user && res.user.name && !res.user.name.startsWith('Tài khoản (') && res.user.name.toLowerCase() !== 'lỗi') {
                             clientSession.user.name = res.user.name;
                             window.ClientDB.saveSession(clientSession);
                             updateSessionUI(clientSession);
@@ -970,13 +971,20 @@ async function handleVerifySession() {
         });
 
         if (res.active && res.status === 'active') {
+            const rawName = res.user?.name || clientSession?.user?.name || '';
+            const verifiedName = (rawName && rawName.toLowerCase() !== 'lỗi' && rawName.toLowerCase() !== 'error')
+                ? rawName
+                : (res.user?.id ? `Tài khoản (${res.user.id})` : 'Tài khoản Facebook');
+            const sanitizedUser = { ...(res.user || clientSession?.user || {}), name: verifiedName };
+
             if (window.ClientDB) {
                 await window.ClientDB.saveSession({
                     cookie: cookieVal,
-                    user: res.user || clientSession?.user || { name: 'Facebook User' },
+                    user: sanitizedUser,
                     status: 'active'
                 });
             }
+            res.user = sanitizedUser;
             state.session = res;
             updateSessionUI(res);
             showToast(res.message || 'Session hoạt động tốt!', 'success');
@@ -1107,7 +1115,7 @@ async function handleLogout() {
 
 async function handleEditAccountName() {
     const currentName = document.getElementById('accountDisplayName')?.textContent?.trim() || '';
-    const initialVal = (currentName && !currentName.startsWith('Tài khoản (')) ? currentName : '';
+    const initialVal = (currentName && !currentName.startsWith('Tài khoản (') && currentName.toLowerCase() !== 'lỗi' && currentName.toLowerCase() !== 'error') ? currentName : '';
     const newName = prompt('Nhập tên bạn muốn đặt cho tài khoản Facebook này:', initialVal);
     if (!newName || !newName.trim()) return;
 
@@ -1172,7 +1180,11 @@ function updateSessionUI(sessionData) {
         if (subtext) subtext.textContent = 'Đã kết nối với Facebook. Sẵn sàng bóc tách dữ liệu.';
         
         if (accountInfoContainer) accountInfoContainer.style.display = 'block';
-        if (accountDisplayName) accountDisplayName.textContent = sessionData.user?.name || 'Tài khoản Facebook';
+        if (accountDisplayName) {
+            const dName = sessionData.user?.name || '';
+            const isValid = dName && dName.toLowerCase() !== 'lỗi' && dName.toLowerCase() !== 'error';
+            accountDisplayName.textContent = isValid ? dName : (sessionData.user?.id ? `Tài khoản (${sessionData.user.id})` : 'Tài khoản Facebook');
+        }
         if (accountUid) accountUid.textContent = sessionData.user?.id || 'Active';
     } else if (status === 'authenticating') {
         if (icon) icon.textContent = '⏳';
