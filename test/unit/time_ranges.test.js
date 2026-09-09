@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveTimeResult } from '../../src/core/search-engine.js';
 
@@ -74,4 +74,103 @@ test('TIME-RANGE-002: resolveTimeResult handles 3 days (72h) window accurately',
     now: refTime
   });
   assert.equal(fourDaysRes.withinRequestedWindow, false);
+});
+
+test('TIME-RANGE-003: resolveTimeResult handles weekday timestamps accurately', () => {
+  // Wednesday, Sept 9, 2026 at 10:00 UTC (day of week: 3)
+  const refTime = new Date('2026-09-09T10:00:00.000Z');
+
+  // "Thứ Hai lúc 10:00" -> Monday (2 days ago = ~48h)
+  const mondayRes = resolveTimeResult({
+    timeText: 'Thứ Hai lúc 10:00',
+    recencyHours: 72, // 3 days
+    now: refTime
+  });
+  assert.equal(mondayRes.withinRequestedWindow, true);
+  assert.equal(mondayRes.isWithin24h, false);
+
+  // Monday in 24h window -> outside
+  const mondayIn24h = resolveTimeResult({
+    timeText: 'Thứ Hai lúc 10:00',
+    recencyHours: 24,
+    now: refTime
+  });
+  assert.equal(mondayIn24h.withinRequestedWindow, false);
+
+  // "Thứ Sáu lúc 10:00" -> Friday last week (5 days ago = ~120h)
+  // Inside 1 week (168h), outside 3 days (72h)
+  const fridayIn1Week = resolveTimeResult({
+    timeText: 'Thứ Sáu lúc 10:00',
+    recencyHours: 168,
+    now: refTime
+  });
+  assert.equal(fridayIn1Week.withinRequestedWindow, true);
+
+  const fridayIn3Days = resolveTimeResult({
+    timeText: 'Thứ Sáu lúc 10:00',
+    recencyHours: 72,
+    now: refTime
+  });
+  assert.equal(fridayIn3Days.withinRequestedWindow, false);
+});
+
+test('TIME-RANGE-004: Any time (99999h) accepts all posts regardless of age', () => {
+  const refTime = new Date('2026-09-09T10:00:00.000Z');
+
+  const oldMonthRes = resolveTimeResult({
+    timeText: '2 tháng',
+    recencyHours: 99999,
+    now: refTime
+  });
+  assert.equal(oldMonthRes.withinRequestedWindow, true);
+
+  const oldYearRes = resolveTimeResult({
+    timeText: '1 năm',
+    recencyHours: 99999,
+    now: refTime
+  });
+  assert.equal(oldYearRes.withinRequestedWindow, true);
+
+  const oldWeeksRes = resolveTimeResult({
+    timeText: '3 tuần',
+    recencyHours: 99999,
+    now: refTime
+  });
+  assert.equal(oldWeeksRes.withinRequestedWindow, true);
+
+  const unknownTimeRes = resolveTimeResult({
+    timeText: 'Bài viết không có thời gian rõ ràng',
+    recencyHours: 99999,
+    now: refTime
+  });
+  assert.equal(unknownTimeRes.withinRequestedWindow, true);
+});
+
+test('TIME-RANGE-005: Specific dates correctly evaluated against 3 days and 1 week', () => {
+  // Wednesday, Sept 9, 2026 at 10:00
+  const refTime = new Date('2026-09-09T10:00:00.000Z');
+
+  // "7 tháng 9 lúc 10:00" -> 48h ago (within 72h & 168h, outside 24h)
+  const sept7Res = resolveTimeResult({
+    timeText: '7 tháng 9 lúc 10:00',
+    recencyHours: 72,
+    now: refTime
+  });
+  assert.equal(sept7Res.withinRequestedWindow, true);
+  assert.equal(sept7Res.isWithin24h, false);
+
+  const sept7In24h = resolveTimeResult({
+    timeText: '7 tháng 9 lúc 10:00',
+    recencyHours: 24,
+    now: refTime
+  });
+  assert.equal(sept7In24h.withinRequestedWindow, false);
+
+  // "1 tháng 9 lúc 10:00" -> 8 days ago (192h ago) -> outside 168h
+  const sept1In1Week = resolveTimeResult({
+    timeText: '1 tháng 9 lúc 10:00',
+    recencyHours: 168,
+    now: refTime
+  });
+  assert.equal(sept1In1Week.withinRequestedWindow, false);
 });

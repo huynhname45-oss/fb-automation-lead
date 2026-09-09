@@ -178,11 +178,58 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
       latestAt: postDate.toISOString(),
       source: 'feed_text',
       confidence: 0.9,
-      withinRequestedWindow: diffHours >= 0 && diffHours <= recencyHours,
+      withinRequestedWindow: recencyHours >= 99999 || (diffHours >= 0 && diffHours <= recencyHours),
       isWithin24h: diffHours >= 0 && diffHours <= 24,
       formattedDate: timeText,
       fullContent: rawContent
     };
+  }
+
+  // 4.3. Day of week (e.g. "Thứ Hai lúc 10:49", "Thứ 2", "Thứ Bảy lúc 18:00", "Chủ nhật lúc 09:30", "Monday at 10:00")
+  const weekdayMatch = cleanTime.match(/(?:thứ\s*([2-7]|hai|ba|tư|tu|năm|nam|sáu|sau|bảy|bay)|chủ\s*nhật|chu\s*nhat|cn|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:lúc|at))?(?:\s*(\d{1,2}):(\d{2}))?/iu);
+  if (weekdayMatch) {
+    const rawDay = (weekdayMatch[1] || weekdayMatch[0]).toLowerCase();
+    const dayMap = {
+      'hai': 1, '2': 1, 'monday': 1,
+      'ba': 2, '3': 2, 'tuesday': 2,
+      'tư': 3, 'tu': 3, '4': 3, 'wednesday': 3,
+      'năm': 4, 'nam': 4, '5': 4, 'thursday': 4,
+      'sáu': 5, 'sau': 5, '6': 5, 'friday': 5,
+      'bảy': 6, 'bay': 6, '7': 6, 'saturday': 6,
+      'chủ nhật': 0, 'chu nhat': 0, 'cn': 0, 'sunday': 0
+    };
+    let targetDay = -1;
+    for (const [k, v] of Object.entries(dayMap)) {
+      if (rawDay.includes(k) || rawDay === k) {
+        targetDay = v;
+        break;
+      }
+    }
+    if (targetDay !== -1) {
+      const nowDate = new Date(nowTs);
+      const currentDay = nowDate.getDay();
+      let daysAgo = (currentDay - targetDay + 7) % 7;
+      if (daysAgo === 0) daysAgo = 7; // Same weekday last week
+      const hours = weekdayMatch[2] ? parseInt(weekdayMatch[2], 10) : 12;
+      const mins = weekdayMatch[3] ? parseInt(weekdayMatch[3], 10) : 0;
+      const postDate = new Date(nowTs);
+      postDate.setDate(postDate.getDate() - daysAgo);
+      postDate.setHours(hours, mins, 0, 0);
+
+      const diffHours = (nowTs - postDate.getTime()) / (3600 * 1000);
+      return {
+        status: weekdayMatch[2] ? 'exact' : 'range',
+        publishedAt: postDate.toISOString(),
+        earliestAt: new Date(postDate.getTime() - 1800000).toISOString(),
+        latestAt: new Date(postDate.getTime() + 1800000).toISOString(),
+        source: 'feed_text',
+        confidence: 0.9,
+        withinRequestedWindow: recencyHours >= 99999 || (diffHours >= 0 && diffHours <= recencyHours),
+        isWithin24h: diffHours >= 0 && diffHours <= 24,
+        formattedDate: timeText,
+        fullContent: rawContent
+      };
+    }
   }
 
   // 5. Relative days (e.g. "2 ngày", "3 ngày", "4 ngày")
@@ -198,7 +245,7 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
       latestAt: new Date(targetTs + 12 * 3600 * 1000).toISOString(),
       source: 'feed_text',
       confidence: 0.8,
-      withinRequestedWindow: recencyHours > 24 && diffHours <= recencyHours,
+      withinRequestedWindow: recencyHours >= 99999 || (recencyHours > 24 && diffHours <= recencyHours),
       isWithin24h: false,
       formattedDate: timeText,
       fullContent: rawContent
@@ -218,7 +265,7 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
       latestAt: new Date(targetTs + 24 * 3600 * 1000).toISOString(),
       source: 'feed_text',
       confidence: 0.8,
-      withinRequestedWindow: recencyHours >= 168 && diffHours <= recencyHours,
+      withinRequestedWindow: recencyHours >= 99999 || (recencyHours >= 168 && diffHours <= recencyHours),
       isWithin24h: false,
       formattedDate: timeText,
       fullContent: rawContent
@@ -239,14 +286,14 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
       latestAt: null,
       source: 'feed_text',
       confidence: 0.9,
-      withinRequestedWindow: false,
+      withinRequestedWindow: recencyHours >= 99999,
       isWithin24h: false,
       formattedDate: timeText,
       fullContent: rawContent
     };
   }
 
-  // Default fallback: unknown, strictly not within window
+  // Default fallback: unknown
   return {
     status: 'unknown',
     publishedAt: null,
@@ -254,7 +301,7 @@ export function resolveTimeResult({ timeText = '', rawContent = '', recencyHours
     latestAt: null,
     source: 'feed_text',
     confidence: 0.2,
-    withinRequestedWindow: false,
+    withinRequestedWindow: recencyHours >= 99999,
     isWithin24h: false,
     formattedDate: timeText,
     fullContent: rawContent
@@ -729,11 +776,8 @@ class SearchEngine extends EventEmitter {
       }
 
       // 2. Select All (Tất cả) Tab in sidebar to expand sub-filters (Bài viết mới đây, Ngày đăng)
-      await this._applyAllTab(page);
-      await delay(1500);
-
-      // 3. Toggle "Bài viết mới đây" (Recent Posts)
-      // Chỉ bật "Bài viết mới đây" khi chọn mốc 24h. Các mốc khác (3 ngày, 1 tuần, bất kỳ) không bật để tránh Facebook ẩn bài cũ hơn 24h.
+      // Khi người dùng chọn mốc 24h: Bật "Tất cả" và "Bài viết mới đây".
+      // Các mốc khác (3 ngày, 1 tuần, bất kỳ): Giữ nguyên feed mặc định để không bị ẩn bài cũ.
       let targetRecencyHours = 24;
       let enableRecent = true;
 
@@ -757,19 +801,28 @@ class SearchEngine extends EventEmitter {
         enableRecent = true;
       }
 
-      if (enableRecent) {
-        logger.info('3. Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây" (Mốc 24h)...');
-        await this._applyRecentPostsToggle(page, true);
-        await delay(1500);
-      } else {
-        logger.info(`3. Bỏ qua nút gạt "Bài viết mới đây" trên Facebook (Khoảng thời gian: ${filters.timeRange || 'mở rộng'})...`);
-      }
+      const hasDateFilter = filters.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '';
 
-      // 4. Select "Ngày đăng" (Date Posted - Year)
-      if (filters.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '') {
-        logger.info(`4. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
-        await this._applyDateFilter(page, filters.datePosted);
+      if (enableRecent || hasDateFilter) {
+        await this._applyAllTab(page);
         await delay(1500);
+
+        if (enableRecent) {
+          logger.info('3. Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây" (Mốc 24h)...');
+          await this._applyRecentPostsToggle(page, true);
+          await delay(1500);
+        } else {
+          logger.info(`3. Kiểm tra nút gạt "Bài viết mới đây" trên Facebook (Đảm bảo TẮT cho mốc: ${filters.timeRange || 'mở rộng'})...`);
+          await this._applyRecentPostsToggle(page, false);
+        }
+
+        if (hasDateFilter) {
+          logger.info(`4. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
+          await this._applyDateFilter(page, filters.datePosted);
+          await delay(1500);
+        }
+      } else {
+        logger.info(`3. Giữ nguyên bộ lọc Facebook mặc định (Khoảng thời gian: ${filters.timeRange || 'mở rộng'}). Không bật nút gạt "Bài viết mới đây".`);
       }
 
       const processedPostKeys = new Set();
@@ -1135,9 +1188,16 @@ class SearchEngine extends EventEmitter {
             recencyHours: targetRecencyHours
           });
 
-          // Mở trang chi tiết bài viết nếu bản xem trước trên feed chưa có SĐT hoặc thời gian chưa rõ
+          // 1.2. Nếu đã xác định thời gian trên feed và KHÔNG thuộc mốc đã chọn -> Bỏ qua ngay lập tức, không mở trang bài viết
+          if (targetRecencyHours < 99999 && postVerification.status !== 'unknown' && !postVerification.withinRequestedWindow) {
+            logger.info(`❌ [BƯỚC 1 - SAI THỜI GIAN] BỎ QUA [${post.authorName}] (${postVerification.formattedDate}) - Bài viết không thuộc mốc ${targetRecencyHours}h đã chọn!`);
+            if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
+            continue;
+          }
+
+          // Mở trang chi tiết bài viết nếu thời gian chưa rõ hoặc bản xem trước trên feed chưa có SĐT
           const feedHasPhone = extractPhonesFromText(post.content).length > 0;
-          if (!feedHasPhone || !postVerification.withinRequestedWindow || postVerification.status === 'unknown') {
+          if (postVerification.status === 'unknown' || !feedHasPhone) {
             if (post.postLink) {
               const detailedVerif = await this._verifyPostDetails(
                 context, 
