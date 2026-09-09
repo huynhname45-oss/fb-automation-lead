@@ -11,9 +11,14 @@ const configSchema = z.object({
   excludeEnterpriseChains: z.boolean().optional(),
   excludePosCompetitors: z.boolean().optional(),
   excludeUnsupportedIndustries: z.boolean().optional(),
+  excludeRealEstate: z.boolean().optional(),
+  excludeHotels: z.boolean().optional(),
+  excludeBeautySpa: z.boolean().optional(),
+  excludeEventGifts: z.boolean().optional(),
   requireMobilePhoneOnly: z.boolean().optional(),
   requirePhoneOnly: z.boolean().optional(),
   excludeKeywords: z.string().optional(),
+  searchKeyword: z.string().optional(),
   aiEnabled: z.boolean().optional(),
   aiProvider: z.enum(['free_hybrid', 'gemini', 'openai', 'deepseek', 'groq']).optional(),
   aiApiKey: z.string().optional(),
@@ -32,8 +37,16 @@ const configSchema = z.object({
   }).optional(),
   defaultFilters: z.object({
     recentPosts: z.boolean().optional(),
-    datePosted: z.string().optional()
-  }).optional()
+    datePosted: z.string().optional(),
+    timeRange: z.string().optional()
+  }).optional(),
+  memberScanConfig: z.object({
+    excludeSales: z.boolean().optional(),
+    deepPhone: z.boolean().optional(),
+    maxMembersPerGroup: z.number().optional(),
+    groupUrls: z.string().optional()
+  }).optional(),
+  userFormPreferences: z.record(z.any()).optional()
 });
 
 router.get('/', (req, res) => {

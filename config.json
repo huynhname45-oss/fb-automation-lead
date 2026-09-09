@@ -5,13 +5,14 @@
   "excludeEnterpriseChains": true,
   "excludePosCompetitors": false,
   "excludeUnsupportedIndustries": false,
-  "excludeRealEstate": false,
+  "excludeRealEstate": true,
   "excludeHotels": false,
   "excludeBeautySpa": false,
   "excludeEventGifts": true,
   "requireMobilePhoneOnly": true,
   "requirePhoneOnly": false,
   "excludeKeywords": "",
+  "searchKeyword": "khai trương quán",
   "aiEnabled": true,
   "aiProvider": "groq",
   "aiApiKey": "AQ.Ab8RN6K7D64ZvqO_oCalWpUg3VJw4oK8UWt47jPmA1ynCZUsDQ",
@@ -27,6 +28,13 @@
     "recentPosts": false,
     "datePosted": "any"
   },
+  "memberScanConfig": {
+    "excludeSales": true,
+    "deepPhone": true,
+    "maxMembersPerGroup": 60,
+    "groupUrls": ""
+  },
+  "userFormPreferences": {},
   "exportConfig": {
     "provinceCode": "__export__.res_province_121_cf34d119",
     "productGroup": "RETAIL_PRO",

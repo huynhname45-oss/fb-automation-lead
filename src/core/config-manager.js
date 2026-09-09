@@ -41,6 +41,7 @@ const DEFAULT_CONFIG = {
   requireMobilePhoneOnly: true,
   requirePhoneOnly: false,
   excludeKeywords: '',
+  searchKeyword: '',
   aiEnabled: true,
   aiProvider: 'groq',
   aiApiKey: '',
@@ -55,8 +56,16 @@ const DEFAULT_CONFIG = {
   aiPromptContext: DEFAULT_AI_PROMPT_CONTEXT,
   defaultFilters: {
     recentPosts: true,
-    datePosted: 'any'
-  }
+    datePosted: 'any',
+    timeRange: '24h'
+  },
+  memberScanConfig: {
+    excludeSales: true,
+    deepPhone: true,
+    maxMembersPerGroup: 60,
+    groupUrls: ''
+  },
+  userFormPreferences: {}
 };
 
 class ConfigManager {

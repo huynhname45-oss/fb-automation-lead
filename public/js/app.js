@@ -83,9 +83,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initNavigation();
     initEventListeners();
+    restoreAllUserPreferences(); // Khôi phục ngay lập tức toàn bộ tùy chọn người dùng từ bộ nhớ
     await initClientStorage();
     checkSessionStatus();
-    fetchConfig();
+    await fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
     loadSavedGroups();     // Automatically load cached groups on startup
     startIdleSync();
@@ -415,19 +416,70 @@ function initEventListeners() {
         });
     }
 
+    // Two-way sync & Preference Auto-Save Handlers
     const configHeadless = document.getElementById('configHeadless');
+    const cfgHeadless = document.getElementById('cfgHeadless');
     if (configHeadless) {
-        configHeadless.addEventListener('change', async (e) => {
-            try {
-                await api('PUT', '/api/config', { headless: e.target.checked });
-                const cfgHeadless = document.getElementById('cfgHeadless');
-                if (cfgHeadless) cfgHeadless.checked = e.target.checked;
-                showToast(`Đã ${e.target.checked ? 'bật' : 'tắt'} chế độ chạy ngầm (Headless)`, 'info');
-            } catch (err) {
-                showToast('Lỗi cập nhật cấu hình', 'error');
-            }
+        configHeadless.addEventListener('change', (e) => {
+            if (cfgHeadless) cfgHeadless.checked = e.target.checked;
+            saveAllUserPreferences();
+            showToast(`Đã ${e.target.checked ? 'bật' : 'tắt'} chế độ chạy ngầm (Headless)`, 'info');
         });
     }
+    if (cfgHeadless) {
+        cfgHeadless.addEventListener('change', (e) => {
+            if (configHeadless) configHeadless.checked = e.target.checked;
+            saveAllUserPreferences();
+        });
+    }
+
+    const chkRequirePhoneOnly = document.getElementById('chkRequirePhoneOnly');
+    const cfgRequirePhoneOnly = document.getElementById('cfgRequirePhoneOnly');
+    if (chkRequirePhoneOnly) {
+        chkRequirePhoneOnly.addEventListener('change', (e) => {
+            if (cfgRequirePhoneOnly) cfgRequirePhoneOnly.checked = e.target.checked;
+            saveAllUserPreferences();
+        });
+    }
+    if (cfgRequirePhoneOnly) {
+        cfgRequirePhoneOnly.addEventListener('change', (e) => {
+            if (chkRequirePhoneOnly) chkRequirePhoneOnly.checked = e.target.checked;
+            saveAllUserPreferences();
+        });
+    }
+
+    const filterMaxPosts = document.getElementById('filterMaxPosts');
+    const cfgMaxPosts = document.getElementById('cfgMaxPosts');
+    if (filterMaxPosts) {
+        filterMaxPosts.addEventListener('input', (e) => {
+            if (cfgMaxPosts) cfgMaxPosts.value = e.target.value;
+            saveAllUserPreferences();
+        });
+    }
+    if (cfgMaxPosts) {
+        cfgMaxPosts.addEventListener('input', (e) => {
+            if (filterMaxPosts) filterMaxPosts.value = e.target.value;
+            saveAllUserPreferences();
+        });
+    }
+
+    // Auto-save on all remaining preference inputs & selects
+    const autoSaveElementIds = [
+        'searchInput', 'excludeKeywordsInput', 'selTimeRange', 'filterDatePosted',
+        'chkExcludeRealEstate', 'chkExcludeHotels', 'chkExcludeBeautySpa', 'chkExcludeEventGifts',
+        'chkMemberExcludeSales', 'chkMemberDeepPhone', 'inputMaxMembersPerGroup', 'inputMemberGroupUrls',
+        'filterQualitySelect', 'filterStatusSelect', 'filterAiScoreSelect'
+    ];
+
+    autoSaveElementIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', saveAllUserPreferences);
+            if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'number')) {
+                el.addEventListener('input', saveAllUserPreferences);
+            }
+        }
+    });
 
     // Filter Listeners (Trạng thái & Từ ngày -> Đến ngày)
     const btnApplyDateFilter = document.getElementById('btnApplyDateFilter');
@@ -1361,13 +1413,9 @@ async function handleStartSearch(e) {
 
     const keyword = document.getElementById('searchInput').value.trim();
     const rawExclude = (document.getElementById('excludeKeywordsInput')?.value || '').trim();
-    localStorage.setItem('fb_automation_exclude_keywords', rawExclude);
-    api('PUT', '/api/config', { excludeKeywords: rawExclude }).catch(() => {});
-
     const excludeKeywords = rawExclude
         ? rawExclude.split(/[,，]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
         : [];
-
     const maxPosts = parseInt(document.getElementById('filterMaxPosts').value, 10) || state.config?.maxPosts || 50;
     const datePosted = document.getElementById('filterDatePosted').value;
     const timeRange = document.getElementById('selTimeRange')?.value || '24h';
@@ -1376,7 +1424,10 @@ async function handleStartSearch(e) {
     const excludeRealEstate = document.getElementById('chkExcludeRealEstate')?.checked || false;
     const excludeHotels = document.getElementById('chkExcludeHotels')?.checked || false;
     const excludeBeautySpa = document.getElementById('chkExcludeBeautySpa')?.checked || false;
-    const excludeEventGifts = document.getElementById('chkExcludeEventGifts')?.checked || false;
+    const excludeEventGifts = document.getElementById('chkExcludeEventGifts')?.checked ?? true;
+
+    // Persist all user form choices immediately
+    saveAllUserPreferences();
 
     if (!keyword) {
         showToast('Vui lòng nhập từ khóa tìm kiếm', 'warning');
@@ -2053,6 +2104,138 @@ async function handleDeleteSelected() {
 }
 
 /**
+ * User Preferences & Form State Persistence (Tự động lưu & Phục hồi tất cả tùy chọn)
+ */
+let _savePrefsTimeout = null;
+
+function saveAllUserPreferences() {
+    const getVal = (id) => document.getElementById(id)?.value;
+    const getChecked = (id) => document.getElementById(id)?.checked;
+
+    const prefs = {
+        searchKeyword: getVal('searchInput') ?? '',
+        excludeKeywords: getVal('excludeKeywordsInput') ?? '',
+        timeRange: getVal('selTimeRange') ?? '24h',
+        requirePhoneOnly: getChecked('chkRequirePhoneOnly') ?? false,
+        datePosted: getVal('filterDatePosted') ?? '',
+        maxPosts: parseInt(getVal('filterMaxPosts'), 10) || 50,
+        excludeRealEstate: getChecked('chkExcludeRealEstate') ?? false,
+        excludeHotels: getChecked('chkExcludeHotels') ?? false,
+        excludeBeautySpa: getChecked('chkExcludeBeautySpa') ?? false,
+        excludeEventGifts: getChecked('chkExcludeEventGifts') ?? true,
+
+        memberExcludeSales: getChecked('chkMemberExcludeSales') ?? true,
+        memberDeepPhone: getChecked('chkMemberDeepPhone') ?? true,
+        maxMembersPerGroup: parseInt(getVal('inputMaxMembersPerGroup'), 10) || 60,
+        memberGroupUrls: getVal('inputMemberGroupUrls') ?? '',
+
+        headless: getChecked('configHeadless') ?? false,
+        filterQuality: getVal('filterQualitySelect') ?? 'all',
+        filterStatus: getVal('filterStatusSelect') ?? 'all',
+        filterAiScore: getVal('filterAiScoreSelect') ?? 'all'
+    };
+
+    try {
+        localStorage.setItem('fb_user_form_prefs', JSON.stringify(prefs));
+    } catch (e) {}
+
+    // Debounce save to backend /api/config so server config.json always stays in sync
+    clearTimeout(_savePrefsTimeout);
+    _savePrefsTimeout = setTimeout(() => {
+        const payload = {
+            searchKeyword: prefs.searchKeyword,
+            excludeKeywords: prefs.excludeKeywords,
+            excludeRealEstate: prefs.excludeRealEstate,
+            excludeHotels: prefs.excludeHotels,
+            excludeBeautySpa: prefs.excludeBeautySpa,
+            excludeEventGifts: prefs.excludeEventGifts,
+            requirePhoneOnly: prefs.requirePhoneOnly,
+            maxPosts: prefs.maxPosts,
+            headless: prefs.headless,
+            defaultFilters: {
+                recentPosts: prefs.timeRange === '24h',
+                timeRange: prefs.timeRange,
+                datePosted: prefs.datePosted || 'any'
+            },
+            memberScanConfig: {
+                excludeSales: prefs.memberExcludeSales,
+                deepPhone: prefs.memberDeepPhone,
+                maxMembersPerGroup: prefs.maxMembersPerGroup,
+                groupUrls: prefs.memberGroupUrls
+            },
+            userFormPreferences: prefs
+        };
+        api('PUT', '/api/config', payload).catch(() => {});
+    }, 500);
+}
+
+function restoreAllUserPreferences() {
+    let prefs = null;
+    try {
+        const raw = localStorage.getItem('fb_user_form_prefs');
+        if (raw) prefs = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!prefs && state.config?.userFormPreferences && Object.keys(state.config.userFormPreferences).length > 0) {
+        prefs = state.config.userFormPreferences;
+    }
+
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.value = val;
+    };
+    const setChecked = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.checked = !!val;
+    };
+
+    if (prefs) {
+        if (prefs.searchKeyword !== undefined) setVal('searchInput', prefs.searchKeyword);
+        if (prefs.excludeKeywords !== undefined) setVal('excludeKeywordsInput', prefs.excludeKeywords);
+        if (prefs.timeRange !== undefined) setVal('selTimeRange', prefs.timeRange);
+        if (prefs.datePosted !== undefined) setVal('filterDatePosted', prefs.datePosted);
+        if (prefs.maxPosts !== undefined) {
+            setVal('filterMaxPosts', prefs.maxPosts);
+            setVal('cfgMaxPosts', prefs.maxPosts);
+        }
+        if (prefs.requirePhoneOnly !== undefined) {
+            setChecked('chkRequirePhoneOnly', prefs.requirePhoneOnly);
+            setChecked('cfgRequirePhoneOnly', prefs.requirePhoneOnly);
+        }
+
+        if (prefs.excludeRealEstate !== undefined) setChecked('chkExcludeRealEstate', prefs.excludeRealEstate);
+        if (prefs.excludeHotels !== undefined) setChecked('chkExcludeHotels', prefs.excludeHotels);
+        if (prefs.excludeBeautySpa !== undefined) setChecked('chkExcludeBeautySpa', prefs.excludeBeautySpa);
+        if (prefs.excludeEventGifts !== undefined) setChecked('chkExcludeEventGifts', prefs.excludeEventGifts);
+
+        if (prefs.memberExcludeSales !== undefined) setChecked('chkMemberExcludeSales', prefs.memberExcludeSales);
+        if (prefs.memberDeepPhone !== undefined) setChecked('chkMemberDeepPhone', prefs.memberDeepPhone);
+        if (prefs.maxMembersPerGroup !== undefined) setVal('inputMaxMembersPerGroup', prefs.maxMembersPerGroup);
+        if (prefs.memberGroupUrls !== undefined) setVal('inputMemberGroupUrls', prefs.memberGroupUrls);
+
+        if (prefs.headless !== undefined) {
+            setChecked('configHeadless', prefs.headless);
+            setChecked('cfgHeadless', prefs.headless);
+        }
+
+        if (prefs.filterQuality !== undefined) setVal('filterQualitySelect', prefs.filterQuality);
+        if (prefs.filterStatus !== undefined) setVal('filterStatusSelect', prefs.filterStatus);
+        if (prefs.filterAiScore !== undefined) setVal('filterAiScoreSelect', prefs.filterAiScore);
+    } else if (state.config) {
+        if (state.config.searchKeyword) setVal('searchInput', state.config.searchKeyword);
+        if (state.config.excludeKeywords) setVal('excludeKeywordsInput', state.config.excludeKeywords);
+        if (state.config.excludeRealEstate !== undefined) setChecked('chkExcludeRealEstate', state.config.excludeRealEstate);
+        if (state.config.excludeHotels !== undefined) setChecked('chkExcludeHotels', state.config.excludeHotels);
+        if (state.config.excludeBeautySpa !== undefined) setChecked('chkExcludeBeautySpa', state.config.excludeBeautySpa);
+        setChecked('chkExcludeEventGifts', state.config.excludeEventGifts !== false);
+        if (state.config.defaultFilters?.timeRange) setVal('selTimeRange', state.config.defaultFilters.timeRange);
+        if (state.config.defaultFilters?.datePosted && state.config.defaultFilters.datePosted !== 'any') {
+            setVal('filterDatePosted', state.config.defaultFilters.datePosted);
+        }
+    }
+}
+
+/**
  * Config API Handlers
  */
 async function fetchConfig() {
@@ -2089,6 +2272,44 @@ async function fetchConfig() {
         const cfgRequirePhoneOnly = document.getElementById('cfgRequirePhoneOnly');
         if (chkRequirePhoneOnly) chkRequirePhoneOnly.checked = config.requirePhoneOnly === true;
         if (cfgRequirePhoneOnly) cfgRequirePhoneOnly.checked = config.requirePhoneOnly === true;
+
+        // Industry Exclusions Sync
+        const chkExcludeRealEstate = document.getElementById('chkExcludeRealEstate');
+        const chkExcludeHotels = document.getElementById('chkExcludeHotels');
+        const chkExcludeBeautySpa = document.getElementById('chkExcludeBeautySpa');
+        const chkExcludeEventGifts = document.getElementById('chkExcludeEventGifts');
+
+        if (chkExcludeRealEstate) chkExcludeRealEstate.checked = config.excludeRealEstate === true;
+        if (chkExcludeHotels) chkExcludeHotels.checked = config.excludeHotels === true;
+        if (chkExcludeBeautySpa) chkExcludeBeautySpa.checked = config.excludeBeautySpa === true;
+        if (chkExcludeEventGifts) chkExcludeEventGifts.checked = config.excludeEventGifts !== false;
+
+        // Search inputs sync
+        if (config.searchKeyword) {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput && !searchInput.value) searchInput.value = config.searchKeyword;
+        }
+
+        // Member Scanner Config Sync
+        if (config.memberScanConfig) {
+            const chkMemberExcludeSales = document.getElementById('chkMemberExcludeSales');
+            const chkMemberDeepPhone = document.getElementById('chkMemberDeepPhone');
+            const inputMaxMembersPerGroup = document.getElementById('inputMaxMembersPerGroup');
+            const inputMemberGroupUrls = document.getElementById('inputMemberGroupUrls');
+
+            if (chkMemberExcludeSales && config.memberScanConfig.excludeSales !== undefined) {
+                chkMemberExcludeSales.checked = config.memberScanConfig.excludeSales !== false;
+            }
+            if (chkMemberDeepPhone && config.memberScanConfig.deepPhone !== undefined) {
+                chkMemberDeepPhone.checked = config.memberScanConfig.deepPhone !== false;
+            }
+            if (inputMaxMembersPerGroup && config.memberScanConfig.maxMembersPerGroup) {
+                inputMaxMembersPerGroup.value = config.memberScanConfig.maxMembersPerGroup;
+            }
+            if (inputMemberGroupUrls && config.memberScanConfig.groupUrls) {
+                inputMemberGroupUrls.value = config.memberScanConfig.groupUrls;
+            }
+        }
 
         // AI Configuration Sync
         const chkAiEnabled = document.getElementById('cfgAiEnabled');
@@ -2149,8 +2370,12 @@ async function fetchConfig() {
                 localStorage.setItem('fb_automation_exclude_keywords', config.excludeKeywords);
             }
         }
+
+        // Overlay with client-stored user form preferences (if user edited locally)
+        restoreAllUserPreferences();
     } catch (err) {
-        // Silently use defaults
+        // Silently use defaults and restore local prefs
+        restoreAllUserPreferences();
     }
 }
 
@@ -2286,6 +2511,10 @@ async function handleSaveConfig(e) {
         excludeEnterpriseChains: excludeEnterprise,
         excludePosCompetitors: excludeCompetitors,
         excludeUnsupportedIndustries: excludeUnsupported,
+        excludeRealEstate: document.getElementById('chkExcludeRealEstate')?.checked ?? (state.config?.excludeRealEstate || false),
+        excludeHotels: document.getElementById('chkExcludeHotels')?.checked ?? (state.config?.excludeHotels || false),
+        excludeBeautySpa: document.getElementById('chkExcludeBeautySpa')?.checked ?? (state.config?.excludeBeautySpa || false),
+        excludeEventGifts: document.getElementById('chkExcludeEventGifts')?.checked ?? (state.config?.excludeEventGifts !== false),
         requireMobilePhoneOnly: requireMobileOnly,
         requirePhoneOnly: requirePhoneOnly,
         aiEnabled: aiEnabledVal,
@@ -2316,6 +2545,7 @@ async function handleSaveConfig(e) {
         const filterMaxPosts = document.getElementById('filterMaxPosts');
         if (filterMaxPosts) filterMaxPosts.value = maxPostsVal;
 
+        saveAllUserPreferences();
         showToast(`Đã lưu cấu hình AI & Ngữ cảnh thành công!`, 'success');
     } catch (err) {
         showToast(err.message || 'Lỗi lưu cấu hình', 'error');
