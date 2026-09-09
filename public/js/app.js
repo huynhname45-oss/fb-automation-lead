@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchResultsHistory(); // Automatically load history on startup
     loadSavedGroups();     // Automatically load cached groups on startup
     startIdleSync();
+    initSystemUpdater();   // Khởi tạo trình kiểm tra và cập nhật hệ thống tự động qua Git
 });
 
 /**
@@ -4407,3 +4408,314 @@ async function handleClearMemberScanLog() {
     } catch (_) {}
     showToast('Đã xóa toàn bộ nội dung nhật ký quét!', 'info');
 }
+
+/* ==========================================================================
+   SYSTEM UPDATER (IN-APP GIT SELF-UPDATE)
+   ========================================================================== */
+
+const systemUpdateState = {
+    hasUpdate: false,
+    currentCommit: null,
+    remoteCommit: null,
+    isBusy: false,
+    isUpdating: false,
+    autoUpdateWhenIdle: false,
+    recoveryPollingTimer: null
+};
+
+async function checkSystemVersion(force = false) {
+    try {
+        const url = '/api/system/version' + (force ? '?force=true' : '');
+        const res = await api('GET', url);
+        if (!res.supported) return;
+
+        systemUpdateState.hasUpdate = !!res.hasUpdate;
+        systemUpdateState.currentCommit = res.currentCommit;
+        systemUpdateState.remoteCommit = res.remoteCommit;
+        systemUpdateState.isBusy = !!res.isBusy;
+        systemUpdateState.isUpdating = !!res.isUpdating;
+
+        // 1. Sidebar Dot
+        const sidebarDot = document.getElementById('sidebarUpdateDot');
+        if (sidebarDot) {
+            sidebarDot.style.display = res.hasUpdate ? 'inline-block' : 'none';
+        }
+
+        // 2. Top Notification Banner
+        const banner = document.getElementById('systemUpdateBanner');
+        const bannerCommitMsg = document.getElementById('updateBannerCommitMsg');
+        const bannerCommitDate = document.getElementById('updateBannerCommitDate');
+        const dismissedSha = sessionStorage.getItem('dismissed_update_sha');
+
+        if (res.hasUpdate && res.remoteCommit && dismissedSha !== res.remoteCommit.sha) {
+            if (bannerCommitMsg) bannerCommitMsg.textContent = res.remoteCommit.message || 'Bản cập nhật mới';
+            if (bannerCommitDate) bannerCommitDate.textContent = res.remoteCommit.date ? `(${res.remoteCommit.date})` : '';
+            if (banner) banner.style.display = 'block';
+        } else {
+            if (banner) banner.style.display = 'none';
+        }
+
+        // 3. Settings Tab Cards
+        const cfgCurrentSha = document.getElementById('cfgCurrentCommitSha');
+        const cfgCurrentDate = document.getElementById('cfgCurrentCommitDate');
+        const cfgCurrentMsg = document.getElementById('cfgCurrentCommitMsg');
+        const cfgRemoteSha = document.getElementById('cfgRemoteCommitSha');
+        const cfgRemoteDate = document.getElementById('cfgRemoteCommitDate');
+        const cfgRemoteMsg = document.getElementById('cfgRemoteCommitMsg');
+        const cfgStatusDot = document.getElementById('cfgUpdateStatusDot');
+        const cfgStatusText = document.getElementById('cfgUpdateStatusText');
+        const btnTriggerConfig = document.getElementById('btnTriggerUpdateConfig');
+
+        if (cfgCurrentSha && res.currentCommit) cfgCurrentSha.textContent = res.currentCommit.sha || '—';
+        if (cfgCurrentDate && res.currentCommit) cfgCurrentDate.textContent = res.currentCommit.date || '—';
+        if (cfgCurrentMsg && res.currentCommit) cfgCurrentMsg.textContent = res.currentCommit.message || '—';
+
+        if (cfgRemoteSha && res.remoteCommit) cfgRemoteSha.textContent = res.remoteCommit.sha || '—';
+        if (cfgRemoteDate && res.remoteCommit) cfgRemoteDate.textContent = res.remoteCommit.date || '—';
+        if (cfgRemoteMsg && res.remoteCommit) cfgRemoteMsg.textContent = res.remoteCommit.message || '—';
+
+        if (cfgStatusDot && cfgStatusText) {
+            if (res.hasUpdate) {
+                cfgStatusDot.style.background = '#f59e0b';
+                cfgStatusText.textContent = `Đã có bản cập nhật mới trên Git (${res.behindCount || 1} commit mới)`;
+                if (btnTriggerConfig) btnTriggerConfig.style.display = 'inline-flex';
+            } else {
+                cfgStatusDot.style.background = '#10b981';
+                cfgStatusText.textContent = 'Đang là phiên bản mới nhất trên Git';
+                if (btnTriggerConfig) btnTriggerConfig.style.display = 'none';
+            }
+        }
+
+        // 4. Nếu đang có một Client khác kích hoạt Update
+        if (res.isUpdating && !systemUpdateState.recoveryPollingTimer) {
+            showUpdateOverlay('Hệ thống đang được nâng cấp bởi một người dùng khác...');
+            startServerRecoveryPolling();
+        }
+
+        // 5. Nếu đang ở chế độ chờ cào xong rồi tự động update
+        if (systemUpdateState.autoUpdateWhenIdle && !res.isBusy && res.hasUpdate) {
+            systemUpdateState.autoUpdateWhenIdle = false;
+            showToast('Tác vụ quét trước đã hoàn tất! Bắt đầu tự động nâng cấp hệ thống...', 'info');
+            startSystemUpdate(false);
+        }
+    } catch (err) {
+        console.warn('Lỗi khi kiểm tra phiên bản hệ thống:', err);
+    }
+}
+
+async function startSystemUpdate(force = false) {
+    const btnBanner = document.getElementById('btnBannerUpdateNow');
+    const btnConfig = document.getElementById('btnTriggerUpdateConfig');
+    if (btnBanner) btnBanner.disabled = true;
+    if (btnConfig) btnConfig.disabled = true;
+
+    showToast('Đang kết nối để cập nhật hệ thống...', 'info');
+
+    try {
+        const res = await api('POST', '/api/system/update', { force });
+
+        // Trường hợp hệ thống bận chạy tác vụ ngầm
+        if (res.status === 'busy') {
+            if (btnBanner) btnBanner.disabled = false;
+            if (btnConfig) btnConfig.disabled = false;
+
+            const modalBusy = document.getElementById('modalUpdateBusy');
+            const detailsBox = document.getElementById('modalBusyTaskDetails');
+            if (detailsBox) {
+                detailsBox.textContent = res.busyDetails || 'Đang có tác vụ cào lead hoặc quét nhóm ngầm.';
+            }
+            if (modalBusy) modalBusy.style.display = 'flex';
+            return;
+        }
+
+        // Trường hợp cập nhật thành công -> Bật màn hình phủ đếm ngược
+        showUpdateOverlay('Cập nhật thành công! Server đang khởi động lại...');
+
+        const stepPull = document.getElementById('stepPullCode');
+        const stepNpm = document.getElementById('stepNpmInstall');
+        const stepRestart = document.getElementById('stepRestartServer');
+        const statusText = document.getElementById('updatingStatusLiveText');
+
+        if (stepPull) {
+            stepPull.classList.add('done');
+            stepPull.querySelector('.update-step-icon').textContent = '✓';
+        }
+        if (stepNpm) {
+            stepNpm.classList.add('done');
+            stepNpm.querySelector('.update-step-icon').textContent = '✓';
+        }
+        if (stepRestart) {
+            stepRestart.classList.add('active');
+            stepRestart.querySelector('.update-step-icon').textContent = '⚡';
+        }
+        if (statusText) {
+            statusText.textContent = 'Server đang khởi động lại... Đang tự động kết nối lại sau 4 giây.';
+        }
+
+        // Đợi 3 giây rồi bắt đầu thăm dò kết nối lại
+        setTimeout(() => {
+            startServerRecoveryPolling();
+        }, 3000);
+
+    } catch (err) {
+        if (btnBanner) btnBanner.disabled = false;
+        if (btnConfig) btnConfig.disabled = false;
+        hideUpdateOverlay();
+        showToast(err.message || 'Không thể cập nhật hệ thống!', 'error');
+    }
+}
+
+function showUpdateOverlay(title = 'Đang Cập Nhật Hệ Thống...') {
+    const overlay = document.getElementById('modalUpdatingOverlay');
+    const titleEl = document.getElementById('updatingOverlayTitle');
+    if (titleEl) titleEl.textContent = title;
+    if (overlay) overlay.style.display = 'flex';
+}
+
+function hideUpdateOverlay() {
+    const overlay = document.getElementById('modalUpdatingOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function startServerRecoveryPolling() {
+    if (systemUpdateState.recoveryPollingTimer) return;
+
+    let attempts = 0;
+    const maxAttempts = 60; // Thử tối đa 60 lần (khoảng 90 giây)
+
+    systemUpdateState.recoveryPollingTimer = setInterval(async () => {
+        attempts++;
+        const statusText = document.getElementById('updatingStatusLiveText');
+        if (statusText) {
+            statusText.textContent = `Đang kết nối lại tới Server... (Lần thử ${attempts})`;
+        }
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const response = await fetch('/api/system/version?force=false', {
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data && !data.isUpdating) {
+                    clearInterval(systemUpdateState.recoveryPollingTimer);
+                    systemUpdateState.recoveryPollingTimer = null;
+                    if (statusText) {
+                        statusText.textContent = '🎉 Đã kết nối thành công! Đang tải lại giao diện mới...';
+                        statusText.style.color = '#10b981';
+                    }
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            }
+        } catch (_) {
+            // Server chưa khởi động xong, tiếp tục đợi
+        }
+
+        if (attempts >= maxAttempts) {
+            clearInterval(systemUpdateState.recoveryPollingTimer);
+            systemUpdateState.recoveryPollingTimer = null;
+            if (statusText) {
+                statusText.textContent = '⚠️ Hết thời gian chờ kết nối tự động. Vui lòng bấm F5 để tải lại trang.';
+                statusText.style.color = '#dc2626';
+            }
+        }
+    }, 1500);
+}
+
+function initSystemUpdater() {
+    // 1. Gắn sự kiện Banner
+    const btnBannerUpdate = document.getElementById('btnBannerUpdateNow');
+    if (btnBannerUpdate) {
+        btnBannerUpdate.addEventListener('click', () => startSystemUpdate(false));
+    }
+
+    const btnBannerDismiss = document.getElementById('btnBannerDismiss');
+    if (btnBannerDismiss) {
+        btnBannerDismiss.addEventListener('click', () => {
+            const sha = systemUpdateState.remoteCommit?.sha || '1';
+            sessionStorage.setItem('dismissed_update_sha', sha);
+            const banner = document.getElementById('systemUpdateBanner');
+            if (banner) banner.style.display = 'none';
+        });
+    }
+
+    // 2. Gắn sự kiện Cụm cấu hình Git
+    const btnCheckManual = document.getElementById('btnCheckUpdateManual');
+    if (btnCheckManual) {
+        btnCheckManual.addEventListener('click', async () => {
+            const originalText = btnCheckManual.innerHTML;
+            btnCheckManual.disabled = true;
+            btnCheckManual.innerHTML = '🔄 Đang kiểm tra...';
+            await checkSystemVersion(true);
+            btnCheckManual.disabled = false;
+            btnCheckManual.innerHTML = originalText;
+            showToast('Đã kiểm tra phiên bản mới nhất từ Git!', 'info');
+        });
+    }
+
+    const btnTriggerConfig = document.getElementById('btnTriggerUpdateConfig');
+    if (btnTriggerConfig) {
+        btnTriggerConfig.addEventListener('click', () => startSystemUpdate(false));
+    }
+
+    // 3. Gắn sự kiện Sidebar Version wrapper
+    const sidebarWrapper = document.getElementById('sidebarVersionWrapper');
+    if (sidebarWrapper) {
+        sidebarWrapper.addEventListener('click', () => {
+            const navConfig = document.getElementById('navConfig');
+            if (navConfig) navConfig.click();
+            const configSubcard = document.querySelector('.config-subcard-system');
+            if (configSubcard) {
+                configSubcard.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    }
+
+    // 4. Gắn sự kiện Busy Warning Modal
+    const btnWait = document.getElementById('btnWaitAndAutoUpdate');
+    if (btnWait) {
+        btnWait.addEventListener('click', () => {
+            systemUpdateState.autoUpdateWhenIdle = true;
+            const modal = document.getElementById('modalUpdateBusy');
+            if (modal) modal.style.display = 'none';
+            showToast('Đã lên lịch cập nhật! Hệ thống sẽ tự động nâng cấp ngay khi tác vụ hoàn thành.', 'info');
+        });
+    }
+
+    const btnForce = document.getElementById('btnForceUpdateNow');
+    if (btnForce) {
+        btnForce.addEventListener('click', () => {
+            const modal = document.getElementById('modalUpdateBusy');
+            if (modal) modal.style.display = 'none';
+            startSystemUpdate(true);
+        });
+    }
+
+    const btnCancelBusy = document.getElementById('btnCancelUpdateBusy');
+    const btnCloseBusy = document.getElementById('btnCloseModalBusy');
+    [btnCancelBusy, btnCloseBusy].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const modal = document.getElementById('modalUpdateBusy');
+                if (modal) modal.style.display = 'none';
+            });
+        }
+    });
+
+    // 5. Tự động kiểm tra bản cập nhật sau 2 giây
+    setTimeout(() => {
+        checkSystemVersion(false);
+    }, 2000);
+
+    // 6. Định kỳ kiểm tra mỗi 5 phút
+    setInterval(() => {
+        checkSystemVersion(false);
+    }, 5 * 60 * 1000);
+}
+

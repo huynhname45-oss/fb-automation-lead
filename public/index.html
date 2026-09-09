@@ -41,12 +41,34 @@
                 </button>
             </nav>
             <div class="sidebar-footer">
-                <div class="version">v1.0.0 Premium</div>
+                <div class="version-wrapper" id="sidebarVersionWrapper" title="Nhấp để kiểm tra bản cập nhật hệ thống">
+                    <span class="version" id="sidebarVersionText">v1.0.0 Premium</span>
+                    <span class="update-pulse-dot" id="sidebarUpdateDot" style="display: none;" title="Có phiên bản mới từ Git!"></span>
+                </div>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- System Update Notification Banner -->
+            <div id="systemUpdateBanner" class="system-update-banner" style="display: none;">
+                <div class="banner-inner">
+                    <div class="banner-left">
+                        <span class="banner-badge">🚀 BẢN MỚI</span>
+                        <span class="banner-title">Đã có phiên bản mới trên Git:</span>
+                        <strong class="banner-commit-msg" id="updateBannerCommitMsg">—</strong>
+                        <span class="banner-time" id="updateBannerCommitDate">—</span>
+                    </div>
+                    <div class="banner-right">
+                        <button type="button" class="btn btn-sm btn-update-action" id="btnBannerUpdateNow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            <span>Cập nhật ngay</span>
+                        </button>
+                        <button type="button" class="btn-banner-close" id="btnBannerDismiss" title="Tạm ẩn thông báo này">✕</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Header -->
             <header class="header">
                 <h1 class="page-title" id="pageTitle">Session Manager</h1>
@@ -923,6 +945,49 @@
                                     </span>
                                 </div>
 
+                                <!-- Cụm 5: Cập Nhật Hệ Thống Trực Tuyến Từ Git -->
+                                <div class="config-subcard config-subcard-system" style="border-left-color: #2563eb;">
+                                    <span class="config-category-badge" style="background: rgba(37, 99, 235, 0.12); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.3);">🚀 NHÓM 5: CẬP NHẬT HỆ THỐNG TRỰC TUYẾN (GIT OVER-THE-AIR)</span>
+                                    <h3 class="config-section-title">
+                                        <span>🚀</span> Trạng Thái Phiên Bản & Cập Nhật 1-Click
+                                    </h3>
+                                    <p class="config-section-desc">Hệ thống tự động phát hiện mã nguồn mới nhất từ GitHub khi bạn đẩy code lên và cho phép cập nhật tức thì chỉ bằng 1 cú nhấp chuột mà không cần đăng nhập VPS.</p>
+
+                                    <div class="grid-2 mb-3">
+                                        <div class="version-info-box" style="padding: 14px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--glass-border);">
+                                            <div class="text-xs text-muted font-semibold mb-1">BẢN ĐANG CHẠY TRÊN MÁY / VPS (LOCAL)</div>
+                                            <div class="d-flex align-center gap-2 mb-1">
+                                                <code class="code-badge font-bold" id="cfgCurrentCommitSha">—</code>
+                                                <span class="text-xs text-secondary" id="cfgCurrentCommitDate">—</span>
+                                            </div>
+                                            <div class="text-xs text-muted" id="cfgCurrentCommitMsg" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">—</div>
+                                        </div>
+                                        <div class="version-info-box" style="padding: 14px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--glass-border);">
+                                            <div class="text-xs text-muted font-semibold mb-1">BẢN MỚI NHẤT TRÊN GITHUB (REMOTE)</div>
+                                            <div class="d-flex align-center gap-2 mb-1">
+                                                <code class="code-badge font-bold" id="cfgRemoteCommitSha">—</code>
+                                                <span class="text-xs text-secondary" id="cfgRemoteCommitDate">—</span>
+                                            </div>
+                                            <div class="text-xs text-muted" id="cfgRemoteCommitMsg" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">—</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex align-center justify-between wrap-gap p-3 rounded-xl" style="background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 10px;">
+                                        <div class="d-flex align-center gap-2">
+                                            <span id="cfgUpdateStatusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                                            <span class="font-semibold text-sm" id="cfgUpdateStatusText">Đang là phiên bản mới nhất</span>
+                                        </div>
+                                        <div class="d-flex align-center gap-2 wrap-gap">
+                                            <button type="button" class="btn btn-ghost btn-sm" id="btnCheckUpdateManual">
+                                                🔄 Kiểm tra bản mới
+                                            </button>
+                                            <button type="button" class="btn btn-primary btn-sm" id="btnTriggerUpdateConfig" style="display: none;">
+                                                🚀 Cập nhật ngay
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="mt-5 text-center" style="padding-top: 24px; border-top: 1px solid var(--glass-border);">
                                     <button type="submit" class="btn btn-purple-full" id="btnSaveConfig" style="padding: 15px 42px; font-size: 1.05rem; max-width: 380px; margin: 0 auto; display: inline-flex; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.35);">
                                         💾 Lưu Cấu Hình Toàn Bộ Hệ Thống
@@ -1003,6 +1068,68 @@
             <div class="modal-footer">
                 <button class="btn btn-ghost btn-sm" id="btnCancelModalAssign">Hủy</button>
                 <button class="btn btn-purple-full btn-sm" id="btnConfirmModalAssign" style="padding: 0 20px;">Lưu Thay Đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Cảnh Báo Hệ Thống Đang Bận Khi Cập Nhật -->
+    <div class="modal-overlay" id="modalUpdateBusy" style="display: none; z-index: 10000;">
+        <div class="modal" style="border-radius: 16px; max-width: 500px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--glass-border);">
+                <h3 class="font-bold text-base" style="color: #d97706; display: flex; align-items: center; gap: 8px;">
+                    <span>⚠️</span> Hệ Thống Đang Có Tác Vụ Đang Chạy
+                </h3>
+                <button class="modal-close" id="btnCloseModalBusy">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px;">
+                <p class="text-sm mb-3">Hiện tại hệ thống đang thực hiện tác vụ cào lead hoặc quét nhóm ngầm:</p>
+                <div id="modalBusyTaskDetails" style="background: rgba(217, 119, 6, 0.08); border: 1px solid rgba(217, 119, 6, 0.25); border-radius: 10px; padding: 12px 16px; font-size: 0.86rem; color: #b45309; margin-bottom: 16px; font-weight: 500;">
+                    Đang quét dữ liệu...
+                </div>
+                <p class="text-xs text-muted" style="line-height: 1.6;">
+                    Nếu bạn cập nhật ngay bây giờ, các tác vụ trên sẽ bị dừng lại. Bạn có thể chọn <strong>"Chờ quét xong rồi tự cập nhật"</strong> để không làm gián đoạn công việc, hoặc <strong>"Dừng & Cập nhật ngay"</strong> nếu muốn ép nâng cấp.
+                </p>
+            </div>
+            <div class="modal-footer flex-column gap-2" style="border-top: 1px solid var(--glass-border);">
+                <button type="button" class="btn btn-primary w-100" id="btnWaitAndAutoUpdate" style="padding: 10px 16px; font-size: 0.9rem; font-weight: 600;">
+                    ⏳ Chờ quét xong rồi tự động cập nhật (Khuyên dùng)
+                </button>
+                <div class="d-flex justify-between w-100 gap-2">
+                    <button type="button" class="btn btn-danger btn-sm" id="btnForceUpdateNow" style="flex: 1; padding: 8px 12px; font-size: 0.82rem;">
+                        🛑 Dừng tác vụ & Cập nhật ngay
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnCancelUpdateBusy" style="padding: 8px 14px; font-size: 0.82rem;">
+                        Hủy bỏ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Fullscreen: Quá Trình Cập Nhật Đang Diễn Ra -->
+    <div class="update-fullscreen-overlay" id="modalUpdatingOverlay" style="display: none;">
+        <div class="update-modal-card">
+            <div class="update-spinner-ring"></div>
+            <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;" id="updatingOverlayTitle">Đang Cập Nhật Hệ Thống...</h2>
+            <p class="text-xs text-muted" id="updatingOverlaySubtitle">Vui lòng không đóng trình duyệt hoặc tắt nguồn VPS.</p>
+
+            <ul class="update-step-list">
+                <li class="update-step-item" id="stepPullCode">
+                    <span class="update-step-icon">1</span>
+                    <span>Tải mã nguồn mới từ Git & Bảo toàn cấu hình</span>
+                </li>
+                <li class="update-step-item" id="stepNpmInstall">
+                    <span class="update-step-icon">2</span>
+                    <span>Kiểm tra & Cập nhật thư viện hệ thống</span>
+                </li>
+                <li class="update-step-item" id="stepRestartServer">
+                    <span class="update-step-icon">3</span>
+                    <span>Khởi động lại Server & Nạp phiên bản mới</span>
+                </li>
+            </ul>
+
+            <div style="background: rgba(99, 102, 241, 0.08); border-radius: 10px; padding: 12px; font-size: 0.84rem; font-weight: 600; color: var(--primary);" id="updatingStatusLiveText">
+                Đang xử lý...
             </div>
         </div>
     </div>

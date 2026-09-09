@@ -35,7 +35,18 @@ echo [DANG KHOI DONG] Mo server va trinh duyet...
 echo [GHI CHU] De DUNG tool, dong cua so nay hoac nhan Ctrl+C
 echo.
 
+:SERVER_LOOP
 "%NODE_CMD%" server.js
+
+if exist "%~dp0.restart_flag" (
+    del "%~dp0.restart_flag" >nul 2>&1
+    echo.
+    echo ==================================================
+    echo   [HE THONG] DANG KHOI DONG LAI TOOL SAU CAP NHAT...
+    echo ==================================================
+    timeout /t 2 /nobreak >nul
+    goto SERVER_LOOP
+)
 
 echo.
 echo ==================================================

@@ -42,7 +42,8 @@ if %errorlevel% equ 0 (
     echo.
     echo ==================================================
     echo   [OK] DAY CODE THANH CONG!
-    echo   Bay gio tren VPS ban chi can nhap dup file CapNhat_VPS.bat la xong!
+    echo   Cac Client mo Tool tren Web se tu dong thay thong bao
+    echo   va co the bam [Cap nhat ngay] ma khong can ban vao VPS!
     echo ==================================================
 ) else (
     echo.

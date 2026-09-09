@@ -19,3 +19,5 @@ data/history.json
 Thumbs.db
 .vscode/
 .idea/
+.restart_flag
+updater_restart.bat
