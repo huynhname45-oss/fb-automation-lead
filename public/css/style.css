@@ -2135,6 +2135,38 @@ body {
 }
 
 /* Joined Groups Tab Styles */
+/* Groups Table - Clean, elegant, spacious & readable */
+#groupsTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+#groupsTable th {
+  background-color: var(--bg-table-header);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+#groupsTable td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  vertical-align: middle;
+}
+
+#groupsTable tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+#groupsTable tbody tr:hover td {
+  background-color: var(--bg-table-hover);
+}
+
 .group-avatar {
   width: 36px;
   height: 36px;
@@ -2161,9 +2193,12 @@ body {
 .group-link {
   color: var(--text-primary);
   text-decoration: none;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 550;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  display: inline-block;
   transition: color 0.15s ease;
-  line-height: 1.4;
 }
 
 .group-link:hover {

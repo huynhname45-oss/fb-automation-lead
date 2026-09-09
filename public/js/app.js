@@ -2479,10 +2479,12 @@ function renderGroupsUI() {
             <td style="text-align: center; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
             <td style="text-align: center;">${avatarHtml}</td>
             <td>
-                <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="group-link">
-                    ${escapeHtml(g.name || 'Nhóm không tên')}
-                </a>
-                ${g.membersCount ? `<div class="text-xs text-muted mt-1">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
+                <div class="d-flex flex-column" style="gap: 5px;">
+                    <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="group-link">
+                        ${escapeHtml(g.name || 'Nhóm không tên')}
+                    </a>
+                    ${g.membersCount ? `<div class="text-xs text-muted" style="font-size: 0.78rem; opacity: 0.85;">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
+                </div>
             </td>
             <td>
                 <div class="d-flex flex-column gap-1">
