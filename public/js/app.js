@@ -75,21 +75,53 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
 
 HÃY ĐÁNH GIÁ CỰC KỲ KHÁCH QUAN, ĐÚNG TRỌNG TÂM.`;
 
-document.addEventListener('DOMContentLoaded', () => {
-    initApp();
-});
-
-async function initApp() {
+/**
+ * App Initialization
+ */
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     initNavigation();
     initEventListeners();
-    await initSession();
-    await loadConfig();
-    await loadHistory();
-    initDateFilter();
-    initAiScoreFilter();
-    initCustomSelects();
-    updateClientStorageBadge();
+    await initClientStorage();
+    checkSessionStatus();
+    fetchConfig();
+    fetchResultsHistory(); // Automatically load history on startup
+    loadSavedGroups();     // Automatically load cached groups on startup
+    startIdleSync();
+});
+
+/**
+ * Theme Switcher (Giao diện Sáng / Tối)
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem('fb_theme') || 'light';
+    applyTheme(savedTheme);
+
+    const btnThemeToggle = document.getElementById('btnThemeToggle');
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            applyTheme(newTheme);
+            localStorage.setItem('fb_theme', newTheme);
+            showToast(`Đã chuyển sang ${newTheme === 'light' ? 'Giao diện Sáng ☀️' : 'Giao diện Tối 🌙'}`, 'info');
+        });
+    }
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const iconEl = document.getElementById('themeToggleIcon');
+    const textEl = document.getElementById('themeToggleText');
+    if (iconEl && textEl) {
+        if (theme === 'dark') {
+            iconEl.textContent = '🌙';
+            textEl.textContent = 'Giao diện Tối';
+        } else {
+            iconEl.textContent = '☀️';
+            textEl.textContent = 'Giao diện Sáng';
+        }
+    }
 }
 
 function initNavigation() {
