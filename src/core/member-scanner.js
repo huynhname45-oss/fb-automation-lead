@@ -152,7 +152,7 @@ export const SOFTWARE_BRANDS = [
   'ocha', 'suno', 'loop', 'dantrisoft', 'bepos', 'loyverse', 'fabico', 'tpos',
   'vietfn', 'posapp', 'salekit', 'vpage', 'pancake', 'chotdon', 'tuha',
   'gosell', 'sobanhang', 'sổ bán hàng', 'trustpos', 'sunpos', 'bpos', 'ezpos',
-  'webcake', 'ladipage', 'ladi'
+  'webcake', 'ladipage', 'ladi', 'softdreams', 'easypos', 'easyinvoice', 'easybooks'
 ];
 
 export const SALE_KEYWORDS = [
@@ -173,8 +173,8 @@ export const THANH_LY_KEYWORDS = [
 export const VENDOR_NAME_KEYWORDS = [
   'phần mềm', 'phan mem', 'software', 'thiết kế web', 'thiet ke web',
   'setup quán', 'setup f&b', 'pos bán hàng', 'máy bán hàng', 'máy in bill',
-  'máy pos', 'thu ngân', 'marketing online', 'quảng cáo facebook', 'dịch vụ f&b',
-  'omnichannel'
+  'máy pos', 'phần mềm thu ngân', 'máy thu ngân', 'pos thu ngân', 'thiết bị thu ngân',
+  'marketing online', 'quảng cáo facebook', 'dịch vụ f&b', 'omnichannel'
 ];
 
 export const VENDOR_COVER_KEYWORDS = [
@@ -762,15 +762,10 @@ export class MemberScanner extends EventEmitter {
           seenMemberIds.add(item.memberId);
 
           if (isSystemRoleOrInvalidName(item.name)) return;
-          if (excludeSales && isSalesOrSoftwareVendorName(item.name)) {
-            state.skippedCount++;
-            log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${item.name}`, 'warning');
-            return;
-          }
 
-          // In "Mới vào nhóm", all genuine 24h new members have relative timestamps
+          // In "Mới vào nhóm", all genuine 24h new members MUST have relative timestamps
+          // Silently skip anyone without a join timestamp (Admins, Moderators, or "Thành viên có điểm chung")
           if (!item.joinedTimeText) {
-            // Missing join timestamp -> not in the 24h new members section (likely an Admin, Moderator, or Top Contributor)
             return;
           }
 
@@ -781,6 +776,13 @@ export class MemberScanner extends EventEmitter {
             return;
           }
           if (!timeCheck.within24h) return;
+
+          // Check sales ONLY after confirming they are genuine 24h new members
+          if (excludeSales && isSalesOrSoftwareVendorName(item.name)) {
+            state.skippedCount++;
+            log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${item.name}`, 'warning');
+            return;
+          }
 
           candidateMembers.push(item);
         };
@@ -838,14 +840,31 @@ export class MemberScanner extends EventEmitter {
             continue;
           }
 
-          // Phase 1: Fast Instant JSON Extraction from SSR Script Tags
-          log('⚡ [QUÉT NHANH JSON] Đang trích xuất thành viên từ dữ liệu JSON gốc của Facebook...', 'info');
+          // Step: Auto-anchor and scroll directly into "Mới vào nhóm" section
+          log('🎯 Đang định vị và cuộn trực tiếp tới khu vực "Mới vào nhóm"...', 'info');
+          const anchorResult = await page.evaluate(() => {
+            const headings = Array.from(document.querySelectorAll('h2, h3, span, div[role="heading"]'));
+            for (const h of headings) {
+              const text = (h.innerText || '').trim().toLowerCase();
+              if (text === 'mới vào nhóm' || text === 'new to the group' || text.startsWith('mới vào nhóm') || text.startsWith('new to the group')) {
+                h.scrollIntoView({ behavior: 'instant', block: 'start' });
+                return true;
+              }
+            }
+            return false;
+          });
+          if (anchorResult) {
+            await delay(1200);
+          }
+
+          // Phase 1: Fast Instant JSON Extraction from SSR Script Tags (Targeting new_members & join_time)
+          log('⚡ [QUÉT NHANH JSON] Đang trích xuất thành viên mới từ dữ liệu JSON gốc của Facebook...', 'info');
           const jsonMembers = await page.evaluate((currentGroupId) => {
             const scripts = Array.from(document.querySelectorAll('script[type="application/json"]'));
             const found = [];
             for (const s of scripts) {
               const text = s.textContent || '';
-              if (text.includes('new_members') || text.includes('new_forum_members') || text.includes('all_participants') || (text.includes('join_time') && text.includes('name'))) {
+              if (text.includes('new_members') || text.includes('new_forum_members') || (text.includes('join_time') && text.includes('name'))) {
                 try {
                   const data = JSON.parse(text);
                   const queue = [data];
@@ -872,13 +891,15 @@ export class MemberScanner extends EventEmitter {
                           subtitleText = String(t).trim();
                         }
                       }
-                      found.push({
-                        memberId: String(id),
-                        name: String(name).trim(),
-                        groupUserUrl: `https://www.facebook.com/groups/${currentGroupId}/user/${id}/`,
-                        joinedTimeText: joinedText,
-                        subtitleText: subtitleText
-                      });
+                      if (joinedText) {
+                        found.push({
+                          memberId: String(id),
+                          name: String(name).trim(),
+                          groupUserUrl: `https://www.facebook.com/groups/${currentGroupId}/user/${id}/`,
+                          joinedTimeText: joinedText,
+                          subtitleText: subtitleText
+                        });
+                      }
                     }
                     for (const k of Object.keys(cur)) {
                       if (typeof cur[k] === 'object' && cur[k] !== null) queue.push(cur[k]);
@@ -898,22 +919,22 @@ export class MemberScanner extends EventEmitter {
             log(`⚡ [JSON NHANH] Đã bóc tách được ${candidateMembers.length} thành viên trực tiếp từ JSON!`, 'success');
           }
 
-          // Phase 2: Scroll to trigger GraphQL pagination & DOM updates
-          log('📜 Đang cuộn trang để kích hoạt nạp thành viên mới qua GraphQL & DOM...', 'info');
+          // Phase 2: Scroll to trigger GraphQL pagination & DOM updates inside "Mới vào nhóm"
+          log('📜 Đang cuộn trang để nạp thành viên mới qua GraphQL & DOM...', 'info');
           let noNewCount = 0;
-          let prevSeenCount = seenMemberIds.size;
+          let prevCandidateCount = candidateMembers.length;
 
           for (let scrollStep = 0; scrollStep < 35; scrollStep++) {
             if (state.abortRequested || hitTimeLimit) break;
             if (candidateMembers.length >= maxMembersPerGroup) break;
 
             await page.evaluate(() => {
-              window.scrollBy(0, 1100);
+              window.scrollBy(0, 1000);
               if (document.scrollingElement) {
-                document.scrollingElement.scrollTop += 1100;
+                document.scrollingElement.scrollTop += 1000;
               }
             });
-            await delay(700);
+            await delay(1200);
 
             // DOM extraction fallback
             const domMembers = await page.evaluate((currentGroupId) => {
@@ -981,15 +1002,15 @@ export class MemberScanner extends EventEmitter {
               if (hitTimeLimit || candidateMembers.length >= maxMembersPerGroup) break;
             }
 
-            if (seenMemberIds.size === prevSeenCount) {
+            if (candidateMembers.length === prevCandidateCount) {
               noNewCount++;
-              if (noNewCount >= 4) {
+              if (noNewCount >= 8) {
                 log('📄 Đã cuộn hết danh sách thành viên mới trong 24h.', 'info');
                 break;
               }
             } else {
               noNewCount = 0;
-              prevSeenCount = seenMemberIds.size;
+              prevCandidateCount = candidateMembers.length;
             }
           }
 

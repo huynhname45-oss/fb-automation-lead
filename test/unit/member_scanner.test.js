@@ -263,6 +263,19 @@ test('MEMBER-VENDOR-NAME-001: isSalesOrSoftwareVendorName detects sales reps and
   assert.equal(isSalesOrSoftwareVendorName('Tran Thang'), false);
   assert.equal(isSalesOrSoftwareVendorName('Bùi Alla'), false);
   assert.equal(isSalesOrSoftwareVendorName('Cafe & Trà Sữa Mộc'), false);
+
+  // Authentic Vietnamese names containing "Thu Ngân" must NOT be treated as software
+  assert.equal(isSalesOrSoftwareVendorName('Thu Ngân Trần'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Trần Thu Ngân'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Nguyễn Thu Ngân'), false);
+
+  // But POS software / hardware containing thu ngân must be caught
+  assert.equal(isSalesOrSoftwareVendorName('Phần mềm thu ngân EasyPos'), true);
+  assert.equal(isSalesOrSoftwareVendorName('Máy thu ngân POS'), true);
+
+  // Softdreams brand detection
+  assert.equal(isSalesOrSoftwareVendorName('Đức Softdreams'), true);
+  assert.equal(isSalesOrSoftwareVendorName('EasyPos Bán Hàng'), true);
 });
 
 test('MEMBER-WEEKDAY-001: parseMemberJoinedTime triggers stopScrolling for weekday timestamps', async () => {
