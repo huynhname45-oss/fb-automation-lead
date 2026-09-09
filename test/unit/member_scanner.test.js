@@ -245,3 +245,78 @@ test('MEMBER-FAST-HTTP-001: inspectMemberViaFastHttp exports cleanly and handles
   assert.equal(typeof inspectMemberViaFastHttp, 'function');
 });
 
+test('MEMBER-VENDOR-NAME-001: isSalesOrSoftwareVendorName detects sales reps and software services in name', async () => {
+  const { isSalesOrSoftwareVendorName } = await import('../../src/core/member-scanner.js');
+
+  // Real examples from user screenshot
+  assert.equal(isSalesOrSoftwareVendorName('Nguyễn Kiều Trâm Sapo'), true);
+  assert.equal(isSalesOrSoftwareVendorName('Phần Mềm Theo Yêu Cầu'), true);
+  assert.equal(isSalesOrSoftwareVendorName('KiotViet Miền Bắc'), true);
+  assert.equal(isSalesOrSoftwareVendorName('MISA Eshop - Tư Vấn'), true);
+  assert.equal(isSalesOrSoftwareVendorName('Chuyên Viên Sapo'), true);
+  assert.equal(isSalesOrSoftwareVendorName('Setup Quán Cafe & Trà Sữa'), true);
+
+  // Legitimate prospective business leads from user screenshot
+  assert.equal(isSalesOrSoftwareVendorName('Diệp Bích'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Xuân Phát'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Kin Thánh Thiện'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Tran Thang'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Bùi Alla'), false);
+  assert.equal(isSalesOrSoftwareVendorName('Cafe & Trà Sữa Mộc'), false);
+});
+
+test('MEMBER-WEEKDAY-001: parseMemberJoinedTime triggers stopScrolling for weekday timestamps', async () => {
+  const { parseMemberJoinedTime } = await import('../../src/core/member-scanner.js');
+
+  // Real examples from user screenshot: "Đã tham gia vào thứ Hai"
+  const tMon = parseMemberJoinedTime('Đã tham gia vào thứ Hai');
+  assert.equal(tMon.within24h, false);
+  assert.equal(tMon.stopScrolling, true);
+
+  const tTue = parseMemberJoinedTime('Đã tham gia vào thứ Ba');
+  assert.equal(tTue.within24h, false);
+  assert.equal(tTue.stopScrolling, true);
+
+  const tSun = parseMemberJoinedTime('Đã tham gia vào Chủ Nhật');
+  assert.equal(tSun.within24h, false);
+  assert.equal(tSun.stopScrolling, true);
+
+  const tEng = parseMemberJoinedTime('Joined on Monday');
+  assert.equal(tEng.within24h, false);
+  assert.equal(tEng.stopScrolling, true);
+
+  // 22 hours ago from user screenshot must still be accepted
+  const t22h = parseMemberJoinedTime('Đã tham gia 22 giờ trước');
+  assert.equal(t22h.within24h, true);
+  assert.equal(t22h.stopScrolling, false);
+
+  const t5h = parseMemberJoinedTime('Đã tham gia 5 giờ trước');
+  assert.equal(t5h.within24h, true);
+  assert.equal(t5h.stopScrolling, false);
+});
+
+test('MEMBER-OWN-PHONE-001: sanitizeProfileHtml strips scripts and filters own phones', async () => {
+  const { sanitizeProfileHtml } = await import('../../src/core/member-scanner.js');
+  const mockHtmlWithViewerScript = `
+    <html>
+      <head>
+        <script>
+          require("CurrentUserInitialData", [], function() {
+            return {"ACCOUNT_ID":"123456","PHONE":"0943132972"};
+          });
+        </script>
+      </head>
+      <body>
+        <div role="main">
+          <span>Xin chào, shop mình chuyên đầm thiết kế</span>
+        </div>
+      </body>
+    </html>
+  `;
+  const sanitized = sanitizeProfileHtml(mockHtmlWithViewerScript);
+  assert.equal(sanitized.includes('CurrentUserInitialData'), false);
+  assert.equal(sanitized.includes('0943132972'), false);
+  assert.equal(sanitized.includes('shop mình chuyên đầm thiết kế'), true);
+});
+
+

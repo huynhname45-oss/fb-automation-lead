@@ -123,7 +123,42 @@ export function isSystemRoleOrInvalidName(name = '') {
  * Fast inspection of candidate member via lightweight HTTP requests (20x faster than Playwright page loads)
  * Queries contact info, bio, timeline, and about sections
  */
-export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSales = true, deepPhoneSearch = true, groupId = '' } = {}) {
+export function sanitizeProfileHtml(html = '') {
+  if (!html || typeof html !== 'string') return '';
+  // Remove all <script>...</script> tags to avoid picking up viewer account metadata (e.g. CurrentUserInitialData)
+  let clean = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
+  clean = clean.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+  return clean;
+}
+
+export const VENDOR_NAME_KEYWORDS = [
+  'phần mềm', 'phan mem', 'software', 'thiết kế web', 'thiet ke web',
+  'setup quán', 'setup f&b', 'pos bán hàng', 'máy bán hàng', 'máy in bill',
+  'máy pos', 'thu ngân', 'marketing online', 'quảng cáo facebook', 'dịch vụ f&b'
+];
+
+export function isSalesOrSoftwareVendorName(name = '') {
+  if (!name || typeof name !== 'string') return false;
+  const lower = name.toLowerCase();
+
+  // 1. Check generic vendor / agency services in name
+  for (const kw of VENDOR_NAME_KEYWORDS) {
+    if (lower.includes(kw)) return true;
+  }
+
+  // 2. Any software brand in name
+  for (const brand of SOFTWARE_BRANDS) {
+    if (lower.includes(brand)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Fast inspection of candidate member via lightweight HTTP requests (20x faster than Playwright page loads)
+ * Queries contact info, bio, timeline, and about sections
+ */
+export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSales = true, deepPhoneSearch = true, groupId = '', ownPhones = new Set() } = {}) {
   let phone = '';
   let province = normalizeProvinceName(member.subtitleText) || '';
 
@@ -147,7 +182,8 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
             return { isNegative: true, reason: evalGrp.reason, phone: '', province: '' };
           }
           if (!phone) {
-            const grpPhones = extractPhonesFromText(grpHtml);
+            const cleanGrpHtml = sanitizeProfileHtml(grpHtml);
+            const grpPhones = extractPhonesFromText(cleanGrpHtml).filter(p => !ownPhones.has(p));
             if (grpPhones.length > 0) phone = grpPhones[0];
           }
           if (!province) {
@@ -173,8 +209,9 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
         }
       }
 
-      // Extract Phone
-      const foundPhones = extractPhonesFromText(contactHtml);
+      // Extract Phone (strictly filter out logged-in user's own phone)
+      const cleanContactHtml = sanitizeProfileHtml(contactHtml);
+      const foundPhones = extractPhonesFromText(cleanContactHtml).filter(p => !ownPhones.has(p));
       if (foundPhones.length > 0) {
         phone = foundPhones[0];
       }
@@ -201,9 +238,10 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
         }
       }
 
-      // Extract Phone if not found yet
+      // Extract Phone if not found yet (strictly filter out logged-in user's own phone)
       if (!phone) {
-        const foundPhones = extractPhonesFromText(profileHtml);
+        const cleanProfileHtml = sanitizeProfileHtml(profileHtml);
+        const foundPhones = extractPhonesFromText(cleanProfileHtml).filter(p => !ownPhones.has(p));
         if (foundPhones.length > 0) {
           phone = foundPhones[0];
         }
@@ -231,7 +269,8 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
       if (resOg.ok) {
         const ogHtml = await resOg.text();
         if (!phone) {
-          const ogPhones = extractPhonesFromText(ogHtml);
+          const cleanOgHtml = sanitizeProfileHtml(ogHtml);
+          const ogPhones = extractPhonesFromText(cleanOgHtml).filter(p => !ownPhones.has(p));
           if (ogPhones.length > 0) phone = ogPhones[0];
         }
         if (!province) {
@@ -311,13 +350,31 @@ export function parseMemberJoinedTime(rawText = '') {
     return { within24h: false, stopScrolling: true, normalizedText: clean };
   }
 
+  // Weekdays (e.g. "Đã tham gia vào thứ Hai", "vào thứ Ba", "Joined on Monday") -> >= 24h-48h -> STOP SCROLLING
+  const weekdayPatterns = [
+    'thứ hai', 'thu hai', 'thứ ba', 'thu ba', 'thứ tư', 'thu tu',
+    'thứ năm', 'thu nam', 'thứ sáu', 'thu sau', 'thứ bảy', 'thu bay',
+    'chủ nhật', 'chu nhat', 'monday', 'tuesday', 'wednesday',
+    'thursday', 'friday', 'saturday', 'sunday'
+  ];
+  for (const wd of weekdayPatterns) {
+    if (lower.includes(wd)) {
+      return { within24h: false, stopScrolling: true, normalizedText: clean };
+    }
+  }
+
   // Weeks, months, years -> STOP SCROLLING
   if (lower.includes('tuần') || lower.includes('week') || lower.includes('tháng') || lower.includes('month') || lower.includes('năm') || lower.includes('year')) {
     return { within24h: false, stopScrolling: true, normalizedText: clean };
   }
 
-  // Default fallback
-  return { within24h: true, stopScrolling: false, normalizedText: clean };
+  // Specific dates (e.g. "15 tháng 8", "August 15") -> STOP SCROLLING
+  if (/\d+\s*(?:tháng|thg|\/|-)\s*\d+/i.test(lower)) {
+    return { within24h: false, stopScrolling: true, normalizedText: clean };
+  }
+
+  // Strict fallback: If it doesn't match any within-24h pattern, it is NOT within 24h
+  return { within24h: false, stopScrolling: false, normalizedText: clean };
 }
 
 /**
@@ -334,7 +391,14 @@ export function evaluateMemberContent(text = '') {
     }
   }
 
-  // 2. Check combination: Brand + Sales CTA
+  // 2. Check vendor service keywords directly
+  if (lower.includes('phần mềm theo yêu cầu') || lower.includes('phan mem theo yeu cau') ||
+      lower.includes('cung cấp phần mềm') || lower.includes('giải pháp phần mềm') ||
+      lower.includes('thiết kế web') || lower.includes('setup quán trọn gói')) {
+    return { isNegative: true, reason: 'Phát hiện dịch vụ/đơn vị cung cấp phần mềm' };
+  }
+
+  // 3. Check combination: Brand + Sales CTA
   const matchedBrand = SOFTWARE_BRANDS.find(b => lower.includes(b));
   const matchedCTA = SALE_KEYWORDS.find(k => lower.includes(k));
 
@@ -342,7 +406,7 @@ export function evaluateMemberContent(text = '') {
     return { isNegative: true, reason: `Phát hiện Sale chào mời PM: [${matchedBrand.toUpperCase()}] kèm ["${matchedCTA}"]` };
   }
 
-  // 3. Check explicit workplace / job title
+  // 4. Check explicit workplace / job title
   const jobPatterns = [
     /làm việc tại\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan)/i,
     /chuyên viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|tư vấn)/i,
@@ -358,7 +422,7 @@ export function evaluateMemberContent(text = '') {
     }
   }
 
-  // 4. Standalone aggressive sales patterns
+  // 5. Standalone aggressive sales patterns
   if (lower.includes('nhận tư vấn phần mềm') || lower.includes('em nhận tư vấn') || lower.includes('kết nối zalo em') || lower.includes('ib e tư vấn') || lower.includes('ib em tư vấn')) {
     return { isNegative: true, reason: 'Phát hiện bình luận tư vấn dịch vụ' };
   }
@@ -486,6 +550,31 @@ export class MemberScanner extends EventEmitter {
       }
 
       const cookieHeader = formatted.map(c => `${c.name}=${c.value}`).join('; ');
+      const loggedInUid = formatted.find(c => c.name === 'c_user')?.value || '';
+      const ownPhones = new Set();
+      if (loggedInUid) {
+        try {
+          const selfUrl = `https://www.facebook.com/${loggedInUid}/about_contact_and_basic_info`;
+          const selfRes = await fetch(selfUrl, {
+            headers: {
+              'User-Agent': 'curl/8.4.0',
+              'Cookie': cookieHeader,
+              'Accept': '*/*',
+              'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+            },
+            signal: AbortSignal.timeout(4000)
+          });
+          if (selfRes.ok) {
+            const selfHtml = await selfRes.text();
+            const detectedOwn = extractPhonesFromText(selfHtml);
+            detectedOwn.forEach(p => ownPhones.add(p));
+            if (detectedOwn.length > 0) {
+              logger.info(`[MEMBER-SCANNER] Đã nhận diện SĐT tài khoản chủ (sẽ loại trừ khỏi kết quả): ${detectedOwn.join(', ')}`);
+            }
+          }
+        } catch (e) {}
+      }
+
       await context.addCookies(formatted);
       log(`🔑 Đã nạp ${formatted.length} cookies vào trình duyệt Chromium.`, 'info');
 
@@ -522,6 +611,11 @@ export class MemberScanner extends EventEmitter {
         const addCandidate = (item) => {
           if (!item || !item.memberId) return;
           if (isSystemRoleOrInvalidName(item.name)) return;
+          if (excludeSales && isSalesOrSoftwareVendorName(item.name)) {
+            state.skippedCount++;
+            log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${item.name}`, 'warning');
+            return;
+          }
           if (seenMemberIds.has(item.memberId)) return;
 
           // In "Mới vào nhóm", all genuine 24h new members have relative timestamps
@@ -755,6 +849,11 @@ export class MemberScanner extends EventEmitter {
 
             // Tier 1: Fast check on name and subtitle
             if (excludeSales) {
+              if (isSalesOrSoftwareVendorName(member.name)) {
+                state.skippedCount++;
+                log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${member.name}`, 'warning');
+                continue;
+              }
               const t1Check = evaluateMemberContent(`${member.name} ${member.subtitleText}`);
               if (t1Check.isNegative) {
                 state.skippedCount++;
@@ -769,7 +868,8 @@ export class MemberScanner extends EventEmitter {
               inspectResult = await inspectMemberViaFastHttp(member, cookieHeader, {
                 excludeSales,
                 deepPhoneSearch,
-                groupId
+                groupId,
+                ownPhones
               });
             } catch (inspectErr) {
               logger.debug({ err: inspectErr.message }, 'Member HTTP inspection error');
