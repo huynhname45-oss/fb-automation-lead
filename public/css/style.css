@@ -2350,4 +2350,68 @@ body {
   background: var(--bg-card-hover);
 }
 
+/* Members Table (24H Lead Hunter) - Separated card rows & styling */
+#membersTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  text-align: left;
+}
+
+#membersTable th {
+  background-color: var(--bg-table-header);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+#membersTable tbody tr:not(.empty-row) {
+  background: var(--bg-card);
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+#membersTable tbody tr:not(.empty-row) td {
+  padding: 12px 14px;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  vertical-align: middle;
+}
+
+#membersTable tbody tr:not(.empty-row) td:first-child {
+  border-left: 1px solid var(--glass-border);
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+
+#membersTable tbody tr:not(.empty-row) td:last-child {
+  border-right: 1px solid var(--glass-border);
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+#membersTable tbody tr:not(.empty-row):hover td {
+  background-color: var(--bg-card-hover);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+#membersTable tbody tr.row-selected td {
+  background-color: rgba(99, 102, 241, 0.09) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+[data-theme="dark"] #membersTable tbody tr:not(.empty-row) {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] #membersTable tbody tr.row-selected td {
+  background-color: rgba(99, 102, 241, 0.22) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+}
+
 

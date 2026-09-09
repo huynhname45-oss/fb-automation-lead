@@ -22,7 +22,8 @@ const state = {
     members: {
         isScanning: false,
         leads: [],
-        pollingInterval: null
+        pollingInterval: null,
+        deletedIds: new Set()
     }
 };
 
@@ -365,6 +366,40 @@ function initEventListeners() {
 
     const btnScanBundleMembers = document.getElementById('btnScanBundleMembers');
     if (btnScanBundleMembers) btnScanBundleMembers.addEventListener('click', handleScanBundleMembers);
+
+    const chkSelectAllMembers = document.getElementById('chkSelectAllMembers');
+    if (chkSelectAllMembers) {
+        chkSelectAllMembers.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            const chkBoxes = document.querySelectorAll('.member-select-chk');
+            chkBoxes.forEach(chk => {
+                chk.checked = checked;
+            });
+            updateMemberSelectionState();
+        });
+    }
+
+    const btnDeleteSelectedMembers = document.getElementById('btnDeleteSelectedMembers');
+    if (btnDeleteSelectedMembers) {
+        btnDeleteSelectedMembers.addEventListener('click', handleDeleteSelectedMembers);
+    }
+
+    const membersTableBody = document.getElementById('membersTableBody');
+    if (membersTableBody) {
+        membersTableBody.addEventListener('change', (e) => {
+            if (e.target && e.target.classList.contains('member-select-chk')) {
+                updateMemberSelectionState();
+            }
+        });
+
+        membersTableBody.addEventListener('click', (e) => {
+            const btnDel = e.target.closest('.btn-delete-single-member');
+            if (btnDel) {
+                const idx = parseInt(btnDel.dataset.index, 10);
+                handleDeleteSingleMember(idx);
+            }
+        });
+    }
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -3946,6 +3981,8 @@ async function handleStartScanMembers() {
     try {
         state.members.isScanning = true;
         state.members.leads = [];
+        if (!state.members.deletedIds) state.members.deletedIds = new Set();
+        state.members.deletedIds.clear();
         renderMembersTable([]);
 
         if (btnStart) btnStart.style.display = 'none';
@@ -4064,7 +4101,12 @@ function stopPollingMemberStatus() {
 function updateMemberScanUI(status) {
     if (!status) return;
 
-    state.members.leads = status.leads || [];
+    if (!state.members.deletedIds) state.members.deletedIds = new Set();
+    const rawLeads = status.leads || [];
+    state.members.leads = rawLeads.filter(m => {
+        const idKey = m.memberId || (m.name + '_' + (m.groupUrl || ''));
+        return !state.members.deletedIds.has(idKey);
+    });
 
     // Update count badge on export button
     const badgeCount = document.getElementById('memberCountBadge');
@@ -4124,13 +4166,14 @@ function renderMembersTable(leads) {
     if (!leads || leads.length === 0) {
         tbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="7" class="text-center py-5 text-muted">
+                <td colspan="8" class="text-center py-5 text-muted">
                     <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
                     <div style="font-weight: 500;">Chưa có thành viên tiềm năng nào.</div>
                     <div class="text-xs text-muted mt-1">Chọn nhóm và bấm <strong>"Bắt đầu quét thành viên mới"</strong> để tìm kiếm!</div>
                 </td>
             </tr>
         `;
+        updateMemberSelectionState();
         return;
     }
 
@@ -4154,7 +4197,10 @@ function renderMembersTable(leads) {
         const profileLink = m.profileUrl || (m.memberId ? `https://www.facebook.com/profile.php?id=${m.memberId}` : '#');
 
         return `
-            <tr>
+            <tr data-index="${idx}">
+                <td style="text-align: center; vertical-align: middle;">
+                    <input type="checkbox" class="member-select-chk custom-checkbox" data-index="${idx}">
+                </td>
                 <td style="text-align: center; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
                 <td>
                     <div class="d-flex align-center gap-2">
@@ -4173,14 +4219,109 @@ function renderMembersTable(leads) {
                 <td style="text-align: center;">${locationHtml}</td>
                 <td style="text-align: center;">${joinedHtml}</td>
                 <td>${groupNameHtml}</td>
-                <td style="text-align: center;">
+                <td style="text-align: center; white-space: nowrap;">
                     <a href="${escapeHtml(profileLink)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-xs" title="Mở trang cá nhân trên Facebook">
-                        ↗ Mở FB
+                        ↗ FB
                     </a>
+                    <button type="button" class="btn btn-ghost btn-xs btn-delete-single-member text-danger" data-index="${idx}" title="Xóa dòng này" style="color: #ef4444; margin-left: 4px;">
+                        🗑️
+                    </button>
                 </td>
             </tr>
         `;
     }).join('');
+
+    updateMemberSelectionState();
+}
+
+function updateMemberSelectionState() {
+    const chkAll = document.getElementById('chkSelectAllMembers');
+    const chkBoxes = document.querySelectorAll('.member-select-chk');
+    const btnDeleteSelected = document.getElementById('btnDeleteSelectedMembers');
+    const badgeSelected = document.getElementById('selectedMembersCountBadge');
+
+    let checkedCount = 0;
+    chkBoxes.forEach(chk => {
+        const row = chk.closest('tr');
+        if (chk.checked) {
+            checkedCount++;
+            if (row) row.classList.add('row-selected');
+        } else {
+            if (row) row.classList.remove('row-selected');
+        }
+    });
+
+    if (chkAll) {
+        chkAll.checked = chkBoxes.length > 0 && checkedCount === chkBoxes.length;
+        chkAll.indeterminate = checkedCount > 0 && checkedCount < chkBoxes.length;
+    }
+
+    if (badgeSelected) {
+        badgeSelected.textContent = checkedCount;
+    }
+
+    if (btnDeleteSelected) {
+        btnDeleteSelected.style.display = checkedCount > 0 ? 'inline-flex' : 'none';
+    }
+}
+
+function handleDeleteSelectedMembers() {
+    const chkBoxes = document.querySelectorAll('.member-select-chk:checked');
+    if (chkBoxes.length === 0) {
+        showToast('Vui lòng chọn ít nhất một thành viên để xóa!', 'warning');
+        return;
+    }
+
+    const selectedIndices = new Set();
+    chkBoxes.forEach(chk => {
+        const idx = parseInt(chk.dataset.index, 10);
+        if (!isNaN(idx)) selectedIndices.add(idx);
+    });
+
+    if (!state.members.deletedIds) state.members.deletedIds = new Set();
+
+    selectedIndices.forEach(idx => {
+        const m = state.members.leads[idx];
+        if (m) {
+            const idKey = m.memberId || (m.name + '_' + (m.groupUrl || ''));
+            state.members.deletedIds.add(idKey);
+        }
+    });
+
+    const deletedCount = selectedIndices.size;
+    state.members.leads = state.members.leads.filter((_, idx) => !selectedIndices.has(idx));
+
+    // Update count badge on export button
+    const badgeCount = document.getElementById('memberCountBadge');
+    if (badgeCount) badgeCount.textContent = state.members.leads.length;
+
+    const btnExport = document.getElementById('btnExportMembersExcel');
+    if (btnExport) btnExport.disabled = state.members.leads.length === 0;
+
+    renderMembersTable(state.members.leads);
+    showToast(`Đã xóa ${deletedCount} dòng thành viên đã chọn!`, 'info');
+}
+
+function handleDeleteSingleMember(idx) {
+    if (isNaN(idx) || idx < 0 || idx >= state.members.leads.length) return;
+
+    if (!state.members.deletedIds) state.members.deletedIds = new Set();
+    const m = state.members.leads[idx];
+    if (m) {
+        const idKey = m.memberId || (m.name + '_' + (m.groupUrl || ''));
+        state.members.deletedIds.add(idKey);
+    }
+
+    state.members.leads.splice(idx, 1);
+
+    const badgeCount = document.getElementById('memberCountBadge');
+    if (badgeCount) badgeCount.textContent = state.members.leads.length;
+
+    const btnExport = document.getElementById('btnExportMembersExcel');
+    if (btnExport) btnExport.disabled = state.members.leads.length === 0;
+
+    renderMembersTable(state.members.leads);
+    showToast('Đã xóa 1 dòng thành viên!', 'info');
 }
 
 async function handleExportMembersExcel() {
