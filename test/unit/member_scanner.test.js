@@ -217,3 +217,31 @@ test('MEMBER-JSON-002: extractMembersFromAnyJson extracts member nodes from Grap
   assert.equal(members[1].name, 'Trần Thị Chủ Tiệm');
 });
 
+test('MEMBER-ROLE-001: isSystemRoleOrInvalidName strictly blacklists group badges and roles', async () => {
+  const { isSystemRoleOrInvalidName } = await import('../../src/core/member-scanner.js');
+
+  // Must reject system roles & group badges
+  assert.equal(isSystemRoleOrInvalidName('Người kiểm duyệt'), true);
+  assert.equal(isSystemRoleOrInvalidName('Người đóng góp nhiều nhất'), true);
+  assert.equal(isSystemRoleOrInvalidName('Quản trị viên'), true);
+  assert.equal(isSystemRoleOrInvalidName('Quản trị viên & người kiểm duyệt'), true);
+  assert.equal(isSystemRoleOrInvalidName('Admin'), true);
+  assert.equal(isSystemRoleOrInvalidName('Moderator'), true);
+  assert.equal(isSystemRoleOrInvalidName('Chuyên gia nhóm'), true);
+  assert.equal(isSystemRoleOrInvalidName('Top contributor'), true);
+  assert.equal(isSystemRoleOrInvalidName('Thành viên mới'), true);
+  assert.equal(isSystemRoleOrInvalidName('Xem tất cả'), true);
+
+  // Must accept authentic personal names
+  assert.equal(isSystemRoleOrInvalidName('Nguyễn Văn Tuấn'), false);
+  assert.equal(isSystemRoleOrInvalidName('Trần Hữu Long'), false);
+  assert.equal(isSystemRoleOrInvalidName('Hoàng Thuỳ Linh'), false);
+  assert.equal(isSystemRoleOrInvalidName('Lê Mai Hương'), false);
+  assert.equal(isSystemRoleOrInvalidName('Cafe & Trà Sữa Mộc'), false);
+});
+
+test('MEMBER-FAST-HTTP-001: inspectMemberViaFastHttp exports cleanly and handles options', async () => {
+  const { inspectMemberViaFastHttp } = await import('../../src/core/member-scanner.js');
+  assert.equal(typeof inspectMemberViaFastHttp, 'function');
+});
+

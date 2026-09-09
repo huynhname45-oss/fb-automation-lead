@@ -490,18 +490,6 @@ class SessionManager extends EventEmitter {
         lastChecked: Date.now()
       });
 
-      // Persist session to disk for auto-recovery across server restarts
-      try {
-        await fsPromises.mkdir(path.dirname(SESSION_FILE), { recursive: true });
-        await fsPromises.writeFile(SESSION_FILE, JSON.stringify({
-          cookie: cookieInput,
-          user: clientInfo,
-          savedAt: new Date().toISOString()
-        }, null, 2), 'utf-8');
-      } catch (diskErr) {
-        logger.debug({ err: diskErr.message }, 'Failed to persist cookie to session file');
-      }
-
       return {
         success: true,
         status: 'active',
@@ -736,17 +724,6 @@ class SessionManager extends EventEmitter {
         });
       }
 
-      try {
-        if (effectiveCookieToSave) {
-          await fsPromises.mkdir(path.dirname(SESSION_FILE), { recursive: true });
-          await fsPromises.writeFile(SESSION_FILE, JSON.stringify({
-            cookie: effectiveCookieToSave,
-            user: clientInfo,
-            savedAt: new Date().toISOString()
-          }, null, 2), 'utf-8');
-        }
-      } catch (diskErr) {}
-
       return {
         active: true,
         status: 'active',
@@ -767,13 +744,6 @@ class SessionManager extends EventEmitter {
     for (const sess of this.clientSessions.values()) {
       if (sess?.cookie) return sess.cookie;
     }
-    try {
-      if (fs.existsSync(SESSION_FILE)) {
-        const raw = fs.readFileSync(SESSION_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (parsed.cookie) return parsed.cookie;
-      }
-    } catch (e) {}
     return '';
   }
 
@@ -786,21 +756,6 @@ class SessionManager extends EventEmitter {
         user: session.user || null
       };
     }
-
-    // Auto check if disk session exists
-    try {
-      if (fs.existsSync(SESSION_FILE)) {
-        const raw = fs.readFileSync(SESSION_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (parsed.cookie && parsed.user) {
-          return {
-            status: 'active',
-            lastChecked: parsed.savedAt ? new Date(parsed.savedAt).getTime() : null,
-            user: parsed.user
-          };
-        }
-      }
-    } catch (e) {}
 
     return {
       status: 'none',

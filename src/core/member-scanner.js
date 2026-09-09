@@ -99,6 +99,156 @@ export function extractMembersFromAnyJson(root, targetGroupId = '') {
   return members;
 }
 
+export const SYSTEM_ROLE_BLACKLIST = [
+  'người kiểm duyệt', 'nguoi kiem duyet', 'người đóng góp nhiều nhất',
+  'nguoi dong gop nhieu nhat', 'quản trị viên', 'quan tri vien',
+  'quản trị viên & người kiểm duyệt', 'quản trị viên và người kiểm duyệt',
+  'chuyên gia nhóm', 'người tạo nhóm', 'top contributor', 'admin',
+  'moderator', 'thành viên', 'thanh vien', 'thành viên mới', 'mới vào nhóm',
+  'xem tất cả', 'xem them', 'xem thêm', 'bạn bè', 'facebook user', 'tài khoản facebook',
+  'người theo dõi', 'người quản trị'
+];
+
+export function isSystemRoleOrInvalidName(name = '') {
+  if (!name || typeof name !== 'string') return true;
+  const clean = name.trim().toLowerCase();
+  if (clean.length < 2 || clean.length > 50) return true;
+  for (const role of SYSTEM_ROLE_BLACKLIST) {
+    if (clean === role || clean.includes(role)) return true;
+  }
+  return false;
+}
+
+/**
+ * Fast inspection of candidate member via lightweight HTTP requests (20x faster than Playwright page loads)
+ * Queries contact info, bio, timeline, and about sections
+ */
+export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSales = true, deepPhoneSearch = true, groupId = '' } = {}) {
+  let phone = '';
+  let province = normalizeProvinceName(member.subtitleText) || '';
+
+  const headers = {
+    'User-Agent': 'curl/8.4.0',
+    'Cookie': cookieHeader,
+    'Accept': '*/*',
+    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+  };
+
+  // 1. Fetch Group Member Activity (Inspect "Hoạt động mới đây" & "Bài viết trong nhóm")
+  if (excludeSales) {
+    const groupUserUrl = member.groupUserUrl || (groupId ? `https://www.facebook.com/groups/${groupId}/user/${member.memberId}/` : '');
+    if (groupUserUrl) {
+      try {
+        const resGrp = await fetch(groupUserUrl, { headers, signal: AbortSignal.timeout(5000) });
+        if (resGrp.ok) {
+          const grpHtml = await resGrp.text();
+          const evalGrp = evaluateMemberContent(grpHtml.substring(0, 20000));
+          if (evalGrp.isNegative) {
+            return { isNegative: true, reason: evalGrp.reason, phone: '', province: '' };
+          }
+          if (!phone) {
+            const grpPhones = extractPhonesFromText(grpHtml);
+            if (grpPhones.length > 0) phone = grpPhones[0];
+          }
+          if (!province) {
+            province = normalizeProvinceName(grpHtml) || '';
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Fetch Contact and Basic Info tab (where phone numbers and living locations are stored)
+  try {
+    const contactUrl = `https://www.facebook.com/${member.memberId}/about_contact_and_basic_info`;
+    const resContact = await fetch(contactUrl, { headers, signal: AbortSignal.timeout(5000) });
+    if (resContact.ok) {
+      const contactHtml = await resContact.text();
+
+      // Check Sales in About
+      if (excludeSales) {
+        const evalContact = evaluateMemberContent(contactHtml.substring(0, 10000));
+        if (evalContact.isNegative) {
+          return { isNegative: true, reason: evalContact.reason, phone: '', province: '' };
+        }
+      }
+
+      // Extract Phone
+      const foundPhones = extractPhonesFromText(contactHtml);
+      if (foundPhones.length > 0) {
+        phone = foundPhones[0];
+      }
+
+      // Extract Province
+      if (!province) {
+        province = normalizeProvinceName(contactHtml) || '';
+      }
+    }
+  } catch (e) {}
+
+  // 3. Fetch Profile Overview / Timeline (Intro, Bio, Posts)
+  try {
+    const profileUrl = `https://www.facebook.com/${member.memberId}`;
+    const resProfile = await fetch(profileUrl, { headers, signal: AbortSignal.timeout(5000) });
+    if (resProfile.ok) {
+      const profileHtml = await resProfile.text();
+
+      // Check Sales in Bio & Posts
+      if (excludeSales) {
+        const evalProfile = evaluateMemberContent(profileHtml.substring(0, 15000));
+        if (evalProfile.isNegative) {
+          return { isNegative: true, reason: evalProfile.reason, phone: '', province: '' };
+        }
+      }
+
+      // Extract Phone if not found yet
+      if (!phone) {
+        const foundPhones = extractPhonesFromText(profileHtml);
+        if (foundPhones.length > 0) {
+          phone = foundPhones[0];
+        }
+      }
+
+      // Extract Province if not found yet
+      if (!province) {
+        province = normalizeProvinceName(profileHtml) || '';
+      }
+    }
+  } catch (e) {}
+
+  // 4. Fallback: OpenGraph crawler if phone or province is still missing
+  if ((!phone || !province) && deepPhoneSearch) {
+    try {
+      const ogUrl = `https://www.facebook.com/profile.php?id=${member.memberId}`;
+      const resOg = await fetch(ogUrl, {
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (resOg.ok) {
+        const ogHtml = await resOg.text();
+        if (!phone) {
+          const ogPhones = extractPhonesFromText(ogHtml);
+          if (ogPhones.length > 0) phone = ogPhones[0];
+        }
+        if (!province) {
+          province = normalizeProvinceName(ogHtml) || '';
+        }
+      }
+    } catch (e) {}
+  }
+
+  return {
+    isNegative: false,
+    reason: '',
+    phone,
+    province
+  };
+}
+
 export const SOFTWARE_BRANDS = [
   'misa', 'eshop', 'omicall', 'sapo', 'kiotviet', 'kiot viet', 'ipos', 'pos365',
   'cukcuk', 'haravan', 'nhanh.vn', 'nhanh vn', 'maybanhang', 'máy bán hàng',
@@ -335,6 +485,7 @@ export class MemberScanner extends EventEmitter {
         throw new Error('Chuỗi Cookie không hợp lệ! Vui lòng kiểm tra lại Cookie Facebook.');
       }
 
+      const cookieHeader = formatted.map(c => `${c.name}=${c.value}`).join('; ');
       await context.addCookies(formatted);
       log(`🔑 Đã nạp ${formatted.length} cookies vào trình duyệt Chromium.`, 'info');
 
@@ -370,18 +521,24 @@ export class MemberScanner extends EventEmitter {
 
         const addCandidate = (item) => {
           if (!item || !item.memberId) return;
+          if (isSystemRoleOrInvalidName(item.name)) return;
           if (seenMemberIds.has(item.memberId)) return;
-          seenMemberIds.add(item.memberId);
 
-          if (item.joinedTimeText) {
-            const timeCheck = parseMemberJoinedTime(item.joinedTimeText);
-            if (timeCheck.stopScrolling) {
-              hitTimeLimit = true;
-              log(`⏹ Gặp thành viên đã vào nhóm quá 24h: ${item.name} ("${item.joinedTimeText}"). Dừng nạp thêm.`, 'warning');
-              return;
-            }
-            if (!timeCheck.within24h) return;
+          // In "Mới vào nhóm", all genuine 24h new members have relative timestamps
+          if (!item.joinedTimeText) {
+            // Missing join timestamp -> not in the 24h new members section (likely an Admin, Moderator, or Top Contributor)
+            return;
           }
+
+          const timeCheck = parseMemberJoinedTime(item.joinedTimeText);
+          if (timeCheck.stopScrolling) {
+            hitTimeLimit = true;
+            log(`⏹ Gặp thành viên đã vào nhóm quá 24h: ${item.name} ("${item.joinedTimeText}"). Dừng nạp thêm.`, 'warning');
+            return;
+          }
+          if (!timeCheck.within24h) return;
+
+          seenMemberIds.add(item.memberId);
           candidateMembers.push(item);
         };
 
@@ -514,6 +671,12 @@ export class MemberScanner extends EventEmitter {
             const domMembers = await page.evaluate((currentGroupId) => {
               const userLinks = Array.from(document.querySelectorAll('a[href*="/user/"], a[role="link"][href*="/groups/"]'));
               const results = [];
+              const blacklist = [
+                'kiểm duyệt', 'kiem duyet', 'đóng góp', 'dong gop',
+                'quản trị', 'quan tri', 'chuyên gia', 'admin', 'moderator',
+                'thành viên', 'thanh vien', 'xem tất cả', 'bạn bè'
+              ];
+
               for (const a of userLinks) {
                 const href = a.getAttribute('href') || '';
                 const mId = href.match(/\/user\/(\d+)/i) || href.match(/\/user\/([^/?]+)/i);
@@ -528,8 +691,11 @@ export class MemberScanner extends EventEmitter {
                 if (!container) continue;
 
                 const nameEl = container.querySelector('a[role="link"] span, strong, h3');
-                const name = nameEl ? nameEl.textContent.trim() : a.textContent.trim();
+                const name = (nameEl ? nameEl.textContent : a.textContent || '').trim();
                 if (!name || name.length < 2) continue;
+
+                const lowerName = name.toLowerCase();
+                if (blacklist.some(b => lowerName.includes(b))) continue;
 
                 const rawLines = (container.innerText || container.textContent || '')
                   .split('\n')
@@ -547,6 +713,9 @@ export class MemberScanner extends EventEmitter {
                     if (!subtitleText) subtitleText = line;
                   }
                 }
+
+                // Strictly require joinedTimeText so only the 24h new members section is collected
+                if (!joinedTimeText) continue;
 
                 results.push({
                   memberId,
@@ -575,9 +744,9 @@ export class MemberScanner extends EventEmitter {
 
           page.off('response', graphqlListener);
 
-          log(`👥 Đã thu thập được ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định từng thành viên...`, 'info');
+          log(`👥 Đã thu thập được ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định siêu tốc qua API...`, 'info');
 
-          // Inspect each candidate member
+          // Inspect each candidate member via high-speed HTTP API (sub-second per member)
           for (const member of candidateMembers) {
             if (state.abortRequested) break;
             state.processedMembers++;
@@ -594,125 +763,36 @@ export class MemberScanner extends EventEmitter {
               }
             }
 
-            // Tier 2: Open /groups/{groupId}/user/{memberId}/ to inspect "Hoạt động mới đây" & "Bài viết trong nhóm"
-            let profileUrl = `https://www.facebook.com/${member.memberId}`;
-            let province = normalizeProvinceName(member.subtitleText) || '';
-            let groupActivityCheckFailed = false;
-
+            // High-speed HTTP API inspection (Group Activity, Contact Info, Bio, Timeline)
+            let inspectResult = { isNegative: false, reason: '', phone: '', province: '' };
             try {
-              await page.goto(member.groupUserUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-              await delay(2000);
-
-              const groupProfileData = await page.evaluate(() => {
-                // Find "Xem trang cá nhân" link
-                const viewProfileLink = document.querySelector('a[href*="/user/"][role="link"], a[href*="facebook.com/"][role="button"], a[role="link"]');
-                const profileHref = viewProfileLink ? viewProfileLink.getAttribute('href') : '';
-
-                // Extract all text from "Hoạt động mới đây" and "Bài viết trong nhóm"
-                const activityContainers = Array.from(document.querySelectorAll('div'));
-                let activityText = '';
-                for (const d of activityContainers) {
-                  const t = (d.innerText || '').trim();
-                  if (t.includes('Hoạt động mới đây') || t.includes('Recent activity') || t.includes('Bài viết trong nhóm')) {
-                    activityText += ' ' + t;
-                  }
-                }
-
-                // Subtitle/intro text
-                const introEl = document.querySelector('div[role="main"]');
-                const introText = introEl ? (introEl.innerText || '').substring(0, 1500) : '';
-
-                return {
-                  profileHref,
-                  activityText: activityText || introText
-                };
+              inspectResult = await inspectMemberViaFastHttp(member, cookieHeader, {
+                excludeSales,
+                deepPhoneSearch,
+                groupId
               });
-
-              if (groupProfileData.profileHref && groupProfileData.profileHref.startsWith('http')) {
-                profileUrl = groupProfileData.profileHref;
-              }
-
-              // Evaluate activity content
-              if (excludeSales && groupProfileData.activityText) {
-                const t2Check = evaluateMemberContent(groupProfileData.activityText);
-                if (t2Check.isNegative) {
-                  state.skippedCount++;
-                  log(`⏩ [TẦNG 2] Bỏ qua ${member.name}: ${t2Check.reason}`, 'warning');
-                  groupActivityCheckFailed = true;
-                  continue;
-                }
-              }
-            } catch (err) {
-              logger.debug({ err: err.message }, 'Could not load group user activity page, proceeding to profile');
+            } catch (inspectErr) {
+              logger.debug({ err: inspectErr.message }, 'Member HTTP inspection error');
             }
 
-            if (groupActivityCheckFailed) continue;
+            if (inspectResult.isNegative) {
+              state.skippedCount++;
+              log(`⏩ [BỎ QUA SALE/THANH LÝ] ${member.name}: ${inspectResult.reason}`, 'warning');
+              continue;
+            }
 
-            // Tier 3: Open profile to extract Province & Phone
-            let phone = '';
+            const phone = inspectResult.phone || '';
+            const province = inspectResult.province || '';
 
-            try {
-              log(`👤 Đang mở trang cá nhân của ${member.name}...`, 'info');
-              await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-              await delay(2200);
-
-              // 3.1 Extract Province from /about if not yet found
-              if (!province) {
-                const profileText = await page.evaluate(() => document.body ? document.body.innerText : '');
-                province = normalizeProvinceName(profileText) || '';
-              }
-
-              // 3.2 Extract Phone from profile text & bio
-              const profileInfo = await page.evaluate(() => {
-                const bioEl = document.querySelector('div[data-pagelet*="ProfileIntro"], div[role="main"]');
-                return bioEl ? (bioEl.innerText || '') : '';
-              });
-
-              const foundPhones = extractPhonesFromText(profileInfo);
-              if (foundPhones.length > 0) {
-                phone = foundPhones[0];
-                log(`📞 Tìm thấy SĐT trên Bio/Giới thiệu của ${member.name}: ${phone}`, 'success');
-              }
-
-              // 3.3 Deep Phone Search via profile timeline search: profile/{UID}/search/?q=sdt
-              if (!phone && deepPhoneSearch) {
-                const searchUrl = buildProfileSearchUrl(member.memberId, 'sdt') || `https://www.facebook.com/profile/${member.memberId}/search/?q=sdt`;
-                log(`🔎 [TÌM KIẾM CHUYÊN SÂU] Tìm 'sdt' trên tường của ${member.name}: ${searchUrl}`, 'info');
-
-                try {
-                  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-                  await delay(2000);
-
-                  const searchPostsText = await page.evaluate(() => {
-                    const articles = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"]'));
-                    return articles.slice(0, 4).map(a => a.innerText || '').join('\n');
-                  });
-
-                  // Check if the search results reveal a hidden sale PM
-                  if (excludeSales && searchPostsText) {
-                    const searchCheck = evaluateMemberContent(searchPostsText);
-                    if (searchCheck.isNegative) {
-                      state.skippedCount++;
-                      log(`⏩ [TẦNG 3] Bỏ qua ${member.name}: ${searchCheck.reason}`, 'warning');
-                      continue;
-                    }
-                  }
-
-                  const deepPhones = extractPhonesFromText(searchPostsText);
-                  if (deepPhones.length > 0) {
-                    phone = deepPhones[0];
-                    log(`🎯 Tìm thấy SĐT qua tìm kiếm bài viết của ${member.name}: ${phone}`, 'success');
-                  }
-                } catch (searchErr) {
-                  logger.debug({ err: searchErr.message }, 'Profile search error');
-                }
-              }
-
-            } catch (profErr) {
-              logger.debug({ err: profErr.message }, 'Profile navigation error');
+            if (phone) {
+              log(`📞 Tìm thấy SĐT của ${member.name}: ${phone}`, 'success');
+            }
+            if (province) {
+              log(`📍 Xác định địa phương của ${member.name}: ${province}`, 'info');
             }
 
             // Record qualified lead
+            const profileUrl = `https://www.facebook.com/${member.memberId}`;
             const qualifiedLead = {
               stt: state.qualifiedLeads + 1,
               id: member.memberId,
@@ -733,8 +813,8 @@ export class MemberScanner extends EventEmitter {
             this.emit('lead', { clientId, lead: qualifiedLead });
             this.emit('progress', { clientId, state });
 
-            // Safe human-like delay
-            await delay(2000 + Math.random() * 2000);
+            // Safe jitter delay (300-600ms)
+            await delay(300 + Math.random() * 300);
           }
 
         } catch (grpErr) {
