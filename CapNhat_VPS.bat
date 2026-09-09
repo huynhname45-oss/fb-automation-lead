@@ -28,7 +28,9 @@ if not exist "%~dp0.git" (
     echo [OK] Da ket noi va dong bo xong toan bo ma nguon!
 ) else (
     echo [1/3] Dang tai code moi nhat tu Git...
-    git pull origin main
+    git stash >nul 2>&1
+    git fetch origin main
+    git reset --hard origin/main
 )
 
 echo.
