@@ -332,6 +332,87 @@ class OCRManager {
     return Array.from(allPhones);
   }
 
+  /**
+   * Complete Image Inspection: Returns both recognized plain text (for vendor branding detection)
+   * and structured phone numbers (for lead phone extraction).
+   */
+  async inspectImage(imageUrl) {
+    if (!imageUrl || typeof imageUrl !== 'string') return { text: '', phones: [] };
+
+    if (imageUrl.includes('emoji') || imageUrl.includes('rsrc.php') || imageUrl.includes('/static.xx/') || imageUrl.includes('p50x50') || imageUrl.includes('s150x150')) {
+      return { text: '', phones: [] };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+      const res = await fetch(imageUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+        }
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return { text: '', phones: [] };
+
+      const contentType = res.headers.get('content-type') || 'image/jpeg';
+      const mimeType = contentType.split(';')[0].trim();
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (buffer.length < 4000) return { text: '', phones: [] };
+
+      let recognizedText = '';
+      let phones = [];
+
+      // 1. AI Vision if available
+      const config = configManager.get();
+      if (config.aiEnabled !== false) {
+        let aiPhones = null;
+        if (config.groqApiKey || config.aiProvider === 'groq') {
+          aiPhones = await this._extractPhonesWithGroqVision(buffer, mimeType);
+        }
+        if (!aiPhones && (config.geminiApiKey || (config.aiProvider === 'gemini' && config.aiApiKey))) {
+          aiPhones = await this._extractPhonesWithGeminiVision(buffer, mimeType);
+        } else if (!aiPhones && (config.apiKey || config.aiProvider === 'openai')) {
+          aiPhones = await this._extractPhonesWithOpenAIVision(buffer, mimeType);
+        }
+        if (Array.isArray(aiPhones) && aiPhones.length > 0) {
+          phones = aiPhones;
+        }
+      }
+
+      // 2. Tesseract OCR for text reading (essential for reading software vendor brands like Haravan, KiotViet, Sapo)
+      const worker = await this.initWorker();
+      if (worker) {
+        let ocrTimer = null;
+        const timeoutPromise = new Promise((_, reject) => {
+          ocrTimer = setTimeout(() => reject(new Error('OCR Timeout')), 8000);
+        });
+
+        let ocrResult = null;
+        try {
+          ocrResult = await Promise.race([worker.recognize(buffer), timeoutPromise]);
+        } finally {
+          if (ocrTimer) clearTimeout(ocrTimer);
+        }
+
+        const data = ocrResult?.data;
+        const rawText = data?.text || '';
+        recognizedText = cleanOCRDigits(rawText);
+        if (phones.length === 0 && recognizedText) {
+          phones = extractPhonesFromText(recognizedText, { isOCR: true });
+        }
+      }
+
+      return { text: recognizedText, phones };
+    } catch (err) {
+      logger.debug({ err: err.message }, 'Image inspection OCR error');
+      return { text: '', phones: [] };
+    }
+  }
+
   async terminate() {
     if (this.worker) {
       try {

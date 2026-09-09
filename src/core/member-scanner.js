@@ -7,6 +7,7 @@ import { GroupManager } from './group-manager.js';
 import { extractPhonesFromText } from './phone-validator.js';
 import { normalizeProvinceName } from './location-extractor.js';
 import { buildProfileSearchUrl } from './search-engine.js';
+import ocrManager from './ocr-manager.js';
 
 /**
  * Safely parse potential multi-line or prefixed Facebook GraphQL response string
@@ -145,11 +146,137 @@ export function sanitizeProfileHtml(html = '') {
   return clean.replace(/\s+/g, ' ').trim();
 }
 
+export const SOFTWARE_BRANDS = [
+  'misa', 'eshop', 'omicall', 'sapo', 'kiotviet', 'kiot viet', 'ipos', 'pos365',
+  'cukcuk', 'haravan', 'nhanh.vn', 'nhanh vn', 'maybanhang', 'máy bán hàng',
+  'ocha', 'suno', 'loop', 'dantrisoft', 'bepos', 'loyverse', 'fabico', 'tpos',
+  'vietfn', 'posapp', 'salekit', 'vpage', 'pancake', 'chotdon', 'tuha',
+  'gosell', 'sobanhang', 'sổ bán hàng', 'trustpos', 'sunpos', 'bpos', 'ezpos',
+  'webcake', 'ladipage', 'ladi'
+];
+
+export const SALE_KEYWORDS = [
+  'nhận tư vấn', 'tư vấn phần mềm', 'tư vấn hỗ trợ', 'bên em hỗ trợ', 'bên e hỗ trợ',
+  'kết nối zalo', 'inbox em', 'inbox e', 'ib em', 'ib e', 'lh:', 'liên hệ em',
+  'liên hệ e', 'lh em', 'lh e', 'zalo em', 'zalo e', 'setup quán trọn gói',
+  'setup quán', 'chuyên viên tư vấn', 'chuyên viên phần mềm', 'đại lý phần mềm',
+  'nhân viên kinh doanh', 'nv kinh doanh', 'sale phần mềm', 'sales phần mềm',
+  'bên em có', 'bên e có', 'em hỗ trợ mình', 'e hỗ trợ mình'
+];
+
+export const THANH_LY_KEYWORDS = [
+  'thanh lý', 'thanh lí', 'pass lại', 'nhượng lại', 'cần pass', 'bán lại',
+  'không dùng nữa', 'thu mua máy', 'thu mua phần mềm', 'thu mua pos',
+  'hết hạn hợp đồng', 'sang quán', 'đóng cửa quán', 'pass gói', 'nhượng gói'
+];
+
 export const VENDOR_NAME_KEYWORDS = [
   'phần mềm', 'phan mem', 'software', 'thiết kế web', 'thiet ke web',
   'setup quán', 'setup f&b', 'pos bán hàng', 'máy bán hàng', 'máy in bill',
-  'máy pos', 'thu ngân', 'marketing online', 'quảng cáo facebook', 'dịch vụ f&b'
+  'máy pos', 'thu ngân', 'marketing online', 'quảng cáo facebook', 'dịch vụ f&b',
+  'omnichannel'
 ];
+
+export const VENDOR_COVER_KEYWORDS = [
+  'omnichannel', 'giải pháp bán hàng', 'giai phap ban hang',
+  'bán hàng đa kênh', 'ban hang da kenh', 'website ecom',
+  'thiết kế web', 'thiet ke web', 'thiết kế website',
+  'phần mềm quản lý', 'phan mem quan ly', 'tư vấn phần mềm',
+  'phần mềm tính tiền', 'máy bán hàng', 'máy in hóa đơn',
+  'máy pos', 'setup quán', 'setup f&b', 'chuyên viên giải pháp'
+];
+
+/**
+ * Extract cover photo URL from Facebook Comet SSR JSON, OpenGraph meta, or DOM attributes
+ */
+export function extractCoverPhotoFromHtml(html = '') {
+  if (!html || typeof html !== 'string') return '';
+
+  // 1. Check Comet SSR JSON Relay objects: cover_photo / coverPhoto / profile_cover / header_photo
+  const relayPatterns = [
+    /"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i,
+    /"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"image"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i,
+    /"focus"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i,
+    /"header_photo"[^}]*?"uri"\s*:\s*"([^"]+)"/i,
+    /"cover_photo_id"[^}]*?"uri"\s*:\s*"([^"]+)"/i,
+    /"profileCoverPhoto"[^}]*?"uri"\s*:\s*"([^"]+)"/i
+  ];
+
+  for (const pat of relayPatterns) {
+    const m = html.match(pat);
+    if (m && m[1]) {
+      const url = m[1].replace(/\\\/|\//g, '/').replace(/\\u0025/g, '%').replace(/&amp;/g, '&');
+      if (url.startsWith('http') && !url.includes('emoji') && !url.includes('rsrc.php') && !url.includes('static.xx')) {
+        return url;
+      }
+    }
+  }
+
+  // 2. DOM / Meta tags
+  const domPatterns = [
+    /<img\b[^>]*data-imgperflogname=["']profileCoverPhoto["'][^>]*src=["']([^"']+)["']/i,
+    /<img\b[^>]*src=["']([^"']+)["'][^>]*data-imgperflogname=["']profileCoverPhoto["']/i,
+    /<div\b[^>]*data-pagelet=["'][^"']*Cover[^"']*["'][^>]*>[\s\S]*?<img\b[^>]*src=["']([^"']+)["']/i,
+    /<div\b[^>]*aria-label=["'][^"']*(?:Ảnh bìa|Cover photo)[^"']*["'][^>]*>[\s\S]*?<img\b[^>]*src=["']([^"']+)["']/i,
+    /<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i
+  ];
+
+  for (const pat of domPatterns) {
+    const m = html.match(pat);
+    if (m && m[1]) {
+      const url = m[1].replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
+      if (url.startsWith('http') && !url.includes('emoji') && !url.includes('rsrc.php') && !url.includes('static.xx')) {
+        return url;
+      }
+    }
+  }
+
+  // 3. High-resolution scontent banner images (-6/ or t39.30808-6 or t39.10873-6)
+  const cdnCoverPattern = /https:[\\\/]+[a-z0-9.-]+\.fbcdn\.net[\\\/]v[\\\/](?:t39\.30808-6|t39\.10873-6|t1\.6435-6)[^"'\s<>\\]+/gi;
+  const cdnMatches = html.match(cdnCoverPattern);
+  if (cdnMatches && cdnMatches.length > 0) {
+    for (const rawUrl of cdnMatches) {
+      const url = rawUrl.replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
+      if (!url.includes('p50x50') && !url.includes('s150x150') && !url.includes('s24x24') && !url.includes('s32x32') && !url.includes('s40x40')) {
+        return url;
+      }
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Evaluate Cover Photo OCR text:
+ * Rejects software sales/vendors immediately if banner displays software brand (Haravan, Sapo, etc.)
+ * or sales/agency marketing keywords (Omnichannel, Giải pháp bán hàng, etc.)
+ */
+export function evaluateCoverPhotoText(text = '') {
+  if (!text || typeof text !== 'string') return { isNegative: false, reason: '' };
+  const lower = text.toLowerCase();
+
+  // 1. Software brand on cover photo -> Definitive vendor rejection (e.g. Haravan banner for Xuân Phát)
+  for (const brand of SOFTWARE_BRANDS) {
+    if (lower.includes(brand)) {
+      return {
+        isNegative: true,
+        reason: `Ảnh bìa chứa thương hiệu phần mềm [${brand.toUpperCase()}]`
+      };
+    }
+  }
+
+  // 2. Vendor marketing keywords on cover photo
+  for (const kw of VENDOR_COVER_KEYWORDS) {
+    if (lower.includes(kw)) {
+      return {
+        isNegative: true,
+        reason: `Ảnh bìa quảng cáo dịch vụ/phần mềm: "${kw}"`
+      };
+    }
+  }
+
+  return { isNegative: false, reason: '' };
+}
 
 export function isSalesOrSoftwareVendorName(name = '') {
   if (!name || typeof name !== 'string') return false;
@@ -181,6 +308,8 @@ function extractValidProvince(rawText = '') {
 export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSales = true, deepPhoneSearch = true, groupId = '', ownPhones = new Set() } = {}) {
   let phone = '';
   let province = extractValidProvince(member.subtitleText);
+  let coverPhotoUrl = '';
+  let phoneFromCover = false;
 
   const headers = {
     'User-Agent': 'curl/8.4.0',
@@ -197,10 +326,11 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
         const resGrp = await fetch(groupUserUrl, { headers, signal: AbortSignal.timeout(5000) });
         if (resGrp.ok) {
           const grpHtml = await resGrp.text();
+          if (!coverPhotoUrl) coverPhotoUrl = extractCoverPhotoFromHtml(grpHtml);
           const cleanGrpHtml = sanitizeProfileHtml(grpHtml);
           const evalGrp = evaluateMemberContent(cleanGrpHtml.substring(0, 20000));
           if (evalGrp.isNegative) {
-            return { isNegative: true, reason: evalGrp.reason, phone: '', province: '' };
+            return { isNegative: true, reason: evalGrp.reason, phone: '', province: '', coverPhotoUrl, phoneFromCover: false };
           }
           if (!phone) {
             const grpPhones = extractPhonesFromText(cleanGrpHtml).filter(p => !ownPhones.has(p));
@@ -226,7 +356,7 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
       if (excludeSales) {
         const evalContact = evaluateMemberContent(cleanContactHtml.substring(0, 10000));
         if (evalContact.isNegative) {
-          return { isNegative: true, reason: evalContact.reason, phone: '', province: '' };
+          return { isNegative: true, reason: evalContact.reason, phone: '', province: '', coverPhotoUrl, phoneFromCover: false };
         }
       }
 
@@ -249,13 +379,14 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
     const resProfile = await fetch(profileUrl, { headers, signal: AbortSignal.timeout(5000) });
     if (resProfile.ok) {
       const profileHtml = await resProfile.text();
+      if (!coverPhotoUrl) coverPhotoUrl = extractCoverPhotoFromHtml(profileHtml);
       const cleanProfileHtml = sanitizeProfileHtml(profileHtml);
 
       // Check Sales in Bio & Posts
       if (excludeSales) {
         const evalProfile = evaluateMemberContent(cleanProfileHtml.substring(0, 15000));
         if (evalProfile.isNegative) {
-          return { isNegative: true, reason: evalProfile.reason, phone: '', province: '' };
+          return { isNegative: true, reason: evalProfile.reason, phone: '', province: '', coverPhotoUrl, phoneFromCover: false };
         }
       }
 
@@ -274,8 +405,8 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
     }
   } catch (e) {}
 
-  // 4. Fallback: OpenGraph crawler if phone or province is still missing
-  if ((!phone || !province) && deepPhoneSearch) {
+  // 4. Fallback: OpenGraph crawler if phone, province, or cover photo is still missing
+  if ((!phone || !province || !coverPhotoUrl) && deepPhoneSearch) {
     try {
       const ogUrl = `https://www.facebook.com/profile.php?id=${member.memberId}`;
       const resOg = await fetch(ogUrl, {
@@ -288,6 +419,7 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
       });
       if (resOg.ok) {
         const ogHtml = await resOg.text();
+        if (!coverPhotoUrl) coverPhotoUrl = extractCoverPhotoFromHtml(ogHtml);
         const cleanOgHtml = sanitizeProfileHtml(ogHtml);
         if (!phone) {
           const ogPhones = extractPhonesFromText(cleanOgHtml).filter(p => !ownPhones.has(p));
@@ -300,35 +432,40 @@ export async function inspectMemberViaFastHttp(member, cookieHeader, { excludeSa
     } catch (e) {}
   }
 
+  // 5. Inspect Cover Photo via OCR / AI Vision (detects sales banners like Haravan/Sapo, and extracts hotline/phone)
+  if (coverPhotoUrl) {
+    try {
+      const ocrData = await ocrManager.inspectImage(coverPhotoUrl);
+      if (ocrData) {
+        if (excludeSales && ocrData.text) {
+          const coverCheck = evaluateCoverPhotoText(ocrData.text);
+          if (coverCheck.isNegative) {
+            return { isNegative: true, reason: coverCheck.reason, phone: '', province: '', coverPhotoUrl, phoneFromCover: false };
+          }
+        }
+        if (!phone && Array.isArray(ocrData.phones) && ocrData.phones.length > 0) {
+          const validOcrPhones = ocrData.phones.filter(p => !ownPhones.has(p));
+          if (validOcrPhones.length > 0) {
+            phone = validOcrPhones[0];
+            phoneFromCover = true;
+          }
+        }
+      }
+    } catch (ocrErr) {
+      logger.debug({ err: ocrErr.message }, 'Cover photo OCR inspection error');
+    }
+  }
+
   return {
     isNegative: false,
     reason: '',
     phone,
-    province
+    province,
+    coverPhotoUrl,
+    phoneFromCover
   };
 }
 
-export const SOFTWARE_BRANDS = [
-  'misa', 'eshop', 'omicall', 'sapo', 'kiotviet', 'kiot viet', 'ipos', 'pos365',
-  'cukcuk', 'haravan', 'nhanh.vn', 'nhanh vn', 'maybanhang', 'máy bán hàng',
-  'ocha', 'suno', 'loop', 'dantrisoft', 'bepos', 'loyverse', 'fabico', 'tpos',
-  'vietfn', 'posapp', 'salekit', 'vpage', 'pancake', 'chotdon', 'tuha'
-];
-
-export const SALE_KEYWORDS = [
-  'nhận tư vấn', 'tư vấn phần mềm', 'tư vấn hỗ trợ', 'bên em hỗ trợ', 'bên e hỗ trợ',
-  'kết nối zalo', 'inbox em', 'inbox e', 'ib em', 'ib e', 'lh:', 'liên hệ em',
-  'liên hệ e', 'lh em', 'lh e', 'zalo em', 'zalo e', 'setup quán trọn gói',
-  'setup quán', 'chuyên viên tư vấn', 'chuyên viên phần mềm', 'đại lý phần mềm',
-  'nhân viên kinh doanh', 'nv kinh doanh', 'sale phần mềm', 'sales phần mềm',
-  'bên em có', 'bên e có', 'em hỗ trợ mình', 'e hỗ trợ mình'
-];
-
-export const THANH_LY_KEYWORDS = [
-  'thanh lý', 'thanh lí', 'pass lại', 'nhượng lại', 'cần pass', 'bán lại',
-  'không dùng nữa', 'thu mua máy', 'thu mua phần mềm', 'thu mua pos',
-  'hết hạn hợp đồng', 'sang quán', 'đóng cửa quán', 'pass gói', 'nhượng gói'
-];
 
 /**
  * Parses relative joined time text from Facebook "Mới vào nhóm" list
@@ -414,8 +551,9 @@ export function evaluateMemberContent(text = '') {
   // 2. Check vendor service keywords directly
   if (lower.includes('phần mềm theo yêu cầu') || lower.includes('phan mem theo yeu cau') ||
       lower.includes('cung cấp phần mềm') || lower.includes('giải pháp phần mềm') ||
-      lower.includes('thiết kế web') || lower.includes('setup quán trọn gói')) {
-    return { isNegative: true, reason: 'Phát hiện dịch vụ/đơn vị cung cấp phần mềm' };
+      lower.includes('thiết kế web') || lower.includes('setup quán trọn gói') ||
+      lower.includes('omnichannel') || lower.includes('website ecom') || lower.includes('bán hàng đa kênh')) {
+    return { isNegative: true, reason: 'Phát hiện dịch vụ/đơn vị cung cấp phần mềm / Omnichannel' };
   }
 
   // 3. Check combination: Brand + Sales CTA
@@ -428,12 +566,13 @@ export function evaluateMemberContent(text = '') {
 
   // 4. Check explicit workplace / job title
   const jobPatterns = [
-    /làm việc tại\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan)/i,
-    /chuyên viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|tư vấn)/i,
-    /nhân viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|kinh doanh)/i,
-    /tư vấn\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|phần mềm)/i,
-    /sale[s]?\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|phần mềm)/i,
-    /đại lý\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|phần mềm)/i
+    /làm việc tại\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell)/i,
+    /chuyên viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|tư vấn|kinh doanh)/i,
+    /nhân viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|kinh doanh)/i,
+    /tư vấn\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
+    /sale[s]?\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
+    /đại lý\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
+    /(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell)\s+.*(chuyên viên|nhân viên|tư vấn|sale|kinh doanh|website|omnichannel)/i
   ];
   for (const pat of jobPatterns) {
     if (pat.test(lower)) {
@@ -892,8 +1031,8 @@ export class MemberScanner extends EventEmitter {
               }
             }
 
-            // High-speed HTTP API inspection (Group Activity, Contact Info, Bio, Timeline)
-            let inspectResult = { isNegative: false, reason: '', phone: '', province: '' };
+            // High-speed HTTP API inspection (Group Activity, Contact Info, Bio, Timeline, Cover Photo OCR)
+            let inspectResult = { isNegative: false, reason: '', phone: '', province: '', coverPhotoUrl: '', phoneFromCover: false };
             try {
               inspectResult = await inspectMemberViaFastHttp(member, cookieHeader, {
                 excludeSales,
@@ -911,11 +1050,70 @@ export class MemberScanner extends EventEmitter {
               continue;
             }
 
-            const phone = inspectResult.phone || '';
+            let phone = inspectResult.phone || '';
             const province = inspectResult.province || '';
+            let coverPhotoUrl = inspectResult.coverPhotoUrl || '';
+
+            // Playwright fallback for cover photo if not found via fast HTTP
+            if (!coverPhotoUrl && page && !page.isClosed()) {
+              try {
+                const groupUserUrl = member.groupUserUrl || (groupId ? `https://www.facebook.com/groups/${groupId}/user/${member.memberId}/` : '');
+                if (groupUserUrl) {
+                  coverPhotoUrl = await page.evaluate(async (url) => {
+                    try {
+                      const res = await fetch(url, { credentials: 'include' });
+                      if (!res.ok) return '';
+                      const html = await res.text();
+                      const m = html.match(/"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i)
+                             || html.match(/"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"image"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i)
+                             || html.match(/<img\b[^>]*data-imgperflogname=["']profileCoverPhoto["'][^>]*src=["']([^"']+)["']/i)
+                             || html.match(/<div\b[^>]*aria-label=["'][^"']*(?:Ảnh bìa|Cover photo)[^"']*["'][^>]*>[\s\S]*?<img\b[^>]*src=["']([^"']+)["']/i)
+                             || html.match(/https:[\\\/]+[a-z0-9.-]+\.fbcdn\.net[\\\/]v[\\\/](?:t39\.30808-6|t39\.10873-6)[^"'\s<>\\]+/i);
+                      if (m && m[1]) return m[1].replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
+                      if (m && typeof m[0] === 'string' && m[0].startsWith('http')) return m[0].replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
+                      return '';
+                    } catch (e) {
+                      return '';
+                    }
+                  }, groupUserUrl);
+                }
+              } catch (evalErr) {
+                logger.debug({ err: evalErr.message }, 'Playwright page.evaluate cover fetch error');
+              }
+            }
+
+            // Inspect Cover Photo with OCR / AI Vision if found via fallback
+            if (coverPhotoUrl && !inspectResult.coverPhotoUrl) {
+              try {
+                const ocrData = await ocrManager.inspectImage(coverPhotoUrl);
+                if (ocrData) {
+                  if (excludeSales && ocrData.text) {
+                    const coverCheck = evaluateCoverPhotoText(ocrData.text);
+                    if (coverCheck.isNegative) {
+                      state.skippedCount++;
+                      log(`⏩ [BỎ QUA SALE ẢNH BÌA] ${member.name}: ${coverCheck.reason}`, 'warning');
+                      continue;
+                    }
+                  }
+                  if (!phone && Array.isArray(ocrData.phones) && ocrData.phones.length > 0) {
+                    const validOcrPhones = ocrData.phones.filter(p => !ownPhones.has(p));
+                    if (validOcrPhones.length > 0) {
+                      phone = validOcrPhones[0];
+                      log(`📸 [OCR ẢNH BÌA] Đã nhận diện SĐT từ ảnh bìa của ${member.name}: ${phone}`, 'success');
+                    }
+                  }
+                }
+              } catch (ocrErr) {
+                logger.debug({ err: ocrErr.message }, 'Cover photo OCR error');
+              }
+            }
 
             if (phone) {
-              log(`📞 Tìm thấy SĐT của ${member.name}: ${phone}`, 'success');
+              if (inspectResult.phoneFromCover) {
+                log(`📸 [OCR ẢNH BÌA] Đã nhận diện SĐT từ ảnh bìa của ${member.name}: ${phone}`, 'success');
+              } else {
+                log(`📞 Tìm thấy SĐT của ${member.name}: ${phone}`, 'success');
+              }
             }
             if (province) {
               log(`📍 Xác định địa phương của ${member.name}: ${province}`, 'info');
@@ -933,6 +1131,7 @@ export class MemberScanner extends EventEmitter {
               joinedTime: member.joinedTimeText || 'Mới tham gia',
               groupName: state.currentGroup,
               groupUrl: membersUrl,
+              coverPhotoUrl: coverPhotoUrl || '',
               scannedAt: new Date().toLocaleString('vi-VN')
             };
 

@@ -114,8 +114,22 @@ async function shutdown() {
   }
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'FATAL UNCAUGHT EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.warn({ reason }, 'UNHANDLED PROMISE REJECTION');
+});
+
+process.on('SIGTERM', () => {
+  logger.info('Received SIGTERM');
+  shutdown();
+});
+process.on('SIGINT', () => {
+  logger.info('Received SIGINT');
+  shutdown();
+});
 
 // Start
 startServer().catch(err => {

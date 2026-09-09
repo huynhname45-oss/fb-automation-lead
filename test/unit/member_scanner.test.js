@@ -359,6 +359,170 @@ test('MEMBER-SCROLL-001: 23h member (Diệp Bích) is accepted and interleaved v
   assert.equal(isSalesOrSoftwareVendorName('Phần Mềm Theo Yêu Cầu'), true);
 });
 
+test('MEMBER-COVER-OCR-001: extractCoverPhotoFromHtml extracts cover photos across JSON, DOM, and Meta', async () => {
+  const { extractCoverPhotoFromHtml } = await import('../../src/core/member-scanner.js');
+
+  // 1. Comet SSR JSON Relay payload
+  const jsonRelay = '{"user":{"cover_photo":{"photo":{"image":{"uri":"https:\\/\\/scontent.fsgn5-2.fna.fbcdn.net\\/v\\/t39.30808-6\\/111_n.jpg?oh=abc&oe=123"}}}}}';
+  const url1 = extractCoverPhotoFromHtml(jsonRelay);
+  assert.equal(url1, 'https://scontent.fsgn5-2.fna.fbcdn.net/v/t39.30808-6/111_n.jpg?oh=abc&oe=123');
+
+  // 2. DOM attribute data-imgperflogname="profileCoverPhoto"
+  const domHtml = '<div class="banner"><img data-imgperflogname="profileCoverPhoto" src="https://scontent.fsgn5-2.fna.fbcdn.net/v/t39.30808-6/222_n.jpg" /></div>';
+  const url2 = extractCoverPhotoFromHtml(domHtml);
+  assert.equal(url2, 'https://scontent.fsgn5-2.fna.fbcdn.net/v/t39.30808-6/222_n.jpg');
+
+  // 3. OpenGraph meta tag
+  const ogHtml = '<meta property="og:image" content="https://scontent.fsgn5-2.fna.fbcdn.net/v/t39.30808-6/333_n.jpg" />';
+  const url3 = extractCoverPhotoFromHtml(ogHtml);
+  assert.equal(url3, 'https://scontent.fsgn5-2.fna.fbcdn.net/v/t39.30808-6/333_n.jpg');
+
+  // 4. Ignores static icons, emojis, and avatars
+  const staticHtml = '<img data-imgperflogname="profileCoverPhoto" src="https://static.xx.fbcdn.net/rsrc.php/v4/icon.png" />';
+  const url4 = extractCoverPhotoFromHtml(staticHtml);
+  assert.equal(url4, '');
+});
+
+test('MEMBER-COVER-OCR-002: evaluateCoverPhotoText strictly rejects software sales reps (Xuân Phát Haravan, Sapo, KiotViet)', async () => {
+  const { evaluateCoverPhotoText } = await import('../../src/core/member-scanner.js');
+
+  // Real text from user screenshot (Xuân Phát cover banner)
+  const xuanPhatCover = 'haravan - Giải Pháp Bán Hàng Đa Kênh Omnichannel và Xây Dựng Website Vượt Trội (Được hơn 60.000+ nhà kinh doanh, thương hiệu tin dùng)';
+  const res1 = evaluateCoverPhotoText(xuanPhatCover);
+  assert.equal(res1.isNegative, true);
+  assert.match(res1.reason, /HARAVAN/i);
+
+  // Sapo cover banner
+  const sapoCover = 'Sapo POS - Phần mềm quản lý bán hàng thông minh số 1 Việt Nam';
+  const res2 = evaluateCoverPhotoText(sapoCover);
+  assert.equal(res2.isNegative, true);
+  assert.match(res2.reason, /SAPO/i);
+
+  // KiotViet cover banner
+  const kiotCover = 'KiotViet - Khởi Nghiệp Kinh Doanh Cùng KiotViet';
+  const res3 = evaluateCoverPhotoText(kiotCover);
+  assert.equal(res3.isNegative, true);
+  assert.match(res3.reason, /KIOTVIET/i);
+
+  // Generic marketing agency banner
+  const agencyCover = 'Chuyên gia giải pháp bán hàng đa kênh omnichannel và thiết kế website';
+  const res4 = evaluateCoverPhotoText(agencyCover);
+  assert.equal(res4.isNegative, true);
+});
+
+test('MEMBER-COVER-OCR-003: evaluateCoverPhotoText accepts authentic shop owners and prospective buyers', async () => {
+  const { evaluateCoverPhotoText } = await import('../../src/core/member-scanner.js');
+
+  // Real text from user screenshot (Bùi Alla cover banner)
+  const buiAllaCover = 'Vay vốn Ngân hàng, tín chấp & thế chấp, Thẻ tín dụng... Chứng minh Tài chính đi Du học, Du lịch... GIÚP BẠN THỰC HIỆN NHỮNG ƯỚC MƠ! HÃY GỌI NGAY: 0352.750.316';
+  const res1 = evaluateCoverPhotoText(buiAllaCover);
+  assert.equal(res1.isNegative, false);
+
+  // Restaurant banner
+  const foodCover = 'Cơm Tấm Đêm Sài Gòn - Giao hàng tận nơi toàn thành phố. Hotline: 0909123456';
+  const res2 = evaluateCoverPhotoText(foodCover);
+  assert.equal(res2.isNegative, false);
+});
+
+test('MEMBER-COVER-OCR-004: inspectMemberViaFastHttp extracts phone number from cover photo OCR (Bùi Alla case)', async () => {
+  const { inspectMemberViaFastHttp } = await import('../../src/core/member-scanner.js');
+  const { default: ocrManager } = await import('../../src/core/ocr-manager.js');
+
+  // Mock inspectImage on ocrManager
+  const originalInspect = ocrManager.inspectImage;
+  ocrManager.inspectImage = async (url) => {
+    if (url.includes('bui_alla_cover')) {
+      return {
+        text: 'Vay vốn Ngân hàng... HÃY GỌI NGAY: 0352.750.316',
+        phones: ['0352750316']
+      };
+    }
+    return { text: '', phones: [] };
+  };
+
+  try {
+    const member = {
+      memberId: '100036042079322',
+      name: 'Bùi Alla',
+      subtitleText: 'Hanoi',
+      groupUserUrl: ''
+    };
+
+    // Mock global fetch to return cover photo URL in HTML
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('about_contact_and_basic_info') || urlStr.includes('100036042079322')) {
+        return {
+          ok: true,
+          text: async () => `<meta property="og:image" content="https://scontent.fbcdn.net/v/t39.30808-6/bui_alla_cover.jpg" /><div><span>Người sáng tạo nội dung số</span></div>`
+        };
+      }
+      return { ok: false };
+    };
+
+    try {
+      const result = await inspectMemberViaFastHttp(member, 'c_user=100036042079322; xs=test');
+      assert.equal(result.isNegative, false);
+      assert.equal(result.phone, '0352750316');
+      assert.equal(result.phoneFromCover, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  } finally {
+    ocrManager.inspectImage = originalInspect;
+  }
+});
+
+test('MEMBER-COVER-OCR-005: inspectMemberViaFastHttp rejects member whose cover photo has Haravan sales banner (Xuân Phát case)', async () => {
+  const { inspectMemberViaFastHttp } = await import('../../src/core/member-scanner.js');
+  const { default: ocrManager } = await import('../../src/core/ocr-manager.js');
+
+  // Mock inspectImage on ocrManager
+  const originalInspect = ocrManager.inspectImage;
+  ocrManager.inspectImage = async (url) => {
+    if (url.includes('xuan_phat_cover')) {
+      return {
+        text: 'haravan - Giải Pháp Bán Hàng Đa Kênh Omnichannel và Xây Dựng Website Vượt Trội',
+        phones: []
+      };
+    }
+    return { text: '', phones: [] };
+  };
+
+  try {
+    const member = {
+      memberId: '61591642754298',
+      name: 'Xuân Phát',
+      subtitleText: '',
+      groupUserUrl: 'https://www.facebook.com/groups/1550943498709432/user/61591642754298'
+    };
+
+    // Mock global fetch to return cover photo URL in HTML
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('61591642754298')) {
+        return {
+          ok: true,
+          text: async () => `<div data-pagelet="ProfileCover"><img src="https://scontent.fbcdn.net/v/t39.30808-6/xuan_phat_cover.jpg" /></div>`
+        };
+      }
+      return { ok: false };
+    };
+
+    try {
+      const result = await inspectMemberViaFastHttp(member, 'c_user=123; xs=test', { excludeSales: true });
+      assert.equal(result.isNegative, true);
+      assert.match(result.reason, /HARAVAN/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  } finally {
+    ocrManager.inspectImage = originalInspect;
+  }
+});
+
 
 
 
