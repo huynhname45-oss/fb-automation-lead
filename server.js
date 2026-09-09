@@ -12,6 +12,7 @@ import searchRoutes from './src/routes/search.js';
 import exportRoutes from './src/routes/export.js';
 import configRoutes from './src/routes/config.js';
 import groupsRoutes from './src/routes/groups.js';
+import membersRoutes from './src/routes/members.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/groups', groupsRoutes);
+app.use('/api/members', membersRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -31,6 +31,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     <span>Nhóm đã tham gia</span>
                 </button>
+                <button class="sidebar-item" id="navMembers" data-tab="members">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+                    <span>Quét thành viên mới</span>
+                </button>
                 <button class="sidebar-item" id="navConfig" data-tab="config">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     <span>Cấu hình (Settings)</span>
@@ -513,6 +517,110 @@
                                                 <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
                                                 <div style="font-weight: 500;">Chưa có dữ liệu nhóm nào.</div>
                                                 <div class="text-xs text-muted mt-1">Bấm nút <strong>"Quét Tất Cả Nhóm"</strong> ở trên để bắt đầu lấy danh sách!</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Members Tab (Group New Members Lead Hunter) -->
+                <section id="tabMembers" class="tab-content">
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <div class="d-flex align-center justify-between wrap-gap">
+                                <div>
+                                    <h2>Quét Thành Viên Mới Vào Nhóm (24H Lead Hunter)</h2>
+                                    <p>Tự động tìm kiếm thành viên mới gia nhập nhóm phần mềm trong 24h, lọc bỏ triệt để Sale PM & Thanh lý, trích xuất Tên, Tỉnh, Số điện thoại.</p>
+                                </div>
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <button class="btn btn-success" id="btnExportMembersExcel" disabled title="Xuất danh sách thành viên mới ra file Excel">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                        Xuất Excel (<span id="memberCountBadge">0</span>)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <!-- Group Input Panel -->
+                            <div class="form-group mb-4">
+                                <label class="field-label" style="font-weight: 600;">Chọn nhóm hoặc Nhập link/ID nhóm cần quét:</label>
+                                <div class="d-flex gap-3 flex-wrap align-center mb-2">
+                                    <div style="flex: 1; min-width: 280px;">
+                                        <select id="selectMemberGroupSource" class="input input-styled" style="height: 44px;">
+                                            <option value="">-- Chọn nhóm từ danh sách nhóm đã tham gia --</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 2; min-width: 320px;">
+                                        <input type="text" id="inputMemberGroupUrls" class="input input-styled" style="height: 44px;" placeholder="Hoặc dán Link nhóm / ID nhóm (cách nhau bởi dấu phẩy nếu nhiều nhóm)...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Filter & Rules Panel -->
+                            <div class="filter-controls-row mb-4 p-3 rounded-lg" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 12px;">
+                                <div class="d-flex align-center justify-between flex-wrap gap-3">
+                                    <div class="d-flex align-center gap-4 flex-wrap">
+                                        <label class="d-flex align-center gap-2 cursor-pointer mb-0" style="font-weight: 600; font-size: 0.9rem;">
+                                            <input type="checkbox" id="chkMemberExcludeSales" class="custom-checkbox" checked>
+                                            <span>🛡️ Tự động loại trừ Sale PM & Thanh lý (Sapo, KiotViet, MISA, OMICALL, iPOS...)</span>
+                                        </label>
+                                        <label class="d-flex align-center gap-2 cursor-pointer mb-0" style="font-weight: 600; font-size: 0.9rem;">
+                                            <input type="checkbox" id="chkMemberDeepPhone" class="custom-checkbox" checked>
+                                            <span>🔎 Tìm kiếm SĐT chuyên sâu trên tường (q=sdt, q=lh)</span>
+                                        </label>
+                                    </div>
+                                    <div class="d-flex align-center gap-2">
+                                        <span class="text-xs text-muted">Giới hạn/nhóm:</span>
+                                        <input type="number" id="inputMaxMembersPerGroup" class="input input-styled" value="60" min="5" max="300" style="width: 80px; height: 36px; padding: 4px 8px; text-align: center;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Bar -->
+                            <div class="d-flex align-center justify-between flex-wrap gap-3 mb-4">
+                                <div class="d-flex align-center gap-3">
+                                    <button class="btn btn-primary" id="btnStartScanMembers" style="padding: 10px 24px;">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                        Bắt đầu quét thành viên mới
+                                    </button>
+                                    <button class="btn btn-danger" id="btnStopScanMembers" style="display: none; padding: 10px 20px;">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                                        Dừng quét
+                                    </button>
+                                </div>
+                                <div id="memberScanStatusBadge" class="text-sm" style="font-weight: 500; color: var(--text-muted);">
+                                    Sẵn sàng quét thành viên mới trong vòng 24 giờ.
+                                </div>
+                            </div>
+
+                            <!-- Live Log Box -->
+                            <div id="memberScanLogBox" class="p-3 mb-4 rounded-lg" style="display: none; background: rgba(0,0,0,0.04); border: 1px solid var(--glass-border); border-radius: 10px; max-height: 120px; overflow-y: auto; font-family: monospace; font-size: 0.82rem; line-height: 1.6;">
+                            </div>
+
+                            <!-- Results Table -->
+                            <div class="table-responsive">
+                                <table class="table styled-table" id="membersTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px; text-align: center;">STT</th>
+                                            <th style="min-width: 180px;">Tên Facebook</th>
+                                            <th style="min-width: 140px; text-align: center;">Số Điện Thoại</th>
+                                            <th style="min-width: 150px; text-align: center;">Tỉnh / Thành Phố</th>
+                                            <th style="min-width: 140px; text-align: center;">Thời Gian Vào</th>
+                                            <th style="min-width: 180px;">Nhóm Nguồn</th>
+                                            <th style="width: 100px; text-align: center;">Thao Tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="membersTableBody">
+                                        <tr class="empty-row">
+                                            <td colspan="7" class="text-center py-5 text-muted">
+                                                <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
+                                                <div style="font-weight: 500;">Chưa có dữ liệu thành viên nào.</div>
+                                                <div class="text-xs text-muted mt-1">Chọn nhóm và bấm <strong>"Bắt đầu quét thành viên mới"</strong> để thu thập!</div>
                                             </td>
                                         </tr>
                                     </tbody>
