@@ -171,43 +171,43 @@
                                 </div>
                                 
                                 <div class="filter-row mb-4">
-                                    <div class="filter-col">
-                                        <label class="filter-label-top" for="selTimeRange">⏱️ Thời gian đăng bài</label>
-                                        <select id="selTimeRange" class="select select-styled" style="font-weight: 500;">
-                                            <option value="24h" selected>24 giờ qua (1 ngày)</option>
-                                            <option value="3d">3 ngày gần nhất (72h)</option>
-                                            <option value="7d">1 tuần gần nhất (7 ngày)</option>
-                                            <option value="any">Bất kỳ thời gian</option>
-                                        </select>
-                                    </div>
+                                    <div class="filter-col" style="min-width: 195px;">
+                                         <label class="filter-label-top" for="selTimeRange">⏱️ Thời gian đăng bài</label>
+                                         <select id="selTimeRange" class="select select-styled" style="font-weight: 500; width: 100%;">
+                                             <option value="24h" selected>24 giờ qua (1 ngày)</option>
+                                             <option value="3d">3 ngày gần nhất (72h)</option>
+                                             <option value="7d">1 tuần gần nhất (7 ngày)</option>
+                                             <option value="any">Bất kỳ thời gian</option>
+                                         </select>
+                                     </div>
 
-                                    <div class="filter-col">
-                                        <label class="filter-label-top" for="chkRequirePhoneOnly">📞 Chỉ lấy bài có SĐT</label>
-                                        <div class="filter-toggle-box">
-                                            <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
-                                                <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="filter-col">
-                                        <label class="filter-label-top" for="filterDatePosted">Ngày đăng (Năm)</label>
-                                        <select id="filterDatePosted" class="select select-styled" style="min-width: 175px;">
-                                            <option value="">Ngày bất kỳ (Mặc định)</option>
-                                            <option value="2026">2026</option>
-                                            <option value="2025">2025</option>
-                                            <option value="2024">2024</option>
-                                            <option value="2023">2023</option>
-                                            <option value="2022">2022</option>
-                                            <option value="2021">2021</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="filter-col">
-                                        <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
-                                        <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000" style="width: 130px;">
-                                    </div>
+                                     <div class="filter-col" style="min-width: 140px;">
+                                         <label class="filter-label-top" for="chkRequirePhoneOnly">📞 Chỉ lấy bài có SĐT</label>
+                                         <div class="filter-toggle-box">
+                                             <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
+                                                 <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
+                                                 <span class="toggle-slider"></span>
+                                             </label>
+                                         </div>
+                                     </div>
+                                     
+                                     <div class="filter-col" style="min-width: 195px;">
+                                         <label class="filter-label-top" for="filterDatePosted">Ngày đăng (Năm)</label>
+                                         <select id="filterDatePosted" class="select select-styled" style="width: 100%;">
+                                             <option value="">Ngày bất kỳ (Mặc định)</option>
+                                             <option value="2026">2026</option>
+                                             <option value="2025">2025</option>
+                                             <option value="2024">2024</option>
+                                             <option value="2023">2023</option>
+                                             <option value="2022">2022</option>
+                                             <option value="2021">2021</option>
+                                         </select>
+                                     </div>
+                                     
+                                     <div class="filter-col" style="min-width: 140px;">
+                                         <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
+                                         <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000" style="width: 100%;">
+                                     </div>
                                 </div>
                                 
                                 <div class="action-buttons mt-4">
