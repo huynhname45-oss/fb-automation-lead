@@ -108,6 +108,11 @@ test('MEMBER-FILTER-003: evaluateMemberContent accepts authentic shop owners and
   const normal3 = 'Mọi người tư vấn giúp em máy in nào in đơn shopee nhanh với ạ';
   const res3 = evaluateMemberContent(normal3);
   assert.equal(res3.isNegative, false);
+
+  // Anh Tuấn Setup real case: Franchise distributor with "Nhân viên kinh doanh, Sale" in his profile
+  const anhTuanBio = 'Anh Tuấn Setup\nHỗ trợ tư vấn nhượng quyền , phân phối Hệ Thống Thế Giới Sữa 247\nHotline : 0384662247\nSống ở Hà Nội\nCông việc: Nhà Nhỏ Của Mẹ\nNhân viên kinh doanh, Sale,';
+  const resAnhTuan = evaluateMemberContent(anhTuanBio);
+  assert.equal(resAnhTuan.isNegative, false);
 });
 
 test('MEMBER-EXCEL-001: MemberScanner.exportToExcelBuffer produces styled Excel without occupation column', async () => {

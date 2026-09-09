@@ -5,7 +5,7 @@ import browserManager from './browser-manager.js';
 import sessionManager, { parseCookieInput } from './session-manager.js';
 import { GroupManager } from './group-manager.js';
 import { extractPhonesFromText } from './phone-validator.js';
-import { normalizeProvinceName } from './location-extractor.js';
+import { normalizeProvinceName, extractLocationFromText } from './location-extractor.js';
 import { buildProfileSearchUrl } from './search-engine.js';
 import ocrManager from './ocr-manager.js';
 
@@ -297,7 +297,7 @@ export function isSalesOrSoftwareVendorName(name = '') {
 
 function extractValidProvince(rawText = '') {
   if (!rawText || typeof rawText !== 'string') return '';
-  const p = normalizeProvinceName(rawText);
+  const p = extractLocationFromText(rawText) || normalizeProvinceName(rawText);
   return (p && p !== '—') ? p : '';
 }
 
@@ -554,13 +554,13 @@ export function evaluateMemberContent(text = '') {
 
   // 4. Check explicit workplace / job title
   const jobPatterns = [
-    /làm việc tại\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell)/i,
-    /chuyên viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|tư vấn|kinh doanh)/i,
-    /nhân viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|kinh doanh)/i,
-    /tư vấn\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
-    /sale[s]?\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
-    /đại lý\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|phần mềm)/i,
-    /(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell)\s+.*(chuyên viên|nhân viên|tư vấn|sale|kinh doanh|website|omnichannel)/i
+    /làm việc tại\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams)/i,
+    /chuyên viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams|phần mềm)/i,
+    /nhân viên\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams|phần mềm)/i,
+    /tư vấn\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams|phần mềm)/i,
+    /sale[s]?\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams|phần mềm)/i,
+    /đại lý\s+.*(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams|phần mềm)/i,
+    /(sapo|kiotviet|kiot viet|ipos|pos365|misa|omicall|cukcuk|haravan|gosell|softdreams)\s+.*(chuyên viên|nhân viên|tư vấn|sale|kinh doanh|website|omnichannel)/i
   ];
   for (const pat of jobPatterns) {
     if (pat.test(lower)) {
@@ -946,6 +946,8 @@ export class MemberScanner extends EventEmitter {
               if (hitTimeLimit || candidateMembers.length >= maxMembersPerGroup) break;
             }
 
+            if (hitTimeLimit) break;
+
             if (candidateMembers.length === prevCandidateCount) {
               noNewCount++;
               if (noNewCount >= 8) {
@@ -956,24 +958,28 @@ export class MemberScanner extends EventEmitter {
               noNewCount = 0;
               prevCandidateCount = candidateMembers.length;
             }
+
+            await page.evaluate(() => {
+              window.scrollBy(0, 1200);
+              if (document.documentElement) {
+                document.documentElement.scrollTop += 1200;
+              }
+            });
+            await delay(2000);
           }
 
           page.off('response', graphqlListener);
 
-          log(`👥 Đã thu thập được ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định siêu tốc qua API...`, 'info');
+          log(`👥 Đã thu thập được ${candidateMembers.length} thành viên mới trong 24h. Bắt đầu thẩm định chuyên sâu & trích xuất SĐT qua trình duyệt...`, 'info');
 
-          // Inspect candidate members via high-speed parallel HTTP API workers (Concurrency = 3)
-          const CONCURRENCY = 3;
-          let candidateIndex = 0;
+          // Inspect candidate members via dedicated Playwright browser page for 100% accurate JS-rendered Bio, Phone, Province, Cover Photo
+          const inspectPage = await context.newPage();
 
-          const inspectWorker = async () => {
-            while (candidateIndex < candidateMembers.length) {
+          try {
+            for (let idx = 0; idx < candidateMembers.length; idx++) {
               if (state.abortRequested) break;
-              const idx = candidateIndex++;
               const member = candidateMembers[idx];
               state.processedMembers++;
-
-              log(`🔍 [${state.processedMembers}/${candidateMembers.length}] Đang kiểm tra: ${member.name} (${member.joinedTimeText || '24h qua'})`, 'info');
 
               // Tier 1: Fast check on name and subtitle
               if (excludeSales) {
@@ -990,59 +996,63 @@ export class MemberScanner extends EventEmitter {
                 }
               }
 
-              // High-speed HTTP API inspection (Group Activity, Contact Info, Bio, Timeline, Cover Photo OCR)
-              let inspectResult = { isNegative: false, reason: '', phone: '', province: '', coverPhotoUrl: '', phoneFromCover: false };
+              log(`🔍 [${state.processedMembers}/${candidateMembers.length}] Đang thẩm định: ${member.name} (${member.joinedTimeText || '24h qua'})...`, 'info');
+
+              let phone = '';
+              let province = extractValidProvince(member.subtitleText);
+              let coverPhotoUrl = '';
+              let phoneFromCover = false;
+              let targetProfileUrl = member.groupUserUrl || `https://www.facebook.com/${member.memberId}`;
+              let resolvedUrl = targetProfileUrl;
+
               try {
-                inspectResult = await inspectMemberViaFastHttp(member, cookieHeader, {
-                  excludeSales,
-                  deepPhoneSearch,
-                  groupId,
-                  ownPhones
+                // Navigate directly to profile via Playwright
+                const directProfileUrl = `https://www.facebook.com/${member.memberId}`;
+                await inspectPage.goto(directProfileUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+                await delay(2000);
+
+                const data = await inspectPage.evaluate(() => {
+                  const text = document.body.innerText || '';
+                  const curUrl = window.location.href;
+                  const coverImg = document.querySelector('img[data-imgperflogname="profileCoverPhoto"], div[aria-label*="Ảnh bìa"] img, div[aria-label*="Cover photo"] img');
+                  return {
+                    text: text.substring(0, 15000),
+                    url: curUrl,
+                    coverUrl: coverImg ? coverImg.src : ''
+                  };
                 });
-              } catch (inspectErr) {
-                logger.debug({ err: inspectErr.message }, 'Member HTTP inspection error');
-              }
 
-              if (inspectResult.isNegative) {
-                state.skippedCount++;
-                log(`⏩ [BỎ QUA SALE/THANH LÝ] ${member.name}: ${inspectResult.reason}`, 'warning');
-                continue;
-              }
-
-              let phone = inspectResult.phone || '';
-              const province = inspectResult.province || '';
-              let coverPhotoUrl = inspectResult.coverPhotoUrl || '';
-
-              // Playwright fallback for cover photo if not found via fast HTTP
-              if (!coverPhotoUrl && page && !page.isClosed()) {
-                try {
-                  const groupUserUrl = member.groupUserUrl || (groupId ? `https://www.facebook.com/groups/${groupId}/user/${member.memberId}/` : '');
-                  if (groupUserUrl) {
-                    coverPhotoUrl = await page.evaluate(async (url) => {
-                      try {
-                        const res = await fetch(url, { credentials: 'include' });
-                        if (!res.ok) return '';
-                        const html = await res.text();
-                        const m = html.match(/"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i)
-                               || html.match(/"(?:cover_photo|coverPhoto|profile_cover)"\s*:\s*\{[^}]*?"image"\s*:\s*\{[^}]*?"uri"\s*:\s*"([^"]+)"/i)
-                               || html.match(/<img\b[^>]*data-imgperflogname=["']profileCoverPhoto["'][^>]*src=["']([^"']+)["']/i)
-                               || html.match(/<div\b[^>]*aria-label=["'][^"']*(?:Ảnh bìa|Cover photo)[^"']*["'][^>]*>[\s\S]*?<img\b[^>]*src=["']([^"']+)["']/i)
-                               || html.match(/https:[\\\/]+[a-z0-9.-]+\.fbcdn\.net[\\\/]v[\\\/](?:t39\.30808-6|t39\.10873-6)[^"'\s<>\\]+/i);
-                        if (m && m[1]) return m[1].replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
-                        if (m && typeof m[0] === 'string' && m[0].startsWith('http')) return m[0].replace(/\\\/|\//g, '/').replace(/&amp;/g, '&');
-                        return '';
-                      } catch (e) {
-                        return '';
-                      }
-                    }, groupUserUrl);
-                  }
-                } catch (evalErr) {
-                  logger.debug({ err: evalErr.message }, 'Playwright page.evaluate cover fetch error');
+                if (data.url && !data.url.includes('/login') && !data.url.includes('/checkpoint')) {
+                  resolvedUrl = data.url;
                 }
+                coverPhotoUrl = data.coverUrl || '';
+
+                // Check sales in bio / intro
+                if (excludeSales && data.text) {
+                  const evalContent = evaluateMemberContent(data.text);
+                  if (evalContent.isNegative) {
+                    state.skippedCount++;
+                    log(`⏩ [BỎ QUA SALE] ${member.name}: ${evalContent.reason}`, 'warning');
+                    continue;
+                  }
+                }
+
+                // Extract phones (Hotline, Zalo, phone numbers in bio or intro)
+                const foundPhones = extractPhonesFromText(data.text).filter(p => !ownPhones.has(p));
+                if (foundPhones.length > 0) {
+                  phone = foundPhones[0];
+                }
+
+                // Extract province / location
+                if (!province && data.text) {
+                  province = extractValidProvince(data.text);
+                }
+              } catch (navErr) {
+                logger.debug({ err: navErr.message }, 'Playwright profile navigation error');
               }
 
-              // Inspect Cover Photo with OCR / AI Vision if found via fallback
-              if (coverPhotoUrl && !inspectResult.coverPhotoUrl) {
+              // Fallback to Cover Photo OCR if phone is missing or to verify sales banners
+              if (coverPhotoUrl) {
                 try {
                   const ocrData = await ocrManager.inspectImage(coverPhotoUrl);
                   if (ocrData) {
@@ -1058,6 +1068,7 @@ export class MemberScanner extends EventEmitter {
                       const validOcrPhones = ocrData.phones.filter(p => !ownPhones.has(p));
                       if (validOcrPhones.length > 0) {
                         phone = validOcrPhones[0];
+                        phoneFromCover = true;
                         log(`📸 [OCR ẢNH BÌA] Đã nhận diện SĐT từ ảnh bìa của ${member.name}: ${phone}`, 'success');
                       }
                     }
@@ -1068,23 +1079,19 @@ export class MemberScanner extends EventEmitter {
               }
 
               if (phone) {
-                if (inspectResult.phoneFromCover) {
-                  log(`📸 [OCR ẢNH BÌA] Đã nhận diện SĐT từ ảnh bìa của ${member.name}: ${phone}`, 'success');
-                } else {
-                  log(`📞 Tìm thấy SĐT của ${member.name}: ${phone}`, 'success');
-                }
+                log(`📞 Tìm thấy SĐT của ${member.name}: ${phone}`, 'success');
               }
               if (province) {
                 log(`📍 Xác định địa phương của ${member.name}: ${province}`, 'info');
               }
 
               // Record qualified lead
-              const profileUrl = `https://www.facebook.com/${member.memberId}`;
               const qualifiedLead = {
                 stt: state.qualifiedLeads + 1,
                 id: member.memberId,
+                memberId: member.memberId,
                 name: member.name,
-                profileUrl,
+                profileUrl: resolvedUrl,
                 phone: phone || '',
                 location: province || '',
                 joinedTime: member.joinedTimeText || 'Mới tham gia',
@@ -1101,12 +1108,11 @@ export class MemberScanner extends EventEmitter {
               this.emit('lead', { clientId, lead: qualifiedLead });
               this.emit('progress', { clientId, state });
 
-              await delay(80);
+              await delay(100);
             }
-          };
-
-          const pool = Array.from({ length: Math.min(CONCURRENCY, candidateMembers.length) }, () => inspectWorker());
-          await Promise.all(pool);
+          } finally {
+            await inspectPage.close().catch(() => {});
+          }
 
         } catch (grpErr) {
           log(`❌ Lỗi khi xử lý nhóm [${groupId}]: ${grpErr.message}`, 'error');
