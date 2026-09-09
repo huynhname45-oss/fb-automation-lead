@@ -182,16 +182,18 @@
                                     </div>
 
                                     <div class="filter-col">
-                                        <span class="filter-label-inline font-semibold">📞 Chỉ lấy bài có SĐT</span>
-                                        <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
-                                            <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
-                                            <span class="toggle-slider"></span>
-                                        </label>
+                                        <label class="filter-label-top" for="chkRequirePhoneOnly">📞 Chỉ lấy bài có SĐT</label>
+                                        <div class="filter-toggle-box">
+                                            <label class="toggle-container" title="Bật: Chỉ lấy bài có SĐT. Tắt: Lấy cả bài không có SĐT nhưng đúng tiềm năng (để nhắn tin FB).">
+                                                <input type="checkbox" id="chkRequirePhoneOnly" class="toggle-switch">
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
                                     </div>
                                     
-                                    <div class="filter-col flex-grow">
+                                    <div class="filter-col">
                                         <label class="filter-label-top" for="filterDatePosted">Ngày đăng (Năm)</label>
-                                        <select id="filterDatePosted" class="select select-styled">
+                                        <select id="filterDatePosted" class="select select-styled" style="min-width: 175px;">
                                             <option value="">Ngày bất kỳ (Mặc định)</option>
                                             <option value="2026">2026</option>
                                             <option value="2025">2025</option>
@@ -204,7 +206,7 @@
                                     
                                     <div class="filter-col">
                                         <label class="filter-label-top" for="filterMaxPosts">Số lượng bài cần lấy</label>
-                                        <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000">
+                                        <input type="number" id="filterMaxPosts" class="input input-styled" value="10" min="1" max="1000" style="width: 130px;">
                                     </div>
                                 </div>
                                 

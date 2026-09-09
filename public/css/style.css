@@ -631,7 +631,7 @@ body {
 /* Filter Row */
 .filter-row {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 20px;
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
@@ -662,6 +662,13 @@ body {
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.filter-toggle-box {
+  height: 42px;
+  display: flex;
+  align-items: center;
 }
 
 .select-styled, .input-styled {
