@@ -783,19 +783,14 @@ export class MemberScanner extends EventEmitter {
           const timeCheck = parseMemberJoinedTime(item.joinedTimeText);
           if (timeCheck.stopScrolling) {
             hitTimeLimit = true;
-            log(`⏹ Gặp thành viên đã vào nhóm quá 24h: ${item.name} ("${item.joinedTimeText}"). Dừng nạp thêm.`, 'warning');
+            log(`⏱ Gặp thành viên đã vào nhóm > 24h: "${item.name}" (${item.joinedTimeText}) -> Dừng thu thập.`, 'info');
             return;
           }
           if (!timeCheck.within24h) return;
 
-          // Check sales ONLY after confirming they are genuine 24h new members
-          if (excludeSales && isSalesOrSoftwareVendorName(item.name)) {
-            state.skippedCount++;
-            log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${item.name}`, 'warning');
-            return;
-          }
-
+          // Thu thập toàn bộ thành viên 24h từ trên xuống dưới (chưa lọc sale ở bước này)
           candidateMembers.push(item);
+          log(`➕ [24H] Phát hiện thành viên mới: ${item.name} (${item.joinedTimeText})`, 'info');
         };
 
         // Real-time GraphQL Network Interception
@@ -868,72 +863,10 @@ export class MemberScanner extends EventEmitter {
             await delay(1200);
           }
 
-          // Phase 1: Fast Instant JSON Extraction from SSR Script Tags (Targeting new_members & join_time)
-          log('⚡ [QUÉT NHANH JSON] Đang trích xuất thành viên mới từ dữ liệu JSON gốc của Facebook...', 'info');
-          const jsonMembers = await page.evaluate((currentGroupId) => {
-            const scripts = Array.from(document.querySelectorAll('script[type="application/json"]'));
-            const found = [];
-            for (const s of scripts) {
-              const text = s.textContent || '';
-              if (text.includes('new_members') || text.includes('new_forum_members') || (text.includes('join_time') && text.includes('name'))) {
-                try {
-                  const data = JSON.parse(text);
-                  const queue = [data];
-                  while (queue.length > 0) {
-                    const cur = queue.pop();
-                    if (!cur || typeof cur !== 'object') continue;
-                    const node = cur.node || cur;
-                    const id = node.id || node.user_id || node.uid;
-                    const name = node.name || node.text || node.title?.text;
-                    if (id && name && typeof name === 'string' && /^\d{5,}$/.test(String(id))) {
-                      let joinedText = '';
-                      let subtitleText = '';
-                      const texts = [
-                        node.subtitle_text?.text,
-                        node.subtitle?.text,
-                        node.join_time_text,
-                        cur.subtitle_text?.text
-                      ].filter(Boolean);
-                      for (const t of texts) {
-                        const low = String(t).toLowerCase();
-                        if (low.includes('tham gia') || low.includes('trước') || low.includes('hôm nay') || low.includes('joined') || low.includes('vừa xong')) {
-                          if (!joinedText) joinedText = String(t).trim();
-                        } else if (!subtitleText) {
-                          subtitleText = String(t).trim();
-                        }
-                      }
-                      if (joinedText) {
-                        found.push({
-                          memberId: String(id),
-                          name: String(name).trim(),
-                          groupUserUrl: `https://www.facebook.com/groups/${currentGroupId}/user/${id}/`,
-                          joinedTimeText: joinedText,
-                          subtitleText: subtitleText
-                        });
-                      }
-                    }
-                    for (const k of Object.keys(cur)) {
-                      if (typeof cur[k] === 'object' && cur[k] !== null) queue.push(cur[k]);
-                    }
-                  }
-                } catch (e) {}
-              }
-            }
-            return found;
-          }, groupId);
-
-          for (const m of jsonMembers) {
-            addCandidate(m);
-          }
-
-          if (candidateMembers.length > 0) {
-            log(`⚡ [JSON NHANH] Đã bóc tách được ${candidateMembers.length} thành viên trực tiếp từ JSON!`, 'success');
-          }
-
-          // Phase 2: Scroll to trigger GraphQL pagination & DOM updates inside "Mới vào nhóm"
-          log('📜 Đang cuộn trang để nạp thành viên mới qua GraphQL & DOM...', 'info');
+          // Cuộn từ trên xuống nạp danh sách thành viên mới trong 24h
+          log('📜 Đang cuộn nạp danh sách thành viên mới trong 24h từ trên xuống...', 'info');
           let noNewCount = 0;
-          let prevCandidateCount = candidateMembers.length;
+          let prevCandidateCount = 0;
 
           for (let scrollStep = 0; scrollStep < 35; scrollStep++) {
             if (state.abortRequested || hitTimeLimit) break;
@@ -1052,7 +985,7 @@ export class MemberScanner extends EventEmitter {
                 const t1Check = evaluateMemberContent(`${member.name} ${member.subtitleText}`);
                 if (t1Check.isNegative) {
                   state.skippedCount++;
-                  log(`⏩ [TẦNG 1] Bỏ qua ${member.name}: ${t1Check.reason}`, 'warning');
+                  log(`⏩ [BỎ QUA SALE] ${member.name}: ${t1Check.reason}`, 'warning');
                   continue;
                 }
               }
