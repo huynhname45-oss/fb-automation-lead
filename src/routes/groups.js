@@ -1,6 +1,6 @@
 import express from 'express';
 import GroupManager from '../core/group-manager.js';
-import sessionManager from '../core/session-manager.js';
+import sessionManager, { parseCookieInput } from '../core/session-manager.js';
 import logger from '../core/logger.js';
 
 const router = express.Router();
@@ -65,6 +65,36 @@ router.post('/export', async (req, res) => {
   } catch (err) {
     logger.error({ err: err.message }, '[GROUPS ROUTE] Lỗi khi xuất Excel danh sách nhóm');
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/groups/resolve-slugs
+ * Resolves an array of group slugs to numeric IDs
+ */
+router.post('/resolve-slugs', async (req, res) => {
+  try {
+    const { slugs = [], cookie = '', clientId = 'default' } = req.body || {};
+    let effectiveCookie = cookie;
+    if (!effectiveCookie && clientId && sessionManager.clientSessions?.has(clientId)) {
+      effectiveCookie = sessionManager.clientSessions.get(clientId)?.cookie || '';
+    }
+
+    const cookieHeader = effectiveCookie ? (Array.isArray(effectiveCookie) ? effectiveCookie : parseCookieInput(effectiveCookie)).map(c => `${c.name}=${c.value}`).join('; ') : '';
+
+    const results = {};
+    for (const slug of slugs) {
+      if (/^\d+$/.test(slug)) {
+        results[slug] = slug;
+      } else {
+        const numId = await GroupManager.resolveNumericGroupId(slug, cookieHeader);
+        results[slug] = numId || slug;
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

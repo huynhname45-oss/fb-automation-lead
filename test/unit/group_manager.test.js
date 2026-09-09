@@ -92,3 +92,38 @@ test('GroupManager.exportToExcelBuffer produces a styled and valid Excel workboo
   assert.equal(row3.getCell(3).value, '1002');
   assert.equal(row3.getCell(4).value, 'Riêng tư');
 });
+
+test('GroupManager.normalizeGroup correctly handles vanity slug and privacy flags', () => {
+  const vanityGroup = {
+    id: 'phanmemquanly0362790270',
+    name: 'THANH LÝ PHẦN MỀM BÁN HÀNG',
+    privacy: 'Nhóm kín',
+    membersCount: 12500
+  };
+  const norm = GroupManager.normalizeGroup(vanityGroup);
+  assert.equal(norm.id, 'phanmemquanly0362790270');
+  assert.equal(norm.slug, 'phanmemquanly0362790270');
+  assert.equal(norm.privacy, 'Riêng tư');
+  assert.equal(norm.membersCount, 12500);
+
+  const numericGroup = {
+    id: '1750490916315535',
+    name: 'KẾ TOÁN PHẦN MỀM BÁN HÀNG',
+    privacy: 'Nhóm công khai'
+  };
+  const normNumeric = GroupManager.normalizeGroup(numericGroup);
+  assert.equal(normNumeric.id, '1750490916315535');
+  assert.equal(normNumeric.slug, '');
+  assert.equal(normNumeric.privacy, 'Công khai');
+});
+
+test('GroupManager.resolveNumericGroupId returns numeric ID immediately if already digits', async () => {
+  const result = await GroupManager.resolveNumericGroupId('1750490916315535');
+  assert.equal(result, '1750490916315535');
+});
+
+test('GroupManager.resolveNumericGroupId caches resolved slugs', async () => {
+  GroupManager._slugCache.set('test_vanity_slug_123', '9876543210');
+  const result = await GroupManager.resolveNumericGroupId('test_vanity_slug_123');
+  assert.equal(result, '9876543210');
+});

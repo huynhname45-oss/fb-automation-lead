@@ -425,6 +425,8 @@ body {
   cursor: pointer;
   border: none;
   transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn svg {

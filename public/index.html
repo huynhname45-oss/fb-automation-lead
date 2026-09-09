@@ -402,18 +402,18 @@
                                             <option value="browser">🌐 Playwright Browser (/groups/joins)</option>
                                         </select>
                                     </div>
-                                    <div class="d-flex align-center gap-2">
-                                        <button class="btn btn-purple-full" id="btnFetchJoinedGroups" style="height: 38px; padding: 0 20px; font-weight: 600; font-size: 0.9rem;">
+                                    <div class="d-flex align-center gap-2 wrap-gap">
+                                        <button class="btn btn-purple-full" id="btnFetchJoinedGroups" style="height: 38px; padding: 0 18px; font-weight: 600; font-size: 0.88rem; white-space: nowrap; flex-shrink: 0;">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path><polyline points="17 8 12 13 9 10"></polyline></svg>
                                             <span id="btnFetchJoinedGroupsText">Quét Tất Cả Nhóm</span>
                                         </button>
-                                        <button class="btn btn-ghost" id="btnExportGroupsExcel" style="height: 38px; font-size: 0.88rem;" title="Xuất toàn bộ danh sách ra file Excel .xlsx">
+                                        <button class="btn btn-ghost" id="btnExportGroupsExcel" style="height: 38px; font-size: 0.88rem; white-space: nowrap; flex-shrink: 0; padding: 0 14px;" title="Xuất toàn bộ danh sách ra file Excel .xlsx">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                                            Xuất Excel
+                                            <span>Xuất Excel</span>
                                         </button>
-                                        <button class="btn btn-ghost" id="btnCopyAllGroupIds" style="height: 38px; font-size: 0.88rem;" title="Sao chép toàn bộ Group ID vào Clipboard">
+                                        <button class="btn btn-ghost" id="btnCopyAllGroupIds" style="height: 38px; font-size: 0.88rem; white-space: nowrap; flex-shrink: 0; padding: 0 14px;" title="Sao chép toàn bộ Group ID vào Clipboard">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                            Copy Toàn bộ ID
+                                            <span>Copy Toàn bộ ID</span>
                                         </button>
                                     </div>
                                 </div>
@@ -446,7 +446,7 @@
                             </div>
 
                             <!-- Groups Table Container -->
-                            <div class="table-responsive" style="max-height: 560px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px;">
+                            <div class="table-responsive" style="max-height: 560px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px; padding-bottom: 12px;">
                                 <table class="table" id="groupsTable">
                                     <thead>
                                         <tr>

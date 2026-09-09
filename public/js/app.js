@@ -2254,6 +2254,12 @@ async function loadSavedGroups(autoFetchIfEmpty = false) {
                 state.groups.list = saved;
                 applyGroupFilters();
                 renderGroupsUI();
+
+                // Auto-resolve any legacy saved groups that still have text slugs
+                const slugsToResolve = saved.filter(g => g.id && !/^\d+$/.test(g.id));
+                if (slugsToResolve.length > 0) {
+                    resolveSavedGroupSlugs(slugsToResolve);
+                }
                 return;
             }
         }
@@ -2264,6 +2270,48 @@ async function loadSavedGroups(autoFetchIfEmpty = false) {
     if (autoFetchIfEmpty && state.session && state.session.status === 'active' && !state.groups.isLoading) {
         handleFetchGroups();
     }
+}
+
+async function resolveSavedGroupSlugs(slugGroups) {
+    try {
+        let cookie = '';
+        if (window.ClientDB && typeof window.ClientDB.getSession === 'function') {
+            const session = await window.ClientDB.getSession();
+            cookie = session?.cookie || '';
+        }
+        if (!cookie) {
+            cookie = localStorage.getItem('fb_cookie') || localStorage.getItem('fb_client_session') || '';
+        }
+
+        const slugs = slugGroups.map(g => g.id);
+        const res = await fetch('/api/groups/resolve-slugs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slugs, cookie, clientId: getClientId() })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.results) {
+                let updated = false;
+                state.groups.list.forEach(g => {
+                    const resolved = data.results[g.id];
+                    if (resolved && /^\d+$/.test(resolved)) {
+                        g.slug = g.id;
+                        g.id = resolved;
+                        g.url = `https://www.facebook.com/groups/${resolved}/`;
+                        updated = true;
+                    }
+                });
+                if (updated) {
+                    if (window.ClientDB && typeof window.ClientDB.saveGroups === 'function') {
+                        await window.ClientDB.saveGroups(state.groups.list);
+                    }
+                    applyGroupFilters();
+                    renderGroupsUI();
+                }
+            }
+        }
+    } catch (e) {}
 }
 
 async function handleFetchGroups() {
@@ -2437,9 +2485,12 @@ function renderGroupsUI() {
                 ${g.membersCount ? `<div class="text-xs text-muted mt-1">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
             </td>
             <td>
-                <div class="d-flex align-center gap-1">
-                    <code style="font-size: 0.84rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">${escapeHtml(g.id)}</code>
-                    <button class="btn btn-ghost btn-xs btn-copy-group-id" data-id="${escapeHtml(g.id)}" title="Sao chép ID">📋</button>
+                <div class="d-flex flex-column gap-1">
+                    <div class="d-flex align-center gap-1">
+                        <code class="font-mono text-sm font-semibold" style="background: rgba(79, 70, 229, 0.08); color: var(--primary); padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(79, 70, 229, 0.2);">${escapeHtml(g.id)}</code>
+                        <button class="btn btn-ghost btn-xs btn-copy-group-id" data-id="${escapeHtml(g.id)}" title="Sao chép Group ID">📋</button>
+                    </div>
+                    ${g.slug && g.slug !== g.id ? `<div class="text-xs text-muted font-mono" style="opacity: 0.8;" title="URL rút gọn / Vanity Slug">🔗 ${escapeHtml(g.slug)}</div>` : ''}
                 </div>
             </td>
             <td style="text-align: center;">${privacyBadge}</td>
@@ -2551,13 +2602,40 @@ function handleCopyAllGroupIds() {
         return;
     }
 
-    const ids = groups.map(g => g.id).filter(Boolean);
-    const text = ids.join(', ');
+    const ids = groups.map(g => String(g.id || '').trim()).filter(Boolean);
+    const numericIds = ids.filter(id => /^\d+$/.test(id));
+    const text = ids.join('\n');
 
-    navigator.clipboard.writeText(text).then(() => {
-        showToast(`Đã sao chép ${ids.length} Group ID vào Clipboard!`, 'success');
-    }).catch(() => {
+    const copySuccess = () => {
+        const msg = numericIds.length === ids.length
+            ? `🎉 Đã sao chép ${ids.length} Group ID (dãy số chuẩn) vào Clipboard!`
+            : `Đã sao chép ${ids.length} Group ID (${numericIds.length} ID số chuẩn) vào Clipboard!`;
+        showToast(msg, 'success');
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(copySuccess).catch(() => {
+            fallbackCopyText(text, copySuccess);
+        });
+    } else {
+        fallbackCopyText(text, copySuccess);
+    }
+}
+
+function fallbackCopyText(text, cb) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (typeof cb === 'function') cb();
+        else showToast('Đã sao chép Group ID vào Clipboard!', 'success');
+    } catch (e) {
         showToast('Không thể sao chép vào clipboard', 'error');
-    });
+    }
 }
 
