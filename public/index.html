@@ -430,12 +430,36 @@
                                 </div>
                             </div>
 
+                            <!-- Group Bundles / Nhóm Lớn Switcher Bar -->
+                            <div class="group-bundles-bar mb-3 p-2" style="background: var(--bg-card); border-radius: 10px; border: 1px solid var(--glass-border);">
+                                <div class="d-flex align-center justify-between wrap-gap">
+                                    <div class="d-flex align-center gap-2" style="flex-wrap: wrap;" id="groupBundlesContainer">
+                                        <button class="bundle-chip active" data-bundle="all">
+                                            <span>📂 Tất cả nhóm</span>
+                                            <span class="chip-count" id="chipCountAll">0</span>
+                                        </button>
+                                        <!-- Other bundles injected dynamically -->
+                                    </div>
+                                    <div class="d-flex align-center gap-2" style="flex-shrink: 0;">
+                                        <button class="btn btn-ghost btn-sm" id="btnOpenCreateBundle" style="font-size: 0.82rem; height: 32px; padding: 0 12px; white-space: nowrap;" title="Tạo một nhóm lớn mới để gom các nhóm lại">
+                                            ➕ Tạo nhóm lớn mới
+                                        </button>
+                                        <button class="btn btn-ghost btn-sm" id="btnManageBundles" style="font-size: 0.82rem; height: 32px; padding: 0 10px; white-space: nowrap;" title="Quản lý / Sửa / Xóa danh sách nhóm lớn">
+                                            ⚙️
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Filter & Search Bar -->
                             <div class="d-flex align-center justify-between wrap-gap mb-3">
                                 <div class="d-flex align-center gap-2" style="flex: 1; max-width: 420px;">
                                     <input type="text" id="inputFilterGroups" class="input input-styled" style="height: 38px; font-size: 0.88rem;" placeholder="🔍 Tìm nhanh theo tên hoặc ID nhóm...">
                                 </div>
                                 <div class="d-flex align-center gap-2">
+                                    <button class="btn btn-ghost btn-sm" id="btnScanCurrentBundle" style="display: none; height: 38px; font-size: 0.84rem; white-space: nowrap; color: var(--primary);" title="Quét bài viết tất cả các nhóm trong nhóm lớn này">
+                                        🔎 Quét bài cả nhóm lớn
+                                    </button>
                                     <select id="selFilterPrivacy" class="input input-styled" style="height: 38px; width: auto; font-size: 0.88rem; padding: 4px 12px;">
                                         <option value="all">Tất cả quyền riêng tư</option>
                                         <option value="public">Chỉ nhóm Công khai</option>
@@ -445,22 +469,43 @@
                                 </div>
                             </div>
 
+                            <!-- Bulk Selection Action Bar -->
+                            <div id="groupsBulkActionBar" style="display: none; background: rgba(79, 70, 229, 0.08); border: 1px solid rgba(79, 70, 229, 0.25); border-radius: 8px; padding: 8px 16px; margin-bottom: 12px;" class="align-center justify-between wrap-gap">
+                                <div class="d-flex align-center gap-2">
+                                    <span class="font-semibold text-sm" style="color: var(--primary);" id="groupsSelectedCountText">Đã chọn 0 nhóm</span>
+                                </div>
+                                <div class="d-flex align-center gap-2 wrap-gap">
+                                    <button class="btn btn-purple-full btn-sm" id="btnBulkAddToBundle" style="height: 32px; padding: 0 14px; font-size: 0.82rem; white-space: nowrap;">
+                                        📁 Thêm vào nhóm lớn...
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" id="btnBulkRemoveFromCurrentBundle" style="display: none; height: 32px; padding: 0 12px; font-size: 0.82rem; color: #dc2626; white-space: nowrap;" title="Gỡ các nhóm đã chọn ra khỏi nhóm lớn hiện tại">
+                                        ✕ Gỡ khỏi nhóm lớn này
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" id="btnBulkCopyIds" style="height: 32px; padding: 0 12px; font-size: 0.82rem; white-space: nowrap;">
+                                        📋 Copy ID đã chọn
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Groups Table Container -->
                             <div class="table-responsive" style="max-height: 560px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px; padding-bottom: 12px;">
                                 <table class="table" id="groupsTable">
                                     <thead>
                                         <tr>
-                                            <th style="width: 55px; text-align: center;">STT</th>
-                                            <th style="width: 55px; text-align: center;">Ảnh</th>
+                                            <th style="width: 38px; text-align: center;">
+                                                <input type="checkbox" id="selectAllGroupsCheckbox" class="custom-checkbox" title="Chọn tất cả nhóm">
+                                            </th>
+                                            <th style="width: 48px; text-align: center;">STT</th>
+                                            <th style="width: 52px; text-align: center;">Ảnh</th>
                                             <th>Tên Nhóm Facebook</th>
-                                            <th style="width: 220px;">Group ID</th>
-                                            <th style="width: 140px; text-align: center;">Quyền riêng tư</th>
-                                            <th style="width: 160px; text-align: center;">Thao tác</th>
+                                            <th style="width: 200px;">Group ID</th>
+                                            <th style="width: 130px; text-align: center;">Quyền riêng tư</th>
+                                            <th style="width: 170px; text-align: center;">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody id="groupsTableBody">
                                         <tr class="empty-row">
-                                            <td colspan="6" class="text-center py-5 text-muted">
+                                            <td colspan="7" class="text-center py-5 text-muted">
                                                 <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
                                                 <div style="font-weight: 500;">Chưa có dữ liệu nhóm nào.</div>
                                                 <div class="text-xs text-muted mt-1">Bấm nút <strong>"Quét Tất Cả Nhóm"</strong> ở trên để bắt đầu lấy danh sách!</div>
@@ -672,6 +717,77 @@
                 </section>
             </div>
         </main>
+    </div>
+
+    <!-- Modal: Tạo / Chỉnh Sửa Nhóm Lớn (Bundle) -->
+    <div class="modal-overlay" id="modalCreateBundle" style="display: none;">
+        <div class="modal" style="border-radius: 14px; max-width: 460px;">
+            <div class="modal-header">
+                <h3 class="font-bold text-base" id="modalBundleTitle">➕ Tạo Nhóm Lớn Mới</h3>
+                <button class="modal-close" id="btnCloseModalBundle">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="inputBundleEditId" value="">
+                <div class="form-group mb-3">
+                    <label class="field-label text-xs" for="inputBundleName">Tên nhóm lớn (Ví dụ: <em>Nhóm F&B Cafe</em>, <em>Thanh lý Thiết bị POS</em>...):</label>
+                    <input type="text" id="inputBundleName" class="input input-styled" placeholder="Nhập tên nhóm lớn...">
+                </div>
+                <div class="form-group mb-0">
+                    <label class="field-label text-xs">Màu sắc nhận diện:</label>
+                    <div class="d-flex align-center gap-2" id="bundleColorPicker">
+                        <span class="color-dot active" data-color="#4f46e5" style="background: #4f46e5;" title="Tím Indigo"></span>
+                        <span class="color-dot" data-color="#059669" style="background: #059669;" title="Xanh lục"></span>
+                        <span class="color-dot" data-color="#d97706" style="background: #d97706;" title="Cam hổ phách"></span>
+                        <span class="color-dot" data-color="#dc2626" style="background: #dc2626;" title="Đỏ tươi"></span>
+                        <span class="color-dot" data-color="#ec4899" style="background: #ec4899;" title="Hồng cánh sen"></span>
+                        <span class="color-dot" data-color="#0284c7" style="background: #0284c7;" title="Xanh dương"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost btn-sm" id="btnCancelModalBundle">Hủy</button>
+                <button class="btn btn-purple-full btn-sm" id="btnSaveModalBundle" style="padding: 0 20px;">Lưu Nhóm Lớn</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Quản Lý Toàn Bộ Nhóm Lớn -->
+    <div class="modal-overlay" id="modalManageBundles" style="display: none;">
+        <div class="modal" style="border-radius: 14px; max-width: 520px;">
+            <div class="modal-header">
+                <h3 class="font-bold text-base">⚙️ Quản Lý Danh Sách Nhóm Lớn</h3>
+                <button class="modal-close" id="btnCloseModalManageBundles">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="manageBundlesListContainer" class="d-flex flex-column gap-2">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer justify-between">
+                <button class="btn btn-ghost btn-sm" id="btnCreateNewFromManage">➕ Tạo thêm nhóm lớn</button>
+                <button class="btn btn-ghost btn-sm" id="btnCloseManageBundlesBtn">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Gán Nhóm Vào Nhóm Lớn -->
+    <div class="modal-overlay" id="modalAssignGroupsToBundle" style="display: none;">
+        <div class="modal" style="border-radius: 14px; max-width: 460px;">
+            <div class="modal-header">
+                <h3 class="font-bold text-base" id="modalAssignTitle">📁 Thêm Vào Nhóm Lớn</h3>
+                <button class="modal-close" id="btnCloseModalAssign">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-sm text-secondary mb-3" id="modalAssignSubtitle">Chọn các nhóm lớn bạn muốn gán vào:</p>
+                <div id="assignBundlesCheckboxesContainer" class="d-flex flex-column gap-2" style="max-height: 260px; overflow-y: auto;">
+                    <!-- Checkboxes injected dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost btn-sm" id="btnCancelModalAssign">Hủy</button>
+                <button class="btn btn-purple-full btn-sm" id="btnConfirmModalAssign" style="padding: 0 20px;">Lưu Thay Đổi</button>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Container -->

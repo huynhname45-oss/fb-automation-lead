@@ -2,7 +2,16 @@ const state = {
     currentTab: 'session',
     session: { status: 'none', lastChecked: null, user: null },
     search: { status: 'idle', keyword: '', results: [], progress: { found: 0, total: 10 } },
-    groups: { list: [], filteredList: [], searchQuery: '', privacyFilter: 'all', isLoading: false },
+    groups: {
+        list: [],
+        filteredList: [],
+        searchQuery: '',
+        privacyFilter: 'all',
+        isLoading: false,
+        bundles: [],
+        selectedBundleId: 'all',
+        selectedGroupIds: new Set()
+    },
     config: { headless: false, crawlDelay: 2500, maxPosts: 10 },
     pagination: { currentPage: 1, pageSize: 10, totalPages: 1 },
     selectedKeys: new Set(),
@@ -141,8 +150,13 @@ function switchTab(tabName, tabs) {
         else if (tabName === 'config') pageTitle.textContent = 'Cấu hình Hệ thống';
     }
 
-    if (tabName === 'groups' && state.groups.list.length === 0) {
-        loadSavedGroups(true);
+    if (tabName === 'groups') {
+        if (state.groups.list.length === 0) {
+            loadSavedGroups(true);
+        } else {
+            renderGroupBundlesBar();
+            renderGroupsUI();
+        }
     }
 
     tabs.forEach(t => {
@@ -219,7 +233,65 @@ function initEventListeners() {
     const groupsTableBody = document.getElementById('groupsTableBody');
     if (groupsTableBody) {
         groupsTableBody.addEventListener('click', handleGroupsTableClick);
+        groupsTableBody.addEventListener('change', handleGroupsTableChange);
     }
+
+    const btnOpenCreateBundle = document.getElementById('btnOpenCreateBundle');
+    if (btnOpenCreateBundle) btnOpenCreateBundle.addEventListener('click', () => openBundleModal());
+
+    const btnManageBundles = document.getElementById('btnManageBundles');
+    if (btnManageBundles) btnManageBundles.addEventListener('click', openManageBundlesModal);
+
+    const btnScanCurrentBundle = document.getElementById('btnScanCurrentBundle');
+    if (btnScanCurrentBundle) btnScanCurrentBundle.addEventListener('click', handleScanCurrentBundle);
+
+    const selectAllGroupsCheckbox = document.getElementById('selectAllGroupsCheckbox');
+    if (selectAllGroupsCheckbox) selectAllGroupsCheckbox.addEventListener('change', handleSelectAllGroupsChange);
+
+    const btnBulkAddToBundle = document.getElementById('btnBulkAddToBundle');
+    if (btnBulkAddToBundle) btnBulkAddToBundle.addEventListener('click', handleBulkAddToBundle);
+
+    const btnBulkRemoveFromCurrentBundle = document.getElementById('btnBulkRemoveFromCurrentBundle');
+    if (btnBulkRemoveFromCurrentBundle) btnBulkRemoveFromCurrentBundle.addEventListener('click', handleBulkRemoveFromCurrentBundle);
+
+    const btnBulkCopyIds = document.getElementById('btnBulkCopyIds');
+    if (btnBulkCopyIds) btnBulkCopyIds.addEventListener('click', handleBulkCopyIds);
+
+    // Modal Create/Edit Bundle
+    const btnCloseModalBundle = document.getElementById('btnCloseModalBundle');
+    if (btnCloseModalBundle) btnCloseModalBundle.addEventListener('click', closeBundleModal);
+
+    const btnCancelModalBundle = document.getElementById('btnCancelModalBundle');
+    if (btnCancelModalBundle) btnCancelModalBundle.addEventListener('click', closeBundleModal);
+
+    const btnSaveModalBundle = document.getElementById('btnSaveModalBundle');
+    if (btnSaveModalBundle) btnSaveModalBundle.addEventListener('click', handleSaveModalBundle);
+
+    const bundleColorPicker = document.getElementById('bundleColorPicker');
+    if (bundleColorPicker) bundleColorPicker.addEventListener('click', handleBundleColorPick);
+
+    // Modal Manage Bundles
+    const btnCloseModalManageBundles = document.getElementById('btnCloseModalManageBundles');
+    if (btnCloseModalManageBundles) btnCloseModalManageBundles.addEventListener('click', closeManageBundlesModal);
+
+    const btnCloseManageBundlesBtn = document.getElementById('btnCloseManageBundlesBtn');
+    if (btnCloseManageBundlesBtn) btnCloseManageBundlesBtn.addEventListener('click', closeManageBundlesModal);
+
+    const btnCreateNewFromManage = document.getElementById('btnCreateNewFromManage');
+    if (btnCreateNewFromManage) btnCreateNewFromManage.addEventListener('click', () => {
+        closeManageBundlesModal();
+        openBundleModal();
+    });
+
+    // Modal Assign Groups to Bundle
+    const btnCloseModalAssign = document.getElementById('btnCloseModalAssign');
+    if (btnCloseModalAssign) btnCloseModalAssign.addEventListener('click', closeAssignModal);
+
+    const btnCancelModalAssign = document.getElementById('btnCancelModalAssign');
+    if (btnCancelModalAssign) btnCancelModalAssign.addEventListener('click', closeAssignModal);
+
+    const btnConfirmModalAssign = document.getElementById('btnConfirmModalAssign');
+    if (btnConfirmModalAssign) btnConfirmModalAssign.addEventListener('click', handleConfirmAssignModal);
 
     const configForm = document.getElementById('configForm');
     if (configForm) configForm.addEventListener('submit', handleSaveConfig);
@@ -2248,11 +2320,21 @@ function escapeHtml(str) {
 
 async function loadSavedGroups(autoFetchIfEmpty = false) {
     try {
+        if (window.ClientDB && typeof window.ClientDB.getBundles === 'function') {
+            const bundles = await window.ClientDB.getBundles();
+            state.groups.bundles = Array.isArray(bundles) ? bundles : [];
+        }
+    } catch (e) {
+        console.warn('Lỗi khi nạp danh sách nhóm lớn từ DB:', e);
+    }
+
+    try {
         if (window.ClientDB && typeof window.ClientDB.getGroups === 'function') {
             const saved = await window.ClientDB.getGroups();
             if (Array.isArray(saved) && saved.length > 0) {
                 state.groups.list = saved;
                 applyGroupFilters();
+                renderGroupBundlesBar();
                 renderGroupsUI();
 
                 // Auto-resolve any legacy saved groups that still have text slugs
@@ -2266,6 +2348,9 @@ async function loadSavedGroups(autoFetchIfEmpty = false) {
     } catch (e) {
         console.warn('Lỗi khi nạp danh sách nhóm từ IndexedDB:', e);
     }
+
+    renderGroupBundlesBar();
+    renderGroupsUI();
 
     if (autoFetchIfEmpty && state.session && state.session.status === 'active' && !state.groups.isLoading) {
         handleFetchGroups();
@@ -2371,6 +2456,7 @@ async function handleFetchGroups() {
         }
 
         applyGroupFilters();
+        renderGroupBundlesBar();
         renderGroupsUI();
 
         showToast(`🎉 Đã lấy thành công toàn bộ ${groups.length} nhóm Facebook bạn đã tham gia!`, 'success');
@@ -2399,8 +2485,20 @@ function handleFilterGroups() {
 function applyGroupFilters() {
     const query = state.groups.searchQuery;
     const privacy = state.groups.privacyFilter;
+    const bundleId = state.groups.selectedBundleId || 'all';
+
+    let currentBundle = null;
+    if (bundleId !== 'all') {
+        currentBundle = (state.groups.bundles || []).find(b => b.id === bundleId);
+    }
 
     state.groups.filteredList = state.groups.list.filter(g => {
+        // Bundle filter
+        if (currentBundle) {
+            const inBundle = Array.isArray(currentBundle.groupIds) && currentBundle.groupIds.includes(String(g.id));
+            if (!inBundle) return false;
+        }
+
         // Privacy filter
         if (privacy === 'public' && g.privacy !== 'Công khai') return false;
         if (privacy === 'private' && g.privacy !== 'Riêng tư') return false;
@@ -2418,12 +2516,98 @@ function applyGroupFilters() {
     });
 }
 
+function renderGroupBundlesBar() {
+    const container = document.getElementById('groupBundlesContainer');
+    if (!container) return;
+
+    const bundles = state.groups.bundles || [];
+    const currentBundleId = state.groups.selectedBundleId || 'all';
+
+    let html = '';
+
+    // "Tất cả nhóm" chip
+    const isAllActive = currentBundleId === 'all';
+    html += `
+        <button class="bundle-chip ${isAllActive ? 'active' : ''}" data-bundle-id="all">
+            <span>🌐 Tất cả nhóm</span>
+            <span class="bundle-badge">${state.groups.list.length}</span>
+        </button>
+    `;
+
+    // Each bundle chip
+    bundles.forEach(b => {
+        const isActive = currentBundleId === b.id;
+        const color = b.color || '#4f46e5';
+        const count = Array.isArray(b.groupIds) ? b.groupIds.length : 0;
+        html += `
+            <button class="bundle-chip ${isActive ? 'active' : ''}" data-bundle-id="${escapeHtml(b.id)}" style="${isActive ? `background: ${color}; border-color: ${color}; color: #fff;` : `border-color: ${color}40;`}">
+                <span class="color-dot" style="background: ${color}; width: 8px; height: 8px; margin: 0; box-shadow: none;"></span>
+                <span>${escapeHtml(b.name)}</span>
+                <span class="bundle-badge" style="${isActive ? 'background: rgba(255,255,255,0.25); color: #fff;' : ''}">${count}</span>
+            </button>
+        `;
+    });
+
+    container.innerHTML = html;
+
+    // Attach click listeners to chips
+    container.querySelectorAll('.bundle-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const bId = chip.getAttribute('data-bundle-id');
+            if (bId) {
+                state.groups.selectedBundleId = bId;
+                applyGroupFilters();
+                renderGroupBundlesBar();
+                renderGroupsUI();
+            }
+        });
+    });
+
+    // Update scan current bundle button
+    const btnScan = document.getElementById('btnScanCurrentBundle');
+    if (btnScan) {
+        if (currentBundleId !== 'all') {
+            const curBundle = bundles.find(b => b.id === currentBundleId);
+            const bundleName = curBundle ? curBundle.name : 'nhóm lớn';
+            btnScan.style.display = 'inline-flex';
+            btnScan.innerHTML = `🔎 Quét bài "${escapeHtml(bundleName)}"`;
+        } else {
+            btnScan.style.display = 'none';
+        }
+    }
+}
+
+function updateBulkActionBar() {
+    const bar = document.getElementById('groupsBulkActionBar');
+    const countText = document.getElementById('selectedGroupsCountText');
+    const btnRemove = document.getElementById('btnBulkRemoveFromCurrentBundle');
+
+    const count = state.groups.selectedGroupIds ? state.groups.selectedGroupIds.size : 0;
+
+    if (!bar) return;
+
+    if (count > 0) {
+        bar.style.display = 'flex';
+        if (countText) countText.textContent = `Đã chọn ${count} nhóm`;
+        if (btnRemove) {
+            if (state.groups.selectedBundleId !== 'all') {
+                btnRemove.style.display = 'inline-flex';
+            } else {
+                btnRemove.style.display = 'none';
+            }
+        }
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
 function renderGroupsUI() {
     const statTotal = document.getElementById('groupsStatTotal');
     const statPublic = document.getElementById('groupsStatPublic');
     const statPrivate = document.getElementById('groupsStatPrivate');
     const badgeCount = document.getElementById('groupsCountFilteredBadge');
     const tbody = document.getElementById('groupsTableBody');
+    const selectAllCheckbox = document.getElementById('selectAllGroupsCheckbox');
 
     const total = state.groups.list.length;
     const publicCount = state.groups.list.filter(g => g.privacy === 'Công khai').length;
@@ -2435,8 +2619,30 @@ function renderGroupsUI() {
 
     const filtered = state.groups.filteredList || [];
     if (badgeCount) {
-        badgeCount.textContent = `${filtered.length} / ${total} nhóm`;
+        if (state.groups.selectedBundleId !== 'all') {
+            const curBundle = (state.groups.bundles || []).find(b => b.id === state.groups.selectedBundleId);
+            const bName = curBundle ? curBundle.name : 'Nhóm lớn';
+            badgeCount.textContent = `${filtered.length} nhóm trong "${bName}"`;
+        } else {
+            badgeCount.textContent = `${filtered.length} / ${total} nhóm`;
+        }
     }
+
+    // Sync select all checkbox
+    if (selectAllCheckbox) {
+        if (filtered.length > 0 && filtered.every(g => state.groups.selectedGroupIds.has(String(g.id)))) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else if (filtered.some(g => state.groups.selectedGroupIds.has(String(g.id)))) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+    }
+
+    updateBulkActionBar();
 
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -2446,15 +2652,23 @@ function renderGroupsUI() {
         emptyRow.className = 'empty-row';
         if (total === 0) {
             emptyRow.innerHTML = `
-                <td colspan="6" class="text-center py-5 text-muted">
+                <td colspan="7" class="text-center py-5 text-muted">
                     <div style="font-size: 2.2rem; margin-bottom: 8px;">👥</div>
                     <div style="font-weight: 500;">Chưa có dữ liệu nhóm nào.</div>
                     <div class="text-xs text-muted mt-1">Bấm nút <strong>"Quét Tất Cả Nhóm"</strong> ở trên để bắt đầu lấy danh sách!</div>
                 </td>
             `;
+        } else if (state.groups.selectedBundleId !== 'all') {
+            emptyRow.innerHTML = `
+                <td colspan="7" class="text-center py-5 text-muted">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">📁</div>
+                    <div style="font-weight: 500;">Nhóm lớn này chưa có nhóm Facebook nào.</div>
+                    <div class="text-xs text-muted mt-1">Hãy chuyển về <strong>"🌐 Tất cả nhóm"</strong>, chọn các nhóm muốn thêm và bấm <strong>"Thêm vào nhóm lớn"</strong>!</div>
+                </td>
+            `;
         } else {
             emptyRow.innerHTML = `
-                <td colspan="6" class="text-center py-5 text-muted">
+                <td colspan="7" class="text-center py-5 text-muted">
                     <div style="font-size: 2rem; margin-bottom: 8px;">🔍</div>
                     <div style="font-weight: 500;">Không tìm thấy nhóm nào khớp với bộ lọc "${escapeHtml(state.groups.searchQuery)}".</div>
                 </td>
@@ -2475,15 +2689,33 @@ function renderGroupsUI() {
             ? `<img src="${escapeHtml(g.avatar)}" alt="" class="group-avatar" onerror="this.outerHTML='<span class=\\'group-avatar-placeholder\\'>👥</span>'"/>`
             : `<span class="group-avatar-placeholder">👥</span>`;
 
+        // Check if group is selected
+        const isChecked = state.groups.selectedGroupIds.has(String(g.id));
+
+        // Find which bundles this group belongs to
+        const memberBundles = (state.groups.bundles || []).filter(b => Array.isArray(b.groupIds) && b.groupIds.includes(String(g.id)));
+        const bundleBadgesHtml = memberBundles.length > 0
+            ? `<div class="d-flex flex-wrap gap-1 mt-1">
+                ${memberBundles.map(b => {
+                    const c = b.color || '#4f46e5';
+                    return `<span class="group-bundle-tag" style="background: ${c}15; color: ${c}; border: 1px solid ${c}35;" title="Nhóm lớn: ${escapeHtml(b.name)}">${escapeHtml(b.name)}</span>`;
+                }).join('')}
+               </div>`
+            : '';
+
         tr.innerHTML = `
+            <td style="text-align: center;">
+                <input type="checkbox" class="group-select-checkbox custom-checkbox" data-id="${escapeHtml(g.id)}" ${isChecked ? 'checked' : ''}>
+            </td>
             <td style="text-align: center; color: var(--text-secondary); font-weight: 500;">${idx + 1}</td>
             <td style="text-align: center;">${avatarHtml}</td>
             <td>
-                <div class="d-flex flex-column" style="gap: 5px;">
+                <div class="d-flex flex-column" style="gap: 4px;">
                     <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="group-link">
                         ${escapeHtml(g.name || 'Nhóm không tên')}
                     </a>
                     ${g.membersCount ? `<div class="text-xs text-muted" style="font-size: 0.78rem; opacity: 0.85;">👥 ${Number(g.membersCount).toLocaleString('vi-VN')} thành viên</div>` : ''}
+                    ${bundleBadgesHtml}
                 </div>
             </td>
             <td>
@@ -2498,8 +2730,11 @@ function renderGroupsUI() {
             <td style="text-align: center;">${privacyBadge}</td>
             <td style="text-align: center;">
                 <div class="d-flex align-center justify-center gap-1">
+                    <button class="btn btn-ghost btn-xs btn-assign-single-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Gán vào Nhóm Lớn">
+                        📁+
+                    </button>
                     <button class="btn btn-ghost btn-xs btn-scan-group" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}" title="Chuyển sang tab Tìm kiếm để quét bài trong nhóm này">
-                        🔎 Quét bài
+                        🔎 Quét
                     </button>
                     <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-xs" title="Mở nhóm trên Facebook">
                         ↗
@@ -2512,7 +2747,133 @@ function renderGroupsUI() {
     });
 }
 
+function handleGroupsTableChange(e) {
+    if (e.target && e.target.classList.contains('group-select-checkbox')) {
+        const id = e.target.getAttribute('data-id');
+        if (id) {
+            if (e.target.checked) {
+                state.groups.selectedGroupIds.add(String(id));
+            } else {
+                state.groups.selectedGroupIds.delete(String(id));
+            }
+            updateBulkActionBar();
+
+            // Update select all checkbox state
+            const selectAllCheckbox = document.getElementById('selectAllGroupsCheckbox');
+            const filtered = state.groups.filteredList || [];
+            if (selectAllCheckbox && filtered.length > 0) {
+                const allSelected = filtered.every(g => state.groups.selectedGroupIds.has(String(g.id)));
+                const someSelected = filtered.some(g => state.groups.selectedGroupIds.has(String(g.id)));
+                selectAllCheckbox.checked = allSelected;
+                selectAllCheckbox.indeterminate = !allSelected && someSelected;
+            }
+        }
+    }
+}
+
+function handleSelectAllGroupsChange(e) {
+    const isChecked = e.target.checked;
+    const filtered = state.groups.filteredList || [];
+    filtered.forEach(g => {
+        const id = String(g.id);
+        if (isChecked) {
+            state.groups.selectedGroupIds.add(id);
+        } else {
+            state.groups.selectedGroupIds.delete(id);
+        }
+    });
+
+    const checkboxes = document.querySelectorAll('.group-select-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+    });
+
+    updateBulkActionBar();
+}
+
+function handleBulkCopyIds() {
+    const ids = Array.from(state.groups.selectedGroupIds);
+    if (ids.length === 0) {
+        showToast('Chưa chọn nhóm nào để sao chép!', 'warning');
+        return;
+    }
+    const text = ids.join('\n');
+    const copySuccess = () => {
+        showToast(`🎉 Đã sao chép ${ids.length} Group ID vào Clipboard!`, 'success');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(copySuccess).catch(() => fallbackCopyText(text, copySuccess));
+    } else {
+        fallbackCopyText(text, copySuccess);
+    }
+}
+
+function handleBulkAddToBundle() {
+    const ids = Array.from(state.groups.selectedGroupIds);
+    if (ids.length === 0) {
+        showToast('Vui lòng tích chọn ít nhất 1 nhóm để thêm vào nhóm lớn!', 'warning');
+        return;
+    }
+    openAssignGroupsModal(ids);
+}
+
+async function handleBulkRemoveFromCurrentBundle() {
+    const curId = state.groups.selectedBundleId;
+    if (curId === 'all') return;
+
+    const bundle = (state.groups.bundles || []).find(b => b.id === curId);
+    if (!bundle) return;
+
+    const idsToRemove = Array.from(state.groups.selectedGroupIds);
+    if (idsToRemove.length === 0) return;
+
+    bundle.groupIds = (bundle.groupIds || []).filter(id => !idsToRemove.includes(id));
+    bundle.updatedAt = new Date().toISOString();
+
+    state.groups.selectedGroupIds.clear();
+
+    if (window.ClientDB && typeof window.ClientDB.saveBundles === 'function') {
+        await window.ClientDB.saveBundles(state.groups.bundles);
+    }
+
+    applyGroupFilters();
+    renderGroupBundlesBar();
+    renderGroupsUI();
+    showToast(`Đã gỡ ${idsToRemove.length} nhóm khỏi "${bundle.name}"!`, 'info');
+}
+
+function handleScanCurrentBundle() {
+    const curId = state.groups.selectedBundleId;
+    if (curId === 'all') return;
+
+    const bundle = (state.groups.bundles || []).find(b => b.id === curId);
+    if (!bundle || !bundle.groupIds || bundle.groupIds.length === 0) {
+        showToast('Nhóm lớn này hiện chưa có nhóm Facebook nào!', 'warning');
+        return;
+    }
+
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = bundle.name;
+    }
+
+    const navSearch = document.getElementById('navSearch');
+    if (navSearch) navSearch.click();
+
+    showToast(`Đã chuyển sang tab Tìm kiếm cho nhóm lớn "${bundle.name}" (${bundle.groupIds.length} nhóm)!`, 'info');
+}
+
 function handleGroupsTableClick(e) {
+    const assignBtn = e.target.closest('.btn-assign-single-group');
+    if (assignBtn) {
+        const id = assignBtn.getAttribute('data-id');
+        const name = assignBtn.getAttribute('data-name') || '';
+        if (id) {
+            openAssignGroupsModal([id], name);
+        }
+        return;
+    }
+
     const copyBtn = e.target.closest('.btn-copy-group-id');
     if (copyBtn) {
         const id = copyBtn.getAttribute('data-id');
@@ -2544,6 +2905,283 @@ function handleGroupsTableClick(e) {
         showToast(`Đã chuyển sang tìm kiếm với nhóm: ${name || id}`, 'info');
         return;
     }
+}
+
+// ==========================================
+// GROUP BUNDLES MODAL HANDLERS
+// ==========================================
+
+let currentBundleSelectedColor = '#4f46e5';
+
+function openBundleModal(bundleToEdit = null) {
+    const modal = document.getElementById('modalCreateBundle');
+    const title = document.getElementById('modalBundleTitle');
+    const inputId = document.getElementById('inputBundleEditId');
+    const inputName = document.getElementById('inputBundleName');
+    const colorDots = document.querySelectorAll('#bundleColorPicker .color-dot');
+
+    if (!modal) return;
+
+    if (bundleToEdit) {
+        if (title) title.textContent = '✏️ Chỉnh Sửa Nhóm Lớn';
+        if (inputId) inputId.value = bundleToEdit.id;
+        if (inputName) inputName.value = bundleToEdit.name || '';
+        currentBundleSelectedColor = bundleToEdit.color || '#4f46e5';
+    } else {
+        if (title) title.textContent = '➕ Tạo Nhóm Lớn Mới';
+        if (inputId) inputId.value = '';
+        if (inputName) inputName.value = '';
+        currentBundleSelectedColor = '#4f46e5';
+    }
+
+    // Sync color dot active state
+    colorDots.forEach(dot => {
+        if (dot.getAttribute('data-color') === currentBundleSelectedColor) {
+            dot.classList.add('active');
+        } else {
+            dot.classList.remove('active');
+        }
+    });
+
+    modal.style.display = 'flex';
+    setTimeout(() => { if (inputName) inputName.focus(); }, 100);
+}
+
+function closeBundleModal() {
+    const modal = document.getElementById('modalCreateBundle');
+    if (modal) modal.style.display = 'none';
+}
+
+function handleBundleColorPick(e) {
+    const dot = e.target.closest('.color-dot');
+    if (!dot) return;
+    const color = dot.getAttribute('data-color');
+    if (!color) return;
+
+    currentBundleSelectedColor = color;
+    document.querySelectorAll('#bundleColorPicker .color-dot').forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+}
+
+async function handleSaveModalBundle() {
+    const inputId = document.getElementById('inputBundleEditId');
+    const inputName = document.getElementById('inputBundleName');
+    const name = (inputName?.value || '').trim();
+
+    if (!name) {
+        showToast('Vui lòng nhập tên nhóm lớn!', 'warning');
+        if (inputName) inputName.focus();
+        return;
+    }
+
+    const editId = inputId?.value;
+    if (editId) {
+        const bundle = (state.groups.bundles || []).find(b => b.id === editId);
+        if (bundle) {
+            bundle.name = name;
+            bundle.color = currentBundleSelectedColor;
+            bundle.updatedAt = new Date().toISOString();
+        }
+    } else {
+        const newBundle = {
+            id: 'bundle_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7),
+            name,
+            color: currentBundleSelectedColor,
+            groupIds: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        state.groups.bundles.push(newBundle);
+    }
+
+    if (window.ClientDB && typeof window.ClientDB.saveBundles === 'function') {
+        await window.ClientDB.saveBundles(state.groups.bundles);
+    }
+
+    closeBundleModal();
+    applyGroupFilters();
+    renderGroupBundlesBar();
+    renderGroupsUI();
+
+    showToast(`Đã lưu nhóm lớn "${name}" thành công!`, 'success');
+}
+
+function openManageBundlesModal() {
+    const modal = document.getElementById('modalManageBundles');
+    const container = document.getElementById('manageBundlesListContainer');
+    if (!modal || !container) return;
+
+    renderManageBundlesList();
+    modal.style.display = 'flex';
+}
+
+function closeManageBundlesModal() {
+    const modal = document.getElementById('modalManageBundles');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderManageBundlesList() {
+    const container = document.getElementById('manageBundlesListContainer');
+    if (!container) return;
+
+    const bundles = state.groups.bundles || [];
+    if (bundles.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <div style="font-size: 1.8rem; margin-bottom: 6px;">📂</div>
+                <div style="font-size: 0.88rem;">Chưa có nhóm lớn nào được tạo.</div>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    bundles.forEach(b => {
+        const color = b.color || '#4f46e5';
+        const count = Array.isArray(b.groupIds) ? b.groupIds.length : 0;
+        html += `
+            <div class="manage-bundle-item d-flex align-center justify-between p-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);">
+                <div class="d-flex align-center gap-2">
+                    <span class="color-dot" style="background: ${color};"></span>
+                    <span style="font-weight: 600; font-size: 0.9rem;">${escapeHtml(b.name)}</span>
+                    <span class="text-xs text-muted">(${count} nhóm)</span>
+                </div>
+                <div class="d-flex align-center gap-1">
+                    <button class="btn btn-ghost btn-xs btn-edit-bundle" data-id="${escapeHtml(b.id)}" title="Đổi tên / màu">
+                        ✏️ Sửa
+                    </button>
+                    <button class="btn btn-ghost btn-xs btn-delete-bundle" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" style="color: #ef4444;" title="Xóa nhóm lớn">
+                        🗑️ Xóa
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+
+    // Attach listeners for Edit and Delete
+    container.querySelectorAll('.btn-edit-bundle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const bId = btn.getAttribute('data-id');
+            const bundle = (state.groups.bundles || []).find(b => b.id === bId);
+            if (bundle) {
+                closeManageBundlesModal();
+                openBundleModal(bundle);
+            }
+        });
+    });
+
+    container.querySelectorAll('.btn-delete-bundle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const bId = btn.getAttribute('data-id');
+            const bName = btn.getAttribute('data-name');
+            if (!confirm(`Bạn có chắc chắn muốn xóa nhóm lớn "${bName}"?\n(Các nhóm Facebook bên trong vẫn được giữ nguyên)`)) {
+                return;
+            }
+
+            state.groups.bundles = (state.groups.bundles || []).filter(b => b.id !== bId);
+            if (state.groups.selectedBundleId === bId) {
+                state.groups.selectedBundleId = 'all';
+            }
+
+            if (window.ClientDB && typeof window.ClientDB.saveBundles === 'function') {
+                await window.ClientDB.saveBundles(state.groups.bundles);
+            }
+
+            renderManageBundlesList();
+            applyGroupFilters();
+            renderGroupBundlesBar();
+            renderGroupsUI();
+            showToast(`Đã xóa nhóm lớn "${bName}"!`, 'info');
+        });
+    });
+}
+
+let currentAssignTargetGroupIds = [];
+
+function openAssignGroupsModal(groupIds = [], groupName = '') {
+    if (!state.groups.bundles || state.groups.bundles.length === 0) {
+        showToast('Bạn chưa có nhóm lớn nào. Hãy tạo nhóm lớn trước!', 'warning');
+        openBundleModal();
+        return;
+    }
+
+    currentAssignTargetGroupIds = groupIds;
+
+    const modal = document.getElementById('modalAssignGroupsToBundle');
+    const title = document.getElementById('modalAssignTitle');
+    const subtitle = document.getElementById('modalAssignSubtitle');
+    const container = document.getElementById('assignBundlesCheckboxesContainer');
+
+    if (!modal || !container) return;
+
+    if (groupIds.length === 1 && groupName) {
+        if (title) title.textContent = `📁 Thêm Vào Nhóm Lớn`;
+        if (subtitle) subtitle.textContent = `Chọn các nhóm lớn bạn muốn gán cho nhóm "${groupName}":`;
+    } else {
+        if (title) title.textContent = `📁 Thêm Vào Nhóm Lớn (${groupIds.length} nhóm)`;
+        if (subtitle) subtitle.textContent = `Chọn các nhóm lớn để gán cho ${groupIds.length} nhóm đã chọn:`;
+    }
+
+    let html = '';
+    state.groups.bundles.forEach(b => {
+        const color = b.color || '#4f46e5';
+        const groupCount = (b.groupIds || []).length;
+        const isAllInBundle = groupIds.length > 0 && groupIds.every(id => (b.groupIds || []).includes(id));
+
+        html += `
+            <label class="d-flex align-center gap-2 p-2 rounded cursor-pointer" style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);">
+                <input type="checkbox" class="bundle-assign-checkbox custom-checkbox" data-bundle-id="${escapeHtml(b.id)}" ${isAllInBundle ? 'checked' : ''}>
+                <span class="color-dot" style="background: ${color};"></span>
+                <span style="font-weight: 500; font-size: 0.9rem; flex: 1;">${escapeHtml(b.name)}</span>
+                <span class="text-xs text-muted">${groupCount} nhóm</span>
+            </label>
+        `;
+    });
+
+    container.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
+function closeAssignModal() {
+    const modal = document.getElementById('modalAssignGroupsToBundle');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleConfirmAssignModal() {
+    const container = document.getElementById('assignBundlesCheckboxesContainer');
+    if (!container) return;
+
+    const checkboxes = container.querySelectorAll('.bundle-assign-checkbox');
+    checkboxes.forEach(cb => {
+        const bId = cb.getAttribute('data-bundle-id');
+        const isChecked = cb.checked;
+        const bundle = (state.groups.bundles || []).find(b => b.id === bId);
+        if (bundle) {
+            if (!Array.isArray(bundle.groupIds)) bundle.groupIds = [];
+            currentAssignTargetGroupIds.forEach(gid => {
+                const idx = bundle.groupIds.indexOf(gid);
+                if (isChecked && idx === -1) {
+                    bundle.groupIds.push(gid);
+                } else if (!isChecked && idx !== -1) {
+                    bundle.groupIds.splice(idx, 1);
+                }
+            });
+            bundle.updatedAt = new Date().toISOString();
+        }
+    });
+
+    if (window.ClientDB && typeof window.ClientDB.saveBundles === 'function') {
+        await window.ClientDB.saveBundles(state.groups.bundles);
+    }
+
+    closeAssignModal();
+    applyGroupFilters();
+    renderGroupBundlesBar();
+    renderGroupsUI();
+
+    showToast(`Đã lưu phân loại nhóm lớn thành công!`, 'success');
 }
 
 async function handleExportGroupsExcel() {
@@ -2640,4 +3278,5 @@ function fallbackCopyText(text, cb) {
         showToast('Không thể sao chép vào clipboard', 'error');
     }
 }
+
 

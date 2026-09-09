@@ -413,6 +413,62 @@ async function dbGetJoinedGroups() {
     });
 }
 
+async function dbSaveGroupBundles(bundles = []) {
+    try {
+        localStorage.setItem('fb_group_bundles', JSON.stringify(bundles));
+    } catch (e) {}
+
+    const db = await initClientDB();
+    if (!db) return bundles;
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('config', 'readwrite');
+            const store = tx.objectStore('config');
+            store.put({ key: 'group_bundles', bundles, updatedAt: new Date().toISOString() });
+            tx.oncomplete = () => resolve(bundles);
+            tx.onerror = () => resolve(bundles);
+        } catch (e) {
+            resolve(bundles);
+        }
+    });
+}
+
+async function dbGetGroupBundles() {
+    const db = await initClientDB();
+    if (!db) {
+        try {
+            return JSON.parse(localStorage.getItem('fb_group_bundles') || '[]');
+        } catch (e) { return []; }
+    }
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('config', 'readonly');
+            const store = tx.objectStore('config');
+            const req = store.get('group_bundles');
+            req.onsuccess = () => {
+                if (req.result && Array.isArray(req.result.bundles)) {
+                    resolve(req.result.bundles);
+                } else {
+                    try {
+                        resolve(JSON.parse(localStorage.getItem('fb_group_bundles') || '[]'));
+                    } catch (e) { resolve([]); }
+                }
+            };
+            req.onerror = () => {
+                try {
+                    resolve(JSON.parse(localStorage.getItem('fb_group_bundles') || '[]'));
+                } catch (e) { resolve([]); }
+            };
+        } catch (e) {
+            try {
+                resolve(JSON.parse(localStorage.getItem('fb_group_bundles') || '[]'));
+            } catch (err) { resolve([]); }
+        }
+    });
+}
+
 // Export ra window toàn cầu
 window.ClientDB = {
     init: initClientDB,
@@ -428,5 +484,7 @@ window.ClientDB = {
     getSession: dbGetClientSession,
     clearSession: dbClearClientSession,
     saveGroups: dbSaveJoinedGroups,
-    getGroups: dbGetJoinedGroups
+    getGroups: dbGetJoinedGroups,
+    saveBundles: dbSaveGroupBundles,
+    getBundles: dbGetGroupBundles
 };
