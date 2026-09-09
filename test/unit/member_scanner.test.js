@@ -342,5 +342,23 @@ test('MEMBER-SVG-PHONE-001: sanitizeProfileHtml strips SVG tags preventing Faceb
   assert.deepEqual(realPhones, ['0988123456']);
 });
 
+test('MEMBER-SCROLL-001: 23h member (Diệp Bích) is accepted and interleaved vendors do not stop collection', async () => {
+  const { parseMemberJoinedTime, isSalesOrSoftwareVendorName } = await import('../../src/core/member-scanner.js');
+
+  // Real data from user screenshot
+  const diepBichTime = 'Đã tham gia 23 giờ trước';
+  const timeRes = parseMemberJoinedTime(diepBichTime);
+  assert.equal(timeRes.within24h, true);
+  assert.equal(timeRes.stopScrolling, false);
+
+  // Diệp Bích is not a vendor
+  assert.equal(isSalesOrSoftwareVendorName('Diệp Bích'), false);
+
+  // Interleaved vendors in the list are correctly identified
+  assert.equal(isSalesOrSoftwareVendorName('Nguyễn Kiều Trâm Sapo'), true);
+  assert.equal(isSalesOrSoftwareVendorName('Phần Mềm Theo Yêu Cầu'), true);
+});
+
+
 
 

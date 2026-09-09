@@ -631,13 +631,15 @@ export class MemberScanner extends EventEmitter {
 
         const addCandidate = (item) => {
           if (!item || !item.memberId) return;
+          if (seenMemberIds.has(item.memberId)) return;
+          seenMemberIds.add(item.memberId);
+
           if (isSystemRoleOrInvalidName(item.name)) return;
           if (excludeSales && isSalesOrSoftwareVendorName(item.name)) {
             state.skippedCount++;
             log(`⏩ [BỎ QUA SALE] Tên tài khoản dịch vụ/phần mềm: ${item.name}`, 'warning');
             return;
           }
-          if (seenMemberIds.has(item.memberId)) return;
 
           // In "Mới vào nhóm", all genuine 24h new members have relative timestamps
           if (!item.joinedTimeText) {
@@ -653,7 +655,6 @@ export class MemberScanner extends EventEmitter {
           }
           if (!timeCheck.within24h) return;
 
-          seenMemberIds.add(item.memberId);
           candidateMembers.push(item);
         };
 
@@ -773,14 +774,19 @@ export class MemberScanner extends EventEmitter {
           // Phase 2: Scroll to trigger GraphQL pagination & DOM updates
           log('📜 Đang cuộn trang để kích hoạt nạp thành viên mới qua GraphQL & DOM...', 'info');
           let noNewCount = 0;
-          let prevCount = candidateMembers.length;
+          let prevSeenCount = seenMemberIds.size;
 
-          for (let scrollStep = 0; scrollStep < 15; scrollStep++) {
+          for (let scrollStep = 0; scrollStep < 35; scrollStep++) {
             if (state.abortRequested || hitTimeLimit) break;
             if (candidateMembers.length >= maxMembersPerGroup) break;
 
-            await page.evaluate(() => window.scrollBy(0, 950));
-            await delay(1300);
+            await page.evaluate(() => {
+              window.scrollBy(0, 1100);
+              if (document.scrollingElement) {
+                document.scrollingElement.scrollTop += 1100;
+              }
+            });
+            await delay(1500);
 
             // DOM extraction fallback
             const domMembers = await page.evaluate((currentGroupId) => {
@@ -848,12 +854,15 @@ export class MemberScanner extends EventEmitter {
               if (hitTimeLimit || candidateMembers.length >= maxMembersPerGroup) break;
             }
 
-            if (candidateMembers.length === prevCount) {
+            if (seenMemberIds.size === prevSeenCount) {
               noNewCount++;
-              if (noNewCount >= 3) break;
+              if (noNewCount >= 4) {
+                log('📄 Đã cuộn hết danh sách thành viên mới trong 24h.', 'info');
+                break;
+              }
             } else {
               noNewCount = 0;
-              prevCount = candidateMembers.length;
+              prevSeenCount = seenMemberIds.size;
             }
           }
 
