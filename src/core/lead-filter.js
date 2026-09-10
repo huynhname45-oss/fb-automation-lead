@@ -107,7 +107,7 @@ function findMatchedKeyword(textClean, keywords = []) {
  * Used to avoid false-rejecting SMB posts that merely mention a landmark in their address line
  * (e.g. "Ngay Nhà thuốc Long Châu – đối diện Chung cư Sky9", "cạnh Vinmart", "gần bệnh viện...").
  */
-export const LANDMARK_PREFIX_REGEX = /(?:địa\s*chỉ|đ\/c|dc|address|vị\s*trí|vi\s*tri|toạ\s*độ|tại|tai|ở|o|ngay|ngay\s*cổng|ngay\s*chân|đối\s*diện|doi\s*dien|doi\s*dien\s*cong|đối\s*diện\s*cổng|gần|gan|gần\s*cổng|gan\s*cong|cạnh|canh|kế\s*bên|ke\s*ben|kế|ke|sát\s*bên|sat\s*ben|sát|sat|cách|cach|sau\s*lưng|sau\s*lung|sau|trước\s*mặt|truoc\s*mat|trước|truoc|bên\s*hông|ben\s*hong|bên\s*cạnh|ben\s*canh|hướng\s*đi|huong\s*di|hướng\s*về|huong\s*ve|đoạn|doan|ngã\s*[345ba|tư|tu|năm|nam]|nga\s*[345ba|tu|nam]|vòng\s*xoay|vong\s*xoay|bùng\s*binh|bung\s*binh|chân\s*cầu|chan\s*cau|dưới\s*chân|duoi\s*chan|shophouse|tầng\s*trệt|tang\s*tret|khu\s*đô\s*thị|khu\s*do\s*thi|chung\s*cư|chung\s*cu|toà\s*nhà|tòa\s*nhà|toa\s*nha|đường|duong|phố|pho|ngõ|ngo|hẻm|hem|số|so)\s*(?:của|ở|tại|phía|bên)?\s*(?:nhà\s*thuốc|siêu\s*thị|cửa\s*hàng|chi\s*nhánh|toà\s*nhà|tòa\s*nhà|toa\s*nha|chung\s*cư|chung\s*cu|dự\s*án|du\s*an|khu\s*đô\s*thị|khu\s*do\s*thi|trung\s*tâm|tttm|chợ|bệnh\s*viện|trường|truong|trường\s*học|trường\s*đại\s*học|đại\s*học|dai\s*hoc|cao\s*đẳng|cao\s*dang|cổng|cong|cổng\s*trường|ktx|kcn|khu\s*công\s*nghiệp)?\s*$/i;
+export const LANDMARK_PREFIX_REGEX = /(?:địa\s*chỉ|đ\/c|dc|address|vị\s*trí|vi\s*tri|toạ\s*độ|tại|tai|ở|o|ngay|ngay\s*cổng|ngay\s*chân|đối\s*diện|doi\s*dien|doi\s*dien\s*cong|đối\s*diện\s*cổng|gần|gan|gần\s*cổng|gan\s*cong|cạnh|canh|kế\s*bên|ke\s*ben|kế|ke|sát\s*bên|sat\s*ben|sát|sat|cách|cach|sau\s*lưng|sau\s*lung|sau|trước\s*mặt|truoc\s*mat|trước|truoc|bên\s*hông|ben\s*hong|bên\s*cạnh|ben\s*canh|hướng\s*đi|huong\s*di|hướng\s*về|huong\s*ve|đoạn|doan|ngã\s*[345ba|tư|tu|năm|nam]|nga\s*[345ba|tu|nam]|vòng\s*xoay|vong\s*xoay|bùng\s*binh|bung\s*binh|chân\s*cầu|chan\s*cau|dưới\s*chân|duoi\s*chan|shophouse|tầng\s*trệt|tang\s*tret|khu\s*đô\s*thị|khu\s*do\s*thi|chung\s*cư|chung\s*cu|toà\s*nhà|tòa\s*nhà|toa\s*nha|đường|duong|phố|pho|ngõ|ngo|hẻm|hem|số|so)\s*(?:của|ở|tại|phía|bên)?\s*(?:nhà\s*thuốc|siêu\s*thị|cửa\s*hàng|chi\s*nhánh|toà\s*nhà|tòa\s*nhà|toa\s*nha|chung\s*cư|chung\s*cu|dự\s*án|du\s*an|khu\s*đô\s*thị|khu\s*do\s*thi|trung\s*tâm|tttm|chợ|bệnh\s*viện|trường|truong|trường\s*học|trường\s*đại\s*học|đại\s*học|dai\s*hoc|cao\s*đẳng|cao\s*dang|cổng|cong|cổng\s*trường|ktx|kcn|khu\s*công\s*nghiệp)?\s*[:\-\s]*$/i;
 
 /**
  * Checks if ALL occurrences of a matched keyword in post content appear inside a directional landmark context.
@@ -508,6 +508,92 @@ export function checkForeignLead(post = {}) {
   return { isForeign: false };
 }
 
+export const REAL_ESTATE_GROUP_PATTERNS = [
+  /(?:phòng\s*trọ|phong\s*tro|nhà\s*trọ|nha\s*tro)/i,
+  /(?:căn\s*hộ|can\s*ho|căn\s*hộ\s*dịch\s*vụ|chdv)/i,
+  /(?:chung\s*cư|chung\s*cu)/i,
+  /(?:bất\s*động\s*sản|bat\s*dong\s*san|bđs|bds|nhà\s*đất|nha\s*dat|địa\s*ốc|dia\s*oc)/i,
+  /(?:cho\s*thuê\s*phòng|cho\s*thue\s*phong|tìm\s*phòng\s*trọ|tim\s*phong\s*tro)/i,
+  /(?:cho\s*thuê\s*căn\s*hộ|cho\s*thue\s*can\s*ho|cho\s*thuê\s*nhà|cho\s*thue\s*nha)/i,
+  /(?:cho\s*thuê\s*mặt\s*bằng|cho\s*thue\s*mat\s*bang|nhượng\s*mặt\s*bằng)/i
+];
+
+export const REAL_ESTATE_AUTHOR_PATTERNS = [
+  /\bHR\s+[A-ZÀ-Ỹa-zà-ỹ0-9_]+/i,
+  /\b(?:bđs|bds|bất\s*động\s*sản|nhà\s*đất|địa\s*ốc|môi\s*giới|cho\s*thuê|phòng\s*trọ|căn\s*hộ|chdv)\b/i
+];
+
+export const REAL_ESTATE_CONTENT_PATTERNS = [
+  /(?:khai\s*trương|mở\s*cửa|ra\s*mắt|khánh\s*thành)\s*(?:chung\s*cư|căn\s*hộ|toà\s*nhà|tòa\s*nhà|phòng\s*trọ|chdv|khu\s*trọ|dãy\s*trọ)/i,
+  /(?:chung\s*cư\s*mini|ccmn|căn\s*hộ\s*mini|căn\s*hộ\s*dịch\s*vụ|chdv|toà\s*nhà\s*mini|tòa\s*nhà\s*mini)/i,
+  /(?:1|2|3|4)\s*pn\s*(?:\+|\&|\/)?\s*(?:1|2|3|4)?\s*pk/i,
+  /\b(?:1pn|2pn|3pn|1pk|2pk|1pn1pk|studio|duplex|bancol)\b/i,
+  /căn\s*hộ\s*(?:bancol|studio|duplex|cao\s*cấp|mini|dịch\s*vụ|sang\s*xịn|view)/i,
+  /toà\s*nhà\s*(?:cao\s*cấp|mới\s*xây)|tòa\s*nhà\s*(?:cao\s*cấp|mới\s*xây)/i,
+  /thang\s*máy,\s*full\s*nội\s*thất|full\s*nội\s*thất\s*tiết\s*kiệm\s*điện|full\s*nội\s*thất\s*cao\s*cấp/i,
+  /(?:phòng\s*trọ|nhà\s*trọ|tìm\s*phòng\s*trọ|cho\s*thuê\s*phòng|cho\s*thuê\s*căn\s*hộ|cho\s*thuê\s*nhà|nhượng\s*phòng|pass\s*phòng)/i,
+  /(?:gặp|lh|liên\s*hệ|inbox)?\s*(?:[a-zà-ỹ\s]{0,20})?xem\s*phòng(?:\s*trước|\s*ngay|\s*trực\s*tiếp)?/i,
+  /(?:hẹn\s*xem\s*phòng|đặt\s*cọc\s*phòng|cọc\s*(?:1|2)\s*tháng|tiền\s*cọc|tiền\s*phòng|giá\s*phòng|phí\s*dịch\s*vụ)/i,
+  /(?:điện\s*\d+k|nước\s*\d+k|giờ\s*giấc\s*tự\s*do|không\s*chung\s*chủ|khóa\s*vân\s*tay|hầm\s*để\s*xe)/i,
+  /(?:bất\s*động\s*sản|bđs|nhà\s*đất|đất\s*nền|condotel|officetel|biệt\s*thự|nhà\s*phố)/i,
+  /mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền|shophouse|biệt\s*thự|nhà\s*phố|phân\s*khu|tòa|khu\s*đô\s*thị)|lễ\s*mở\s*bán/i,
+  /sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản/i,
+  /\b(?:vinhomes|masterise|novaland|sun\s*group|hưng\s*thịnh|đất\s*xanh)\b/i
+];
+
+/**
+ * Checks whether a candidate post represents a Real Estate / Room Rental / Mini Apartment / Property Sales post.
+ * Excludes directional address landmarks for authentic food/retail SMB stores.
+ */
+export function checkRealEstateLead(post = {}) {
+  const authorName = (post.authorName || '').trim();
+  const content = (post.content || '').trim();
+  const groupName = (post.groupName || '').trim();
+  const combinedText = `${authorName} ${groupName} ${content}`;
+
+  // 1. Group Name Check
+  if (groupName) {
+    for (const pat of REAL_ESTATE_GROUP_PATTERNS) {
+      if (pat.test(groupName)) {
+        return { isRealEstate: true, reason: `Đăng trong nhóm Chuyên Bất động sản / Phòng trọ / Căn hộ ("${groupName}")` };
+      }
+    }
+  }
+
+  // 2. Author Name Check
+  if (authorName) {
+    for (const pat of REAL_ESTATE_AUTHOR_PATTERNS) {
+      if (pat.test(authorName)) {
+        return { isRealEstate: true, reason: `Tác giả là môi giới BĐS / HR cho thuê phòng ("${authorName}")` };
+      }
+    }
+  }
+
+  // 3. Distinct food / retail signal
+  const isStoreSellingFoodOrRetail = /(?:quán|tiệm|shop|cafe|cà\s*phê|trà\s*sữa|bún|phở|cơm|lẩu|nướng|ăn\s*vặt|bánh\s*mì|menu|thực\s*đơn|đồ\s*uống|món)/i.test(combinedText);
+
+  // Strong Rental / Property Signals (These NEVER appear in authentic shop opening announcements)
+  const strongRentalOrPropertySignal = /(?:khai\s*trương\s*(?:chung\s*cư|căn\s*hộ|toà\s*nhà|tòa\s*nhà|phòng\s*trọ|chdv)|chung\s*cư\s*mini|ccmn|căn\s*hộ\s*dịch\s*vụ|chdv|1pn|2pn|3pn|1pk|studio|duplex|bancol|xem\s*phòng|cọc\s*(?:1|2)\s*tháng|tiền\s*cọc|tiền\s*phòng|giá\s*phòng|giờ\s*giấc\s*tự\s*do|không\s*chung\s*chủ|mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền)|sa\s*bàn|đại\s*đô\s*thị)/i.test(combinedText);
+
+  if (strongRentalOrPropertySignal) {
+    return { isRealEstate: true, reason: 'Nội dung cho thuê phòng trọ / Căn hộ dịch vụ / Chung cư mini / Bất động sản' };
+  }
+
+  // General content patterns with landmark bypass
+  for (const pat of REAL_ESTATE_CONTENT_PATTERNS) {
+    const match = combinedText.match(pat);
+    if (match) {
+      const matchedTerm = match[0];
+      if (isLandmarkContext(content, matchedTerm) && isStoreSellingFoodOrRetail) {
+        continue; // Landmark in address line of a food/retail store
+      }
+      return { isRealEstate: true, reason: `Chứa từ khóa Bất động sản / Nhà đất / Căn hộ / Phòng trọ: "${matchedTerm}"` };
+    }
+  }
+
+  return { isRealEstate: false, reason: null };
+}
+
 export class LeadFilter {
   constructor(customEntities = null) {
     this.customEntities = customEntities;
@@ -598,6 +684,21 @@ export class LeadFilter {
       };
     }
 
+    // 0.7. Real Estate / Room Rental / Mini Apartment / Chung cư / Bất động sản Check
+    if (config.excludeRealEstate !== false) {
+      const realEstateCheck = checkRealEstateLead(post);
+      if (realEstateCheck.isRealEstate) {
+        return {
+          qualified: false,
+          leadQuality: 'rejected',
+          qualityBadge: 'Bất động sản',
+          category: 'real_estate',
+          matchedTerm: realEstateCheck.reason,
+          reason: `Ngành Bất động sản / Căn hộ / Phòng trọ / Chung cư (${realEstateCheck.reason}).`
+        };
+      }
+    }
+
     const authorClean = cleanTextForMatching(post.authorName || '');
     const contentClean = cleanTextForMatching(post.content || '');
     const combinedText = `${authorClean} ${contentClean}`;
@@ -618,8 +719,8 @@ export class LeadFilter {
       if (matchedChain) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Chuỗi lớn',
           category: 'enterprise_chain',
           matchedTerm: matchedChain.term,
           reason: `Nghi vấn chuỗi lớn / Doanh nghiệp quy mô lớn: "${matchedChain.term}"`
@@ -633,8 +734,8 @@ export class LeadFilter {
       if (matchedCompetitor) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Đối thủ POS',
           category: 'pos_competitor',
           matchedTerm: matchedCompetitor.term,
           reason: `Đối thủ phần mềm POS / Bài bán hàng đối thủ: "${matchedCompetitor.term}"`
@@ -653,8 +754,8 @@ export class LeadFilter {
       if (matchedRE) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Bất động sản',
           category: 'real_estate',
           matchedTerm: matchedRE.term,
           reason: `Ngành Bất động sản / Nhà đất / Phòng trọ: "${matchedRE.term}"`
@@ -670,8 +771,8 @@ export class LeadFilter {
       if (matchedHotel) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Khách sạn/Du lịch',
           category: 'hotels',
           matchedTerm: matchedHotel.term,
           reason: `Ngành Khách sạn / Homestay / Du lịch: "${matchedHotel.term}"`
@@ -688,8 +789,8 @@ export class LeadFilter {
       if (matchedSpa) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Spa/Thẩm mỹ',
           category: 'beauty_spa',
           matchedTerm: matchedSpa.term,
           reason: `Ngành Spa / Thẩm mỹ / Salon tóc / Nail: "${matchedSpa.term}"`
@@ -702,8 +803,8 @@ export class LeadFilter {
       if (matchedIndustry) {
         return {
           qualified: false,
-          leadQuality: 'review',
-          qualityBadge: 'Cần xem lại',
+          leadQuality: 'rejected',
+          qualityBadge: 'Loại trừ',
           category: 'unsupported_industry',
           matchedTerm: matchedIndustry.term,
           reason: `Ngành hàng loại trừ: "${matchedIndustry.term}"`

@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, checkIndustrialManufacturingLead, checkMediaEsportsGossipLead, isLandmarkContext } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, checkIndustrialManufacturingLead, checkMediaEsportsGossipLead, checkRealEstateLead, isLandmarkContext } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -34,24 +34,25 @@ export class AILeadEvaluator {
     const config = { ...configManager.get(), ...overrideConfig };
     const authorName = cleanInvisibleCharacters(post.authorName || '').trim();
     const content = cleanInvisibleCharacters(post.content || '').trim();
+    const groupName = cleanInvisibleCharacters(post.groupName || '').trim();
     const phones = Array.isArray(post.phones) ? post.phones : [];
     const minScore = typeof config.acceptedLeadScore === 'number'
       ? config.acceptedLeadScore
       : (config.minLeadScore ?? 60);
 
-    // First: Run Deterministic Negative Rule Filter (Fast elimination of obvious enterprise/competitor/spam)
-    const ruleEval = leadFilter.evaluateLead({ authorName, content, phones }, config);
+    // First: Run Deterministic Negative Rule Filter (Fast elimination of obvious enterprise/competitor/spam/real estate)
+    const ruleEval = leadFilter.evaluateLead({ authorName, content, groupName, phones }, config);
     if (!ruleEval.qualified) {
       return {
-        isQualified: ruleEval.leadQuality === 'review', // Allow 'review' to proceed for phone extraction
-        score: ruleEval.leadQuality === 'review' ? 50 : 10,
+        isQualified: false,
+        score: ruleEval.leadQuality === 'rejected' ? 0 : 30,
         summary: `Bài viết: ${ruleEval.reason}`,
-        businessType: 'Cần xem lại',
-        intent: 'Cần kiểm tra',
+        businessType: ruleEval.qualityBadge || 'Loại trừ',
+        intent: 'Loại trừ',
         reason: ruleEval.reason,
-        decision: ruleEval.leadQuality === 'rejected' ? 'REJECTED' : 'REVIEW',
-        leadQuality: ruleEval.leadQuality,
-        qualityBadge: ruleEval.qualityBadge || 'Cần xem lại',
+        decision: 'REJECTED',
+        leadQuality: ruleEval.leadQuality || 'rejected',
+        qualityBadge: ruleEval.qualityBadge || 'Loại trừ',
         provider: 'rule_engine'
       };
     }
@@ -151,7 +152,7 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
     - KHÁCH HÀNG / BÀI VIẾT Ở NƯỚC NGOÀI (Thái Lan, Bangkok, Nhật, Hàn, Đài Loan, Mỹ, Úc, Canada... các bài viết tin tức xã hội, an sinh, người vô gia cư, chính sách nước ngoài, xuất khẩu hàng hóa ra nước ngoài).
     - NHÀ MÁY, XÍ NGHIỆP, KHU CÔNG NGHIỆP (KCN), CỤM CÔNG NGHIỆP, KHU CHẾ XUẤT, CÔNG TY SẢN XUẤT, XƯỞNG MAY, GIA CÔNG, XUẤT KHẨU HÀNG HÓA.
     - TUYỂN DỤNG CÔNG NHÂN, LAO ĐỘNG PHỔ THÔNG, THỢ MAY, CÔNG NHÂN SẢN XUẤT, THỜI VỤ.
-    - KHAI TRƯƠNG TÒA NHÀ, SA BÀN, DỰ ÁN BẤT ĐỘNG SẢN, CAO ỐC, ĐẠI ĐÔ THỊ, VINHOMES, NOVALAND, MASTERISE, SUN GROUP, VĂN PHÒNG CHO THUÊ.
+    - KHAI TRƯƠNG CHUNG CƯ MINI (CCMN), CĂN HỘ DỊCH VỤ (CHDV), CHO THUÊ PHÒNG TRỌ, TÌM PHÒNG TRỌ, XEM PHÒNG, ĐẶT CỌC PHÒNG, GIỜ GIẤC TỰ DO, BẤT ĐỘNG SẢN, TÒA NHÀ, SA BÀN, DỰ ÁN BẤT ĐỘNG SẢN, CAO ỐC, ĐẠI ĐÔ THỊ, VINHOMES, NOVALAND, MASTERISE, SUN GROUP, VĂN PHÒNG CHO THUÊ.
    - TẤT CẢ CÁC NGÀNH DỊCH VỤ CÒN LẠI (TRỪ BIDA VÀ KARAOKE):
      + Dịch vụ làm đẹp: Spa, Thẩm mỹ viện, Tiệm Nail, Triệt lông, Massage, Gội đầu dưỡng sinh, Cắt tóc, Salon tóc, Barbershop.
      + Dịch vụ kỹ thuật & sửa chữa: Gara ô tô, Sửa xe máy, Rửa xe, Chăm sóc xe, Sửa điện thoại, Sửa điện lạnh, Lắp camera, Thi công nội thất, Biển quảng cáo.
@@ -1037,6 +1038,12 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
         return { isQualified: false, score: 15, summary: 'Cơ sở lưu trú / Khách sạn / Homestay / Resort', businessType: 'Khách sạn / Lưu trú', intent: 'Lưu trú / Hotel', salesPitch: '', recommendedFeatures: '', reason: 'Khách sạn / Resort / Homestay (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
       }
     }
+    // Real Estate, Room Rental, Mini Apartment, Chung cư, Sa Bàn Check
+    const realEstateCheck = checkRealEstateLead({ authorName, content, phones });
+    if (realEstateCheck.isRealEstate) {
+      return { isQualified: false, score: 0, summary: `Bất động sản / Căn hộ / Phòng trọ (Đã loại trừ): ${realEstateCheck.reason}`, businessType: 'Bất động sản / Phòng trọ', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: `Bất động sản, căn hộ, phòng trọ (${realEstateCheck.reason}), không phải cửa hàng SMB mở mới.`, provider: 'local_nlp' };
+    }
+
     if (/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền|shophouse|biệt\s*thự|nhà\s*phố|phân\s*khu|tòa)|lễ\s*mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu.test(textLower)) {
       const isStoreSellingFoodOrRetail = /(?:quán|tiệm|shop|cafe|cà\s*phê|trà\s*sữa|bún|phở|cơm|lẩu|nướng|ăn\s*vặt|bánh\s*mì|menu|thực\s*đơn|đồ\s*uống|món)/i.test(textLower);
       const matchedTerm = (textLower.match(/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền|shophouse|biệt\s*thự|nhà\s*phố|phân\s*khu|tòa)|lễ\s*mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu) || [])[0] || '';
