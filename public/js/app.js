@@ -4420,7 +4420,8 @@ const systemUpdateState = {
     isBusy: false,
     isUpdating: false,
     autoUpdateWhenIdle: false,
-    recoveryPollingTimer: null
+    recoveryPollingTimer: null,
+    clientInitialSha: null
 };
 
 async function checkSystemVersion(force = false) {
@@ -4429,11 +4430,23 @@ async function checkSystemVersion(force = false) {
         const res = await api('GET', url);
         if (!res.supported) return;
 
+        if (!systemUpdateState.clientInitialSha && res.currentCommit?.sha) {
+            systemUpdateState.clientInitialSha = res.currentCommit.sha;
+        }
+
         systemUpdateState.hasUpdate = !!res.hasUpdate;
         systemUpdateState.currentCommit = res.currentCommit;
         systemUpdateState.remoteCommit = res.remoteCommit;
         systemUpdateState.isBusy = !!res.isBusy;
         systemUpdateState.isUpdating = !!res.isUpdating;
+
+        // 0. Pop-up thông báo Cập nhật thành công cho toàn bộ Client
+        if (res.lastUpdateNotice && res.lastUpdateNotice.noticeId) {
+            const seenNoticeId = localStorage.getItem('last_seen_update_notice_id');
+            if (seenNoticeId !== res.lastUpdateNotice.noticeId) {
+                showUpdateSuccessModal(res.lastUpdateNotice, res.currentCommit);
+            }
+        }
 
         // 1. Sidebar Dot
         const sidebarDot = document.getElementById('sidebarUpdateDot');
@@ -4577,6 +4590,58 @@ function hideUpdateOverlay() {
     if (overlay) overlay.style.display = 'none';
 }
 
+function showUpdateSuccessModal(notice, currentCommit) {
+    if (!notice || !notice.noticeId) return;
+    const modal = document.getElementById('modalUpdateSuccessNotice');
+    if (!modal) return;
+
+    const elSha = document.getElementById('modalUpdateNoticeSha');
+    const elMsg = document.getElementById('modalUpdateNoticeMsg');
+    const elTime = document.getElementById('modalUpdateNoticeTime');
+    const btnAction = document.getElementById('btnDismissUpdateSuccessModal');
+    const btnClose = document.getElementById('btnCloseUpdateSuccessModal');
+
+    const targetSha = notice.commitSha || (currentCommit?.sha ? currentCommit.sha : 'Mới nhất');
+    if (elSha) elSha.textContent = targetSha;
+    if (elMsg) elMsg.textContent = notice.commitMsg || 'Đã đồng bộ các tính năng & cải tiến mới nhất từ Git.';
+    if (elTime) elTime.textContent = notice.commitDate ? `Thời gian cập nhật: ${notice.commitDate}` : `Thời gian: ${new Date(notice.updatedAt || Date.now()).toLocaleString('vi-VN')}`;
+
+    // Nếu tab/client này đang chạy SHA cũ hơn SHA vừa cập nhật, gợi ý Tải lại trang để nhận ngay giao diện và code JS mới
+    const isOldClient = systemUpdateState.clientInitialSha && targetSha && systemUpdateState.clientInitialSha !== targetSha;
+
+    const handleDismiss = (reload = false) => {
+        try {
+            localStorage.setItem('last_seen_update_notice_id', notice.noticeId);
+        } catch (_) {}
+        modal.style.display = 'none';
+        if (reload) {
+            window.location.reload();
+        }
+    };
+
+    if (btnAction) {
+        if (isOldClient) {
+            btnAction.textContent = '🔄 Tải Lại Giao Diện Mới Ngay';
+            btnAction.onclick = () => handleDismiss(true);
+        } else {
+            btnAction.textContent = 'Tuyệt Vời, Bắt Đầu Sử Dụng';
+            btnAction.onclick = () => handleDismiss(false);
+        }
+    }
+
+    if (btnClose) {
+        btnClose.onclick = () => handleDismiss(false);
+    }
+
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            handleDismiss(false);
+        }
+    };
+
+    modal.style.display = 'flex';
+}
+
 function startServerRecoveryPolling() {
     if (systemUpdateState.recoveryPollingTimer) return;
 
@@ -4708,12 +4773,23 @@ function initSystemUpdater() {
         }
     });
 
-    // 5. Tự động kiểm tra bản cập nhật sau 2 giây
+    // 5. Gắn sự kiện phím Escape để đóng Pop-up
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const successModal = document.getElementById('modalUpdateSuccessNotice');
+            if (successModal && successModal.style.display === 'flex') {
+                const btnClose = document.getElementById('btnCloseUpdateSuccessModal');
+                if (btnClose) btnClose.click();
+            }
+        }
+    });
+
+    // 6. Tự động kiểm tra bản cập nhật sau 2 giây
     setTimeout(() => {
         checkSystemVersion(false);
     }, 2000);
 
-    // 6. Định kỳ kiểm tra mỗi 5 phút
+    // 7. Định kỳ kiểm tra mỗi 5 phút
     setInterval(() => {
         checkSystemVersion(false);
     }, 5 * 60 * 1000);

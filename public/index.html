@@ -1144,6 +1144,37 @@
         </div>
     </div>
 
+    <!-- Modal Pop-up: Thông Báo Cập Nhật Thành Công Toàn Bộ Client -->
+    <div class="modal-overlay" id="modalUpdateSuccessNotice" style="display: none; z-index: 10002;">
+        <div class="modal update-success-card" style="border-radius: 20px; max-width: 480px; width: 92%; text-align: center; padding: 32px 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); border: 1px solid var(--glass-border); background: var(--bg-card); position: relative;">
+            <button type="button" class="modal-close" id="btnCloseUpdateSuccessModal" style="position: absolute; top: 16px; right: 18px; font-size: 1.4rem; background: none; border: none; cursor: pointer; color: var(--text-muted);">&times;</button>
+            <div class="update-success-icon">
+                🎉
+            </div>
+            <h3 style="font-size: 1.28rem; font-weight: 800; color: var(--text-color, #1e293b); margin-bottom: 8px;">
+                Cập Nhật Hệ Thống Thành Công!
+            </h3>
+            <p class="text-sm text-muted" style="margin-bottom: 18px; line-height: 1.5;">
+                Phiên bản mới nhất từ Git đã được nạp thành công vào hệ thống.
+            </p>
+            <div class="update-success-details">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; color: #059669; letter-spacing: 0.5px;">Bản cập nhật mới</span>
+                    <span id="modalUpdateNoticeSha" style="font-size: 0.78rem; font-family: monospace; background: rgba(5, 150, 105, 0.15); color: #047857; padding: 2px 7px; border-radius: 6px; font-weight: 700;">—</span>
+                </div>
+                <div id="modalUpdateNoticeMsg" style="font-size: 0.92rem; font-weight: 600; color: var(--text-color, #1e293b); word-break: break-word; line-height: 1.4;">
+                    —
+                </div>
+                <div id="modalUpdateNoticeTime" style="font-size: 0.78rem; color: var(--text-muted, #64748b); margin-top: 6px;">
+                    —
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary w-100" id="btnDismissUpdateSuccessModal" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);">
+                Tuyệt Vời, Bắt Đầu Sử Dụng
+            </button>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 

@@ -13,6 +13,25 @@ const CWD = process.cwd();
 const CONFIG_FILE = path.join(CWD, 'config.json');
 const RESTART_FLAG_FILE = path.join(CWD, '.restart_flag');
 const UPDATER_BAT_FILE = path.join(CWD, 'updater_restart.bat');
+const LAST_UPDATE_NOTICE_FILE = path.join(CWD, 'data', 'last_update_notice.json');
+
+/**
+ * Đọc thông báo cập nhật thành công mới nhất cho toàn bộ client
+ */
+export async function getLastUpdateNotice() {
+  try {
+    if (fsSync.existsSync(LAST_UPDATE_NOTICE_FILE)) {
+      const raw = await fs.readFile(LAST_UPDATE_NOTICE_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      if (data && data.updatedAt && (Date.now() - new Date(data.updatedAt).getTime() < 7 * 24 * 60 * 60 * 1000)) {
+        return data;
+      }
+    }
+  } catch (e) {
+    logger.debug({ err: e.message }, 'Không thể đọc last_update_notice.json');
+  }
+  return null;
+}
 
 let isUpdating = false;
 let updateProgress = {
@@ -145,8 +164,10 @@ export async function checkUpdateStatus(force = false) {
   const now = Date.now();
   if (!force && cachedGitStatus && (now - lastCacheTime < CACHE_TTL_MS)) {
     const busyCheck = isSystemBusy();
+    const lastUpdateNotice = await getLastUpdateNotice();
     return {
       ...cachedGitStatus,
+      lastUpdateNotice,
       isBusy: busyCheck.isBusy,
       busyDetails: busyCheck.details,
       activeTasks: busyCheck.activeTasks,
@@ -156,12 +177,14 @@ export async function checkUpdateStatus(force = false) {
 
   const gitCheck = await isGitAvailable();
   if (!gitCheck.available) {
+    const lastUpdateNotice = await getLastUpdateNotice();
     return {
       supported: false,
       reason: gitCheck.reason,
       hasUpdate: false,
       isBusy: false,
-      isUpdating
+      isUpdating,
+      lastUpdateNotice
     };
   }
 
@@ -184,12 +207,14 @@ export async function checkUpdateStatus(force = false) {
   if (!fetchRes.success) {
     logger.warn({ err: fetchRes.error }, 'Không thể fetch origin main');
     const busyCheck = isSystemBusy();
+    const lastUpdateNotice = await getLastUpdateNotice();
     return {
       supported: true,
       hasUpdate: false,
       fetchError: 'Không thể kết nối tới Git server để kiểm tra bản mới.',
       currentCommit: { sha: localSha, message: localMessage, date: localDate },
       remoteCommit: null,
+      lastUpdateNotice,
       isBusy: busyCheck.isBusy,
       busyDetails: busyCheck.details,
       activeTasks: busyCheck.activeTasks,
@@ -220,6 +245,7 @@ export async function checkUpdateStatus(force = false) {
   const hasUpdate = behindCount > 0;
 
   const busyCheck = isSystemBusy();
+  const lastUpdateNotice = await getLastUpdateNotice();
 
   cachedGitStatus = {
     supported: true,
@@ -227,6 +253,7 @@ export async function checkUpdateStatus(force = false) {
     behindCount,
     currentCommit: { sha: localSha, message: localMessage, date: localDate },
     remoteCommit: { sha: remoteSha, message: remoteMessage, date: remoteDate },
+    lastUpdateNotice,
     lastChecked: new Date().toISOString()
   };
   lastCacheTime = now;
@@ -340,6 +367,36 @@ export async function executeSelfUpdate({ force = false, port = 3001 } = {}) {
       throw new Error(`Không thể cập nhật code sang nhánh mới: ${resetRes.error || resetRes.stderr}`);
     }
     logger.info('Đã đồng bộ toàn bộ mã nguồn sang bản mới nhất trên origin/main.');
+
+    // 4.1. Lưu thông báo cập nhật thành công (phát Pop-up thông báo cho toàn bộ Client)
+    try {
+      const newCommitRes = await runCommand('git log -1 --pretty=format:"%h||%s||%cd" --date=format:"%d/%m/%Y %H:%M"');
+      let newCommit = { sha: '', message: 'Bản cập nhật mới nhất từ Git', date: 'Vừa xong' };
+      if (newCommitRes.success && newCommitRes.stdout) {
+        const parts = newCommitRes.stdout.split('||');
+        newCommit = {
+          sha: parts[0] || '',
+          message: parts[1] || 'Bản cập nhật mới nhất từ Git',
+          date: parts[2] || 'Vừa xong'
+        };
+      }
+      const noticePayload = {
+        noticeId: `update_${newCommit.sha || Date.now()}`,
+        updatedAt: new Date().toISOString(),
+        commitSha: newCommit.sha,
+        commitMsg: newCommit.message,
+        commitDate: newCommit.date,
+        version: '1.0.2'
+      };
+      const dataDir = path.dirname(LAST_UPDATE_NOTICE_FILE);
+      if (!fsSync.existsSync(dataDir)) {
+        fsSync.mkdirSync(dataDir, { recursive: true });
+      }
+      await fs.writeFile(LAST_UPDATE_NOTICE_FILE, JSON.stringify(noticePayload, null, 2), 'utf8');
+      logger.info({ noticeId: noticePayload.noticeId }, 'Đã lưu thông báo cập nhật mới cho các client.');
+    } catch (noticeErr) {
+      logger.warn({ err: noticeErr.message }, 'Không thể ghi last_update_notice.json');
+    }
 
     // 5. Khôi phục & Hợp nhất lại cấu hình config.json
     if (savedConfig) {

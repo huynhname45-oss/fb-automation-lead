@@ -57,3 +57,46 @@ test('UPDATE-004: getUpdateProgress returns initial idle state', () => {
   assert.strictEqual(progress.isUpdating, false);
   assert.strictEqual(progress.step, 'idle');
 });
+
+test('UPDATE-005: getLastUpdateNotice reads and parses notice file correctly', async () => {
+  const { getLastUpdateNotice } = await import('../src/core/update-manager.js');
+  const fs = await import('node:fs/promises');
+  const fsSync = await import('node:fs');
+  const path = await import('node:path');
+
+  const noticePath = path.join(process.cwd(), 'data', 'last_update_notice.json');
+  const backup = fsSync.existsSync(noticePath) ? await fs.readFile(noticePath, 'utf8') : null;
+
+  try {
+    const mockNotice = {
+      noticeId: 'update_test_12345',
+      updatedAt: new Date().toISOString(),
+      commitSha: 'a1b2c3d',
+      commitMsg: 'feat: test update notice',
+      commitDate: '10/09/2026 14:00',
+      version: '1.0.2'
+    };
+
+    const dataDir = path.dirname(noticePath);
+    if (!fsSync.existsSync(dataDir)) {
+      fsSync.mkdirSync(dataDir, { recursive: true });
+    }
+    await fs.writeFile(noticePath, JSON.stringify(mockNotice), 'utf8');
+
+    const notice = await getLastUpdateNotice();
+    assert.ok(notice, 'Notice should be parsed successfully');
+    assert.strictEqual(notice.noticeId, 'update_test_12345');
+    assert.strictEqual(notice.commitSha, 'a1b2c3d');
+
+    const status = await checkUpdateStatus(false);
+    assert.ok(status.lastUpdateNotice, 'checkUpdateStatus should return lastUpdateNotice');
+    assert.strictEqual(status.lastUpdateNotice.noticeId, 'update_test_12345');
+  } finally {
+    if (backup !== null) {
+      await fs.writeFile(noticePath, backup, 'utf8');
+    } else if (fsSync.existsSync(noticePath)) {
+      await fs.unlink(noticePath);
+    }
+  }
+});
+
