@@ -2432,8 +2432,8 @@ body {
 .system-update-banner {
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   color: #ffffff;
-  padding: 10px 20px;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  padding: 13px 24px;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -2464,35 +2464,35 @@ body {
 .system-update-banner .banner-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .system-update-banner .banner-badge {
   background: rgba(255, 255, 255, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .system-update-banner .banner-title {
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
 }
 
 .system-update-banner .banner-commit-msg {
   background: rgba(0, 0, 0, 0.2);
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 6px;
-  font-size: 0.84rem;
-  max-width: 450px;
+  font-size: 0.92rem;
+  max-width: 520px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2501,14 +2501,14 @@ body {
 }
 
 .system-update-banner .banner-time {
-  font-size: 0.78rem;
-  opacity: 0.85;
+  font-size: 0.84rem;
+  opacity: 0.9;
 }
 
 .system-update-banner .banner-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn-update-action {
@@ -2518,13 +2518,13 @@ body {
   border: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
-  padding: 6px 14px;
+  padding: 8px 16px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.84rem;
+  gap: 7px;
+  font-size: 0.92rem;
 }
 
 .btn-update-action:hover {
@@ -2537,9 +2537,9 @@ body {
   background: transparent;
   border: none;
   color: #ffffff;
-  opacity: 0.75;
-  font-size: 1.1rem;
-  padding: 4px 8px;
+  opacity: 0.8;
+  font-size: 1.25rem;
+  padding: 4px 10px;
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.15s ease;
