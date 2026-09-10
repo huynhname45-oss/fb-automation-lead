@@ -356,13 +356,14 @@ export function getCleanCanonicalFacebookUrl(rawUrl) {
 export function extractUidFromUrl(profileUrl = '') {
   if (!profileUrl || typeof profileUrl !== 'string') return '';
   const raw = profileUrl.trim();
+  if (/^\d{8,}$/.test(raw)) return raw;
 
   // 1. Numeric query parameter ?id=1000...
   const idParamMatch = raw.match(/[?&]id=(\d+)/i);
   if (idParamMatch && idParamMatch[1]) return idParamMatch[1];
 
-  // 2. Path /groups/.../user/1000... or /user/1000...
-  const groupUserMatch = raw.match(/\/groups\/[^/]+\/user\/(\d+)/i) || raw.match(/\/user\/(\d+)/i);
+  // 2. Path /groups/.../user/1000... or /groups/.../member/1000... or /user/1000...
+  const groupUserMatch = raw.match(/\/groups\/[^/]+\/(?:user|member)\/(\d+)/i) || raw.match(/\/(?:user|member)\/(\d+)/i);
   if (groupUserMatch && groupUserMatch[1]) return groupUserMatch[1];
 
   // 3. Path /profile/1000...
@@ -373,7 +374,7 @@ export function extractUidFromUrl(profileUrl = '') {
   const peopleMatch = raw.match(/\/people\/[^/]+\/(\d+)/i);
   if (peopleMatch && peopleMatch[1]) return peopleMatch[1];
 
-  // 4. Raw UID string or numeric path
+  // 5. Raw UID string or numeric path
   try {
     const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
     const pathname = u.pathname.replace(/^\/+|\/+$/g, '');
@@ -531,12 +532,19 @@ export function extractPostMetadataFromAnchors(anchorsData = []) {
 
     if (txt && txt.length >= 2 && txt.length <= 70 && !txt.startsWith('#')) {
       authorName = txt;
-      if (href.includes('/groups/') && href.includes('/user/')) {
-        const mUid = href.match(/\/user\/([^/?#]+)/i);
+      if (href.includes('/groups/') && (href.includes('/user/') || href.includes('/member/'))) {
+        const mUid = href.match(/\/(?:user|member)\/([^/?#]+)/i);
         if (mUid && mUid[1]) {
           profileLink = /^\d+$/.test(mUid[1])
             ? `https://www.facebook.com/profile.php?id=${mUid[1]}`
             : `https://www.facebook.com/${mUid[1]}`;
+        } else {
+          profileLink = cleanUrl(href);
+        }
+      } else if (href.includes('/people/')) {
+        const mPeople = href.match(/\/people\/[^/]+\/(\d+)/i);
+        if (mPeople && mPeople[1]) {
+          profileLink = `https://www.facebook.com/profile.php?id=${mPeople[1]}`;
         } else {
           profileLink = cleanUrl(href);
         }
@@ -1080,12 +1088,19 @@ class SearchEngine extends EventEmitter {
 
               if (txt && txt.length >= 2 && txt.length <= 70 && !txt.startsWith('#')) {
                 authorName = txt;
-                if (href.includes('/groups/') && href.includes('/user/')) {
-                  const mUid = href.match(/\/user\/([^/?#]+)/i);
+                if (href.includes('/groups/') && (href.includes('/user/') || href.includes('/member/'))) {
+                  const mUid = href.match(/\/(?:user|member)\/([^/?#]+)/i);
                   if (mUid && mUid[1]) {
                     profileLink = /^\d+$/.test(mUid[1])
                       ? `https://www.facebook.com/profile.php?id=${mUid[1]}`
                       : `https://www.facebook.com/${mUid[1]}`;
+                  } else {
+                    profileLink = cleanUrl(href);
+                  }
+                } else if (href.includes('/people/')) {
+                  const mPeople = href.match(/\/people\/[^/]+\/(\d+)/i);
+                  if (mPeople && mPeople[1]) {
+                    profileLink = `https://www.facebook.com/profile.php?id=${mPeople[1]}`;
                   } else {
                     profileLink = cleanUrl(href);
                   }
@@ -1477,19 +1492,7 @@ class SearchEngine extends EventEmitter {
               for (const targetUrl of targetsToSearch) {
                 const isTaggedPlace = targetUrl === post.taggedPlaceUrl;
                 const profileRes = await this._extractPhonesFromProfile(context, targetUrl, crawlDelay, post.authorName);
-                if (profileRes && profileRes.phones && profileRes.phones.length > 0) {
-                  phoneEvidence = mergePhoneEvidence(
-                    phoneEvidence,
-                    profileRes.phones,
-                    isTaggedPlace ? 'tagged_page_bio' : (profileRes.source || 'profile_bio'),
-                    profileRes.confidence || 0.9,
-                    isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : (profileRes.source?.includes('search') ? `Bài viết tìm kiếm 'sdt' trên trang [${post.authorName}]` : (profileRes.source?.includes('timeline') ? `Bài viết mới nhất trên tường [${post.authorName}]` : 'Thông tin liên hệ trên trang của tác giả')),
-                    {
-                      ...evidenceMetadata,
-                      sourceUrl: targetUrl,
-                      verified: true
-                    }
-                  );
+                if (profileRes) {
                   if (profileRes.location && profileRes.location !== '—' && (detectedLocation === '—' || profileRes.source?.includes('timeline') || profileRes.source?.includes('search'))) {
                     detectedLocation = profileRes.location;
                     locationResult = profileRes.locationResult || {
@@ -1500,10 +1503,24 @@ class SearchEngine extends EventEmitter {
                       evidence: []
                     };
                   }
-                  if (isTaggedPlace && post.taggedPlaceName) {
-                    post.authorName = post.taggedPlaceName;
+                  if (profileRes.phones && profileRes.phones.length > 0) {
+                    phoneEvidence = mergePhoneEvidence(
+                      phoneEvidence,
+                      profileRes.phones,
+                      isTaggedPlace ? 'tagged_page_bio' : (profileRes.source || 'profile_bio'),
+                      profileRes.confidence || 0.9,
+                      isTaggedPlace ? `Thông tin liên hệ từ trang Fanpage check-in [${post.taggedPlaceName}]` : (profileRes.source?.includes('search') ? `Bài viết tìm kiếm 'sdt' trên trang [${post.authorName}]` : (profileRes.source?.includes('timeline') ? `Bài viết mới nhất trên tường [${post.authorName}]` : 'Thông tin liên hệ trên trang của tác giả')),
+                      {
+                        ...evidenceMetadata,
+                        sourceUrl: targetUrl,
+                        verified: true
+                      }
+                    );
+                    if (isTaggedPlace && post.taggedPlaceName) {
+                      post.authorName = post.taggedPlaceName;
+                    }
+                    break;
                   }
-                  break;
                 }
               }
             }
@@ -1530,7 +1547,11 @@ class SearchEngine extends EventEmitter {
 
           // Đảm bảo Link bài viết gốc được chuẩn hóa sạch và chính xác (SEARCH-P0-013: Không gán profile link làm post link)
           const cleanPostUrl = post.postLink ? getCleanCanonicalFacebookUrl(post.postLink) : '';
-          const cleanProfileUrl = post.profileLink ? getCleanCanonicalFacebookUrl(post.profileLink) : '';
+          let cleanProfileUrl = post.profileLink ? getCleanCanonicalFacebookUrl(post.profileLink) : '';
+          const uidFromProfile = extractUidFromUrl(cleanProfileUrl);
+          if (uidFromProfile && (cleanProfileUrl.includes('/groups/') || cleanProfileUrl.includes('/people/'))) {
+            cleanProfileUrl = `https://www.facebook.com/profile.php?id=${uidFromProfile}`;
+          }
 
           const isHighQuality = aiEval.decision === 'ACCEPTED' || aiEval.leadQuality === 'high';
           const evalLeadQuality = isHighQuality ? 'high' : 'review';
@@ -2055,17 +2076,53 @@ class SearchEngine extends EventEmitter {
         } catch (e) {}
       }
 
+      // Chuẩn hóa đường dẫn Profile trực tiếp (nếu là link nhóm thì trích UID chuyển thành profile chính)
+      let targetProfileUrl = profileUrl;
+      const uidFromTarget = extractUidFromUrl(profileUrl);
+      if (uidFromTarget && !profileUrl.includes('/profile.php?id=')) {
+        targetProfileUrl = `https://www.facebook.com/profile.php?id=${uidFromTarget}`;
+      } else if (profileUrl.includes('/groups/') && (profileUrl.includes('/user/') || profileUrl.includes('/member/'))) {
+        const m = profileUrl.match(/\/(?:user|member)\/([^/?#]+)/i);
+        if (m && m[1]) {
+          targetProfileUrl = /^\d+$/.test(m[1])
+            ? `https://www.facebook.com/profile.php?id=${m[1]}`
+            : `https://www.facebook.com/${m[1]}`;
+        }
+      }
+
       // 1. Phân giải numeric User ID (UID) của tác giả (loại trừ tài khoản đang đăng nhập)
-      let resolvedUid = extractUidFromUrl(profileUrl);
+      let resolvedUid = extractUidFromUrl(targetProfileUrl);
       if (resolvedUid && loggedInUid && resolvedUid === loggedInUid) {
         resolvedUid = '';
       }
 
-      // Nếu profileUrl là dạng username hoặc cần phân giải, mở trang để đọc UID và Bio/Intro của tác giả
+      // Mở trang để đọc UID và Bio/Intro của tác giả
       try {
-        logger.info(`🔍 Đang phân giải UID và thông tin liên hệ của tác giả từ: ${profileUrl}`);
-        await profilePage.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        await delay(1200);
+        logger.info(`🔍 Đang phân giải UID và thông tin liên hệ của tác giả từ: ${targetProfileUrl} (gốc: ${profileUrl})`);
+        await profilePage.goto(targetProfileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        try {
+          await Promise.race([
+            profilePage.waitForSelector('div[role="main"] h1, div[data-pagelet*="ProfileHeader"], div[data-pagelet*="ProfileTiles"], div[role="main"] span[dir="auto"]', { timeout: 6000 }),
+            profilePage.waitForSelector('div[role="main"]', { timeout: 6000 })
+          ]);
+        } catch (e) {}
+        await delay(1500);
+
+        // Tự động mở rộng "Xem thêm" / "See more" trên phần đầu trang Bio
+        try {
+          await profilePage.evaluate(() => {
+            const seeMores = Array.from(document.querySelectorAll(
+              'div[data-pagelet*="ProfileHeader"] div[role="button"], ' +
+              'div[data-pagelet*="ProfileTiles"] div[role="button"], ' +
+              'div[role="main"] h1 ~ div div[role="button"], ' +
+              'div[role="main"] div[role="button"]'
+            )).filter(b => /^(?:xem thêm|see more)/i.test((b.innerText || '').trim()));
+            for (const b of seeMores) {
+              try { b.click(); } catch (e) {}
+            }
+          });
+          await delay(300);
+        } catch (e) {}
 
         const profileData = await profilePage.evaluate((myUid) => {
           function isValidAuthorUid(id) {
@@ -2121,16 +2178,73 @@ class SearchEngine extends EventEmitter {
             }
           }
 
-          // E) Trích xuất SĐT trực tiếp từ phần Bio / Giới thiệu / Nút Gọi ngay trên Fanpage hoặc Trang cá nhân
+          // E) Trích xuất SĐT và thông tin liên hệ trực tiếp từ Bio / Giới thiệu / Nút Gọi ngay trên Fanpage hoặc Trang cá nhân
           const contactLinks = Array.from(document.querySelectorAll('a[href^="tel:"], a[href*="zalo.me/"], a[href*="wa.me/"]'))
             .map(a => a.getAttribute('href') || '')
             .filter(Boolean);
 
-          const introNodes = Array.from(document.querySelectorAll('div[data-pagelet*="ProfileTiles"], div[data-pagelet*="ProfileTabs"], div[role="main"] div[dir="auto"], div[aria-label*="Giới thiệu"], div[aria-label*="Intro"]'));
           let bioText = '';
-          for (const el of introNodes) {
+
+          // 1. Target profile header and intro containers (Comet / Modern FB)
+          const targetContainers = Array.from(document.querySelectorAll(
+            'div[data-pagelet*="ProfileHeader"], ' +
+            'div[data-pagelet*="ProfileTiles"], ' +
+            'div[data-pagelet*="ProfileActions"], ' +
+            'div[aria-label*="Thông tin cá nhân"], ' +
+            'div[aria-label*="Giới thiệu"], ' +
+            'div[aria-label*="Intro"], ' +
+            'div[aria-label*="About"]'
+          ));
+          for (const c of targetContainers) {
+            const t = (c.innerText || '').trim();
+            if (t.length > 5 && t.length < 3000) bioText += '\n' + t;
+          }
+
+          // 2. Find H1 (profile name) and its parent header container (contains name, follower count, and bio)
+          const h1 = document.querySelector('div[role="main"] h1, h1');
+          if (h1) {
+            let p = h1.parentElement;
+            for (let i = 0; i < 5 && p && p !== document.body; i++) {
+              if (p.getAttribute('role') === 'main' || p.getAttribute('role') === 'feed') break;
+              const pt = (p.innerText || '').trim();
+              if (pt.length > 10 && pt.length < 3000) {
+                bioText += '\n' + pt;
+                break;
+              }
+              p = p.parentElement;
+            }
+          }
+
+          // 3. Collect all span[dir="auto"], span[dir="ltr"], div[dir="auto"] outside the feed
+          const textNodes = Array.from(document.querySelectorAll(
+            'div[role="main"] span[dir="auto"], ' +
+            'div[role="main"] span[dir="ltr"], ' +
+            'div[role="main"] div[dir="auto"]'
+          ));
+          for (const el of textNodes) {
+            if (el.closest('div[role="feed"], div[data-pagelet*="ProfileTimeline"]')) continue;
             const t = (el.innerText || '').trim();
-            if (t.length > 5 && t.length < 500) bioText += '\n' + t;
+            if (t.length >= 6 && t.length <= 600) {
+              bioText += '\n' + t;
+            }
+          }
+
+          // 4. Fallback: If bioText is empty or short, clone main and strip feed to get pure header & intro text
+          if (bioText.trim().length < 20) {
+            const mainEl = document.querySelector('div[role="main"]') || document.body;
+            const feedEl = document.querySelector('div[role="feed"], div[data-pagelet*="ProfileTimeline"]');
+            if (feedEl && mainEl.contains(feedEl)) {
+              try {
+                const clone = mainEl.cloneNode(true);
+                const cloneFeed = clone.querySelector('div[role="feed"], div[data-pagelet*="ProfileTimeline"]');
+                if (cloneFeed) cloneFeed.remove();
+                bioText += '\n' + (clone.innerText || '').substring(0, 3000);
+              } catch (e) {
+                bioText += '\n' + (mainEl.innerText || '').substring(0, 2000);
+              }
+            } else {
+              bioText += '\n' + (mainEl.innerText || '').substring(0, 2000);
+            }
           }
 
           // F) Trích xuất Ảnh bìa (Cover Photo) và Ảnh đại diện (Avatar) của trang
@@ -2257,23 +2371,28 @@ class SearchEngine extends EventEmitter {
           }
 
           // G1) Kiểm tra Tab About / Thông tin liên hệ cơ bản (Nơi Facebook lưu chính thức trường Số điện thoại đăng ký)
-          if (foundPhones.size === 0 && profileUrl) {
+          if (foundPhones.size === 0 && targetProfileUrl) {
             try {
               let aboutUrl = '';
-              if (profileUrl.includes('/profile.php?id=')) {
-                aboutUrl = profileUrl.replace(/[?&]sk=[^&]+/i, '') + '&sk=about_contact_and_basic_info';
+              if (resolvedUid) {
+                aboutUrl = `https://www.facebook.com/profile.php?id=${resolvedUid}&sk=about_contact_and_basic_info`;
+              } else if (targetProfileUrl.includes('/profile.php?id=')) {
+                aboutUrl = targetProfileUrl.replace(/[?&]sk=[^&]+/i, '') + '&sk=about_contact_and_basic_info';
               } else {
-                const cleanBase = profileUrl.split('?')[0].replace(/\/+$/, '');
+                const cleanBase = targetProfileUrl.split('?')[0].replace(/\/+$/, '');
                 aboutUrl = `${cleanBase}/about_contact_and_basic_info`;
               }
 
               logger.info(`🔍 [THÔNG TIN LIÊN HỆ PROFILE] Đang kiểm tra tab About của [${targetAuthorName || 'Tác giả'}]: ${aboutUrl}`);
               await profilePage.goto(aboutUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+              try {
+                await profilePage.waitForSelector('div[role="main"], div[data-pagelet*="ProfileAbout"]', { timeout: 5000 });
+              } catch (e) {}
               await delay(1200);
 
               const aboutData = await profilePage.evaluate(() => {
                 const contactNodes = Array.from(document.querySelectorAll(
-                  'div[data-pagelet*="ProfileAbout"], div[role="main"] div[dir="auto"], span[dir="ltr"], a[href^="tel:"], a[href*="zalo.me/"], a[href*="wa.me/"]'
+                  'div[data-pagelet*="ProfileAbout"], div[role="main"] div[dir="auto"], span[dir="auto"], span[dir="ltr"], a[href^="tel:"], a[href*="zalo.me/"], a[href*="wa.me/"]'
                 ));
                 const texts = [];
                 const links = [];
@@ -2283,7 +2402,7 @@ class SearchEngine extends EventEmitter {
                     if (href) links.push(href);
                   }
                   const txt = (el.innerText || el.textContent || '').trim();
-                  if (txt.length > 3 && txt.length < 200) {
+                  if (txt.length > 3 && txt.length < 300) {
                     texts.push(txt);
                   }
                 }
@@ -2299,6 +2418,13 @@ class SearchEngine extends EventEmitter {
                 if (Array.isArray(aboutData.texts)) {
                   for (const t of aboutData.texts) {
                     extractPhonesFromText(t, { isOCR: false }).forEach(p => foundPhones.add(p));
+                  }
+                  if (detectedLoc === '—') {
+                    const aboutLoc = extractLocationDetailed({ content: aboutData.texts.join('\n'), authorName: targetAuthorName });
+                    if (aboutLoc && aboutLoc.confidence >= 0.75 && !aboutLoc.conflict && aboutLoc.province !== '—') {
+                      detectedLoc = aboutLoc.province;
+                      locationResult = aboutLoc;
+                    }
                   }
                 }
 

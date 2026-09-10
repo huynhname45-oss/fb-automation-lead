@@ -111,3 +111,40 @@ test('OWNER-PHONE-006: Merges post_comment phone evidence with verified status',
   assert.equal(evidence[0].source, 'post_comment');
   assert.ok(evidence[0].confidence >= 0.95);
 });
+
+test('OWNER-PHONE-007: Bio header text extracts phone number accurately (Xuân Ngọc case)', async () => {
+  const { extractPhonesFromText } = await import('../../src/core/phone-validator.js');
+  const { extractLocationDetailed } = await import('../../src/core/location-extractor.js');
+
+  const xuanNgocBioText = `
+Xuân Ngọc
+6,6K người theo dõi • 1,7K đang theo dõi
+Chân Gà Sốt Thái & Tea
+0326 825 083
+“TRỢ QUAN”
+Người sáng tạo nội dung số
+Nhắn tin Theo dõi Thêm bạn bè
+Tất cả Giới thiệu Reels Ảnh Bạn bè Xem thêm
+Thông tin cá nhân
+Sống tại Đà Nẵng
+Đến từ Quảng Nam
+`;
+
+  const phones = extractPhonesFromText(xuanNgocBioText, { isOCR: false });
+  assert.ok(phones.includes('0326825083'), 'Should extract 0326825083 from profile bio header');
+
+  const loc = extractLocationDetailed({ content: xuanNgocBioText, authorName: 'Xuân Ngọc' });
+  assert.equal(loc.province, 'Đà Nẵng');
+  assert.ok(loc.confidence >= 0.8);
+});
+
+test('OWNER-PHONE-008: extractUidFromUrl supports /member/ and /people/ profile paths', async () => {
+  const { extractUidFromUrl } = await import('../../src/core/search-engine.js');
+
+  assert.equal(extractUidFromUrl('100082508300000'), '100082508300000');
+  assert.equal(extractUidFromUrl('https://www.facebook.com/groups/danangfood/member/100082508300000/'), '100082508300000');
+  assert.equal(extractUidFromUrl('https://www.facebook.com/groups/danangfood/user/100082508300000/'), '100082508300000');
+  assert.equal(extractUidFromUrl('https://www.facebook.com/people/Xuan-Ngoc/100082508300000/'), '100082508300000');
+  assert.equal(extractUidFromUrl('https://www.facebook.com/profile.php?id=100082508300000'), '100082508300000');
+});
+
