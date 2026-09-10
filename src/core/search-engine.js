@@ -835,13 +835,17 @@ class SearchEngine extends EventEmitter {
       const hasDateFilter = filters.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '';
 
       if (enableRecent || hasDateFilter) {
-        await this._applyAllTab(page);
-        await delay(1500);
+        // Đảm bảo ở mục "Bài viết" (Posts tab) để lấy danh sách bài viết từ người dùng và hội nhóm thay vì các trang Fanpage/Tin tức giải trí
+        const currentUrl = page.url();
+        if (!currentUrl.includes('/search/posts')) {
+          await this._applyPostsTab(page);
+          await delay(1200);
+        }
 
         if (enableRecent) {
           logger.info('3. Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây" (Mốc 24h)...');
           await this._applyRecentPostsToggle(page, true);
-          await delay(1500);
+          await delay(1200);
         } else {
           logger.info(`3. Kiểm tra nút gạt "Bài viết mới đây" trên Facebook (Đảm bảo TẮT cho mốc: ${filters.timeRange || 'mở rộng'})...`);
           await this._applyRecentPostsToggle(page, false);
@@ -850,10 +854,10 @@ class SearchEngine extends EventEmitter {
         if (hasDateFilter) {
           logger.info(`4. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
           await this._applyDateFilter(page, filters.datePosted);
-          await delay(1500);
+          await delay(1200);
         }
       } else {
-        logger.info(`3. Giữ nguyên bộ lọc Facebook mặc định (Khoảng thời gian: ${filters.timeRange || 'mở rộng'}). Không bật nút gạt "Bài viết mới đây".`);
+        logger.info(`3. Giữ nguyên bộ lọc Facebook Bài viết mặc định (Khoảng thời gian: ${filters.timeRange || 'mở rộng'}). Không bật nút gạt "Bài viết mới đây".`);
       }
 
       const processedPostKeys = new Set();
@@ -951,8 +955,8 @@ class SearchEngine extends EventEmitter {
               
               function parseCleanTime(s) {
                 if (!s || s.length > 60) return '';
-                if (/(?:xem tin|xem story|nhắn tin|theo dõi|thích|bình luận|chia sẻ|hoạt động)/i.test(s)) return '';
-                const m = s.match(/(?:\d{1,2}\s*(?:phút|giờ|h|ngày|tháng|năm)\s*(?:trước)?|vừa xong|hôm qua(?:\s*lúc\s*\d{1,2}:\d{2})?|\d{1,2}\s*tháng\s*\d{1,2}(?:\s*lúc\s*\d{1,2}:\d{2})?)/i);
+                if (/(?:xem tin|xem story|nhắn tin|theo dõi|thích|bình luận|chia sẻ|hoạt động|gợi ý)/i.test(s)) return '';
+                const m = s.match(/(?:\d{1,2}\s*(?:phút|giờ|h|ngày|tháng|năm)\s*(?:trước)?|vừa xong|just now|hôm qua(?:\s*(?:lúc|at)\s*\d{1,2}:\d{2})?|hôm nay(?:\s*(?:lúc|at)\s*\d{1,2}:\d{2})?|thứ\s+(?:hai|ba|tư|năm|sáu|bảy|chủ\s*nhật)(?:\s*(?:lúc|at)\s*\d{1,2}:\d{2})?|\d{1,2}\s*(?:tháng|thg)\s*\d{1,2}(?:\s*(?:lúc|at)\s*\d{1,2}:\d{2})?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{1,2}\s*(?:hrs?|mins?|days?|d)\b)/i);
                 return m ? m[0] : '';
               }
 
@@ -1769,6 +1773,7 @@ class SearchEngine extends EventEmitter {
         if (!mainText || mainText.length < 20) {
           const postContainers = Array.from(document.querySelectorAll('div[role="dialog"] div[role="article"], div[role="main"] div[role="article"], div[role="article"]'));
           for (const pNode of postContainers) {
+            const textNodes = Array.from(pNode.querySelectorAll('div[dir="auto"], span[dir="auto"]'));
             const validTexts = textNodes
               .map(t => (t.innerText || '').trim())
               .filter(t => {

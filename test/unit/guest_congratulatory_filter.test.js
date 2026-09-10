@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import leadFilter, { checkCongratulatoryLead } from '../../src/core/lead-filter.js';
 import aiLeadEvaluator from '../../src/core/ai-lead-evaluator.js';
@@ -70,4 +70,27 @@ test('Lead Filter & AI Evaluator: Strictly reject guest / attendee congratulator
     assert.equal(localNLP.isQualified, true, `Store opening post from [${post.authorName}] must be accepted by Local NLP`);
     assert.ok(localNLP.score >= 80, `Store opening post from [${post.authorName}] must have score >= 80`);
   }
+
+  // 3. Esports / Celebrity / Fanpage Posts (e.g. Sở Thú Nhà T1) must be strictly REJECTED with 0 score
+  const t1Post = {
+    authorName: 'Sở Thú Nhà T1',
+    content: `Doran và mẹ của tuyển thủ Pyosik có gửi cây tới chúc mừng mẹ của Keria khai trương cửa hàng quần áo nè~~~~
+“Mong cửa hàng sẽ luôn dồi dào may mắn và kinh doanh thật tốt!”
+-T1 Doran-
+“Mừng khai trương cửa hàng mới nhé!”
+-Mẹ của Pyosik-
+————————————
+@w.zizii
+@zjyun95`
+  };
+
+  const t1FilterRes = leadFilter.evaluateLead(t1Post, filterConfig);
+  assert.equal(t1FilterRes.qualified, false, 'T1 esports post must be rejected by LeadFilter');
+  assert.equal(t1FilterRes.leadQuality, 'rejected', 'T1 esports post must have rejected quality');
+  assert.ok(['media_esports_gossip', 'guest_congratulations'].includes(t1FilterRes.category), 'Must be media_esports or guest_congratulations');
+
+  const t1NLP = aiLeadEvaluator._localNLPEvaluate(t1Post.authorName, t1Post.content, []);
+  assert.equal(t1NLP.isQualified, false, 'T1 post must be rejected by Local NLP');
+  assert.equal(t1NLP.score, 0, 'T1 post must receive 0 score from Local NLP');
 });
+

@@ -1,6 +1,6 @@
 import logger from './logger.js';
 import configManager from './config-manager.js';
-import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, checkIndustrialManufacturingLead, isLandmarkContext } from './lead-filter.js';
+import leadFilter, { checkForeignLead, checkCongratulatoryLead, checkEventGiftServiceLead, checkIndustrialManufacturingLead, checkMediaEsportsGossipLead, isLandmarkContext } from './lead-filter.js';
 import { cleanInvisibleCharacters } from './phone-validator.js';
 
 /**
@@ -162,8 +162,9 @@ QUY TẮC PHÂN LOẠI & CHẤM ĐIỂM (Score từ 0 đến 100):
      + Dịch vụ y tế & thú y: Phòng khám, Nha khoa, Nhà thuốc, Dịch vụ sinh đẻ, Gói thai sản, Phòng khám thú y, Spa thú cưng.
      + Dịch vụ giáo dục: Trường học, Lễ khai giảng, Khai trường năm học, Trung tâm tiếng Anh, Luyện thi, Phòng Gym, Yoga.
      + Dịch vụ sự kiện & quà tặng: Giỏ trái cây, Giỏ hoa quả, Giỏ quà biếu, Hoa khai trương, Kệ hoa, Decor tiệc cưới/gia tiên, In thiệp mời, Múa lân.
-   - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ đi ăn mừng khai trương.
-   - Bài viết rác, ảnh gia đình, meme, đời sống cá nhân không kinh doanh.`;
+    - FANPAGE GIẢI TRÍ, ESPORTS, GAME, MEME, SHOWBIZ, TIN TỨC (Sở Thú Nhà T1, T1, Faker, Doran, Pyosik, Keria, LCK, Beatvn, Kênh 14, Hóng Hớt, chia sẻ tin tuyển thủ/idol/nghệ sĩ).
+    - Bài viết của KHÁCH MỜI / BẠN BÈ / HỌC TRÒ / NGƯỜI THÂN gửi cây, gửi hoa, gửi quà chúc mừng khai trương (không phải bài viết từ chủ quán/chủ shop).
+    - Bài viết rác, ảnh gia đình, meme, đời sống cá nhân không kinh doanh.`;
 
     const systemPrompt = `${contextInstruction}
 
@@ -985,6 +986,22 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
       };
     }
 
+    // -0.2. Fanpage Media / Esports / Meme / Showbiz / Gossip Check (Highest Priority)
+    const mediaCheck = checkMediaEsportsGossipLead({ authorName, content, phones });
+    if (mediaCheck.isMediaEsports) {
+      return {
+        isQualified: false,
+        score: 0,
+        summary: 'Fanpage tin tức / Esports / Giải trí / Meme / Tuyển thủ (Đã loại trừ)',
+        businessType: 'Fanpage Tin tức / Giải trí',
+        intent: 'Loại trừ',
+        salesPitch: '',
+        recommendedFeatures: '',
+        reason: `Fanpage tin tức / Esports / Giải trí / Tuyển thủ (${mediaCheck.reason}), không phải cơ sở kinh doanh độc lập.`,
+        provider: 'local_nlp'
+      };
+    }
+
     const textLower = `${authorName} ${content}`.toLowerCase();
     const cleanPadded = ` ${textLower.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
 
@@ -1020,9 +1037,10 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
         return { isQualified: false, score: 15, summary: 'Cơ sở lưu trú / Khách sạn / Homestay / Resort', businessType: 'Khách sạn / Lưu trú', intent: 'Lưu trú / Hotel', salesPitch: '', recommendedFeatures: '', reason: 'Khách sạn / Resort / Homestay (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
       }
     }
-    if (/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu.test(textLower)) {
-      const matchedTerm = (textLower.match(/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu) || [])[0] || '';
-      if (!isLandmarkContext(content, matchedTerm)) {
+    if (/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền|shophouse|biệt\s*thự|nhà\s*phố|phân\s*khu|tòa)|lễ\s*mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu.test(textLower)) {
+      const isStoreSellingFoodOrRetail = /(?:quán|tiệm|shop|cafe|cà\s*phê|trà\s*sữa|bún|phở|cơm|lẩu|nướng|ăn\s*vặt|bánh\s*mì|menu|thực\s*đơn|đồ\s*uống|món)/i.test(textLower);
+      const matchedTerm = (textLower.match(/(?:khai\s*trương\s*tòa\s*nhà|tòa\s*nhà|cao\s*ốc|building|tower|sa\s*bàn|đại\s*đô\s*thị|khu\s*đô\s*thị|dự\s*án\s*bất\s*động\s*sản|mở\s*bán\s*(?:dự\s*án|căn\s*hộ|chung\s*cư|đất\s*nền|shophouse|biệt\s*thự|nhà\s*phố|phân\s*khu|tòa)|lễ\s*mở\s*bán|bất\s*động\s*sản|nhà\s*đất|bđs|phòng\s*trọ|căn\s*hộ|chung\s*cư|cho\s*thuê\s*phòng|cho\s*thuê\s*nhà|cho\s*thuê\s*văn\s*phòng|vinhomes|masterise|novaland|sun\s*group)/iu) || [])[0] || '';
+      if (!isLandmarkContext(content, matchedTerm) && !isStoreSellingFoodOrRetail) {
         return { isQualified: false, score: 0, summary: 'Khai trương tòa nhà / Sa bàn / Bất động sản (Đã loại trừ)', businessType: 'Bất động sản / Tòa nhà', intent: 'Loại trừ', salesPitch: '', recommendedFeatures: '', reason: 'Khai trương tòa nhà, sa bàn, dự án bất động sản, căn hộ, văn phòng (Đã loại trừ theo yêu cầu).', provider: 'local_nlp' };
       }
     }
@@ -1082,7 +1100,8 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
     const openingKeywords = [
       'khai trương', 'grand opening', 'opening', 'chính thức mở cửa', 'tưng bừng khai trương',
       'ngày mở màn', 'lên đèn', 'chạy thử', 'soft opening', 'mừng khai trương',
-      'ưu đãi khai trương', 'khuyến mãi khai trương', 'chuẩn bị khai trương', 'sắp khai trương'
+      'ưu đãi khai trương', 'khuyến mãi khai trương', 'chuẩn bị khai trương', 'sắp khai trương',
+      'mở cửa đón khách', 'chính thức đón khách', 'ngày mai mở bán', 'ngày đầu mở bán', 'mở quán', 'mở tiệm', 'mở shop'
     ];
     const isOpening = openingKeywords.some(kw => textLower.includes(kw));
 
@@ -1145,7 +1164,7 @@ Yêu cầu định dạng đầu ra: BẮT BUỘC chỉ trả về duy nhất 1 
         intent = 'Khai trương cửa hàng mới';
         reason = `${businessType} chuẩn bị khai trương / mở cửa, nhu cầu cao về phần mềm bán hàng và in hóa đơn.`;
       } else {
-        const hasRetailSignal = /(?:quán|tiệm|shop|menu|món|nước|ly|tô|đĩa|bán|giá|order|đặt\s*bàn|mua|bán\s*lẻ|sản\s*phẩm)/i.test(textLower);
+        const hasRetailSignal = /(?:quán|tiệm|shop|cửa\s*hàng|cơ\s*sở|chi\s*nhánh|menu|thực\s*đơn|món|nước|ly|tô|đĩa|bán|giá|order|đặt\s*bàn|mua|bán\s*lẻ|sản\s*phẩm|ưu\s*đãi|giảm\s*(?:\d+%)|khuyến\s*mãi|kính\s*mời|mời\s*(?:cả\s*nhà|mọi\s*người)|ủng\s*hộ|địa\s*chỉ|tọa\s*lạc|check-?in|đón\s*khách)/iu.test(textLower);
         if (hasRetailSignal) {
           score = 85;
           intent = 'Khai trương cửa hàng mới';

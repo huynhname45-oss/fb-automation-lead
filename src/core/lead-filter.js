@@ -273,10 +273,13 @@ export const FOREIGN_PATTERNS = [
 // Patterns detecting celebratory / guest / attendee congratulatory posts (NOT the business owner)
 export const CONGRATULATORY_PATTERNS = [
   /(?:^|[\s,;:.!?-])(?:chúc|chuc)\s+(?:\d+\s+)?(?:thầy|cô|bạn|anh|chị|em|cháu|bác|chú|dì|mẹ|ba|sếp|người anh|người em|con bạn|thằng bạn|mấy đứa|hai bạn|2 bạn|hai đứa|2 đứa|hai anh|2 anh|hai chị|2 chị|hai thầy|2 thầy|quán|team)[^\n.!?]{0,50}(?:khai trương|khai truong|hồng phát|hong phat|đại thắng|thành công|mua may bán đắt|bội thu)/iu,
-  /(?:^|[\s,;:.!?-])(?:chúc mừng|chuc mung)\s+(?:khai trương|khai truong)/iu,
+  /(?:^|[\s,;:.!?-])(?:chúc\s*mừng|chuc\s*mung)\s+(?:[^\n.!?]{0,50}\s+)?(?:khai\s*trương|khai\s*truong)/iu,
+  /(?:^|[\s,;:.!?-])(?:gửi\s*(?:cây|hoa|quà|lẵng|kệ)|tặng\s*(?:cây|hoa|quà|lẵng|kệ))\s+(?:tới|cho|sang|đến|để)?\s*(?:chúc\s*mừng|chuc\s*mung)/iu,
+  /(?:^|[\s,;:.!?-])(?:mừng|mung)\s+(?:khai\s*trương|khai\s*truong)[^\n.!?]{0,30}(?:nhé|nha|ạ|nghen|chúc|may\s*mắn|bội\s*thu|hồng\s*phát)/iu,
   /(?:khai trương|khai truong)\s+(?:hồng phát|hong phat|đại thắng|thành công|may mắn)/iu,
   /(?:^|[\s,;:.!?-])(?:dự lễ|tham dự lễ|đi ăn|đi tiệc|ăn tiệc|đi chúc mừng|đến chúc mừng|qua chúc mừng)\s+(?:lễ\s+)?khai trương/iu,
   /(?:^|[\s,;:.!?-])(?:chung vui|đến chung vui|góp mặt)\s+(?:cùng|với)?[^\n.!?]{0,30}(?:khai trương|sinh nhật)/iu,
+  /(?:mong|chúc)\s+(?:cửa\s*hàng|quán|tiệm|shop)[^\n.!?]{0,50}(?:may\s*mắn|kinh\s*doanh\s*thật\s*tốt|buôn\s*may\s*bán\s*đắt|đông\s*khách|hồng\s*phát|thành\s*công)/iu,
   /(?:kỷ niệm|sinh nhật)\s+lần\s+thứ\s+\d+/iu
 ];
 
@@ -284,7 +287,8 @@ export function checkCongratulatoryLead(post = {}) {
   const content = `${post.content || ''}`.normalize('NFKC');
 
   // Exemption: Strong shop owner / business signals (pricing, menu, discounts, address, gratitude, invitations)
-  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|chúng\s*mình|tụi\s*mình|nhà\s*em|tôi)|tiệm\s*(?:em|mình|chúng\s*mình)|shop\s*(?:em|mình)|chúng\s*mình\s*(?:mở|bán|khai\s*trương)|quán\s*chính\s*thức|menu|thực\s*đơn|bảng\s*giá|đồng\s*giá|giảm\s*(?:\d+%)|khuyến\s*mãi|ưu\s*đãi|\bgọi\s*ngay\b|đặt\s*bàn|kính\s*mời|mời\s*mọi\s*người|mời\s*cả\s*nhà|thân\s*mời|ghé\s*quán|ghé\s*tiệm|ủng\s*hộ\s*quán|cảm\s*ơn\s*(?:mọi\s*người|cả\s*nhà|quý\s*khách|anh\s*chị|bạn\s*bè)|địa\s*chỉ\s*(?:quán|tiệm|cửa\s*hàng|ở|tại)?|hotline|sđt|sdt|ship\s*tận\s*nơi|order)/iu.test(content);
+  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|chúng\s*mình|tụi\s*mình|nhà\s*em|tôi)|tiệm\s*(?:em|mình|chúng\s*mình)|shop\s*(?:em|mình)|chúng\s*mình\s*(?:mở|bán|khai\s*trương)|quán\s*chính\s*thức|mở\s*cửa\s*đón\s*khách|chính\s*thức\s*mở\s*cửa|lên\s*đèn|ngày\s*mai\s*mở\s*bán|cơ\s*sở\s*mới|chi\s*nhánh\s*mới|menu|thực\s*đơn|bảng\s*giá|đồng\s*giá|giảm\s*(?:giá\s*)?(?:\d+%)|khuyến\s*mãi|ưu\s*đãi|\bgọi\s*ngay\b|đặt\s*bàn|kính\s*mời|mời\s*mọi\s*người|mời\s*cả\s*nhà|thân\s*mời|ghé\s*quán|ghé\s*tiệm|ủng\s*hộ\s*quán|cảm\s*ơn\s*(?:mọi\s*người|cả\s*nhà|quý\s*khách|anh\s*chị|bạn\s*bè)|địa\s*chỉ\s*(?:quán|tiệm|cửa\s*hàng|ở|tại)?|hotline|sđt|sdt|ship\s*tận\s*nơi|order)/iu.test(content) ||
+    /^(?:shop|quán|tiệm|nhà\s*hàng|bánh\s*mì|trà\s*sữa|cafe|cà\s*phê)\s+/iu.test(post.authorName || '');
 
   // If there are shop owner signals, it is definitive that the post is from the shop owner/seller, NOT a guest
   if (isShopOwnerSignal) {
@@ -298,6 +302,53 @@ export function checkCongratulatoryLead(post = {}) {
     }
   }
   return { isCongratulatory: false };
+}
+
+/**
+ * Patterns detecting Fanpages & Content about Esports, Gaming teams, Showbiz,
+ * Memes, Entertainment, and Celebrity / Pro player news (e.g. "Sở Thú Nhà T1", Doran, Keria, Pyosik, Faker, Showbiz gossip).
+ */
+export const MEDIA_ESPORTS_GOSSIP_PATTERNS = {
+  authorPatterns: [
+    /\b(?:t1|gen\.g|geng|faker|keria|doran|pyosik|chovy|oner|gumayusi|zeus|showmaker|deft|canyon|beryl|dplus|drx|kt\s*rolster|hanwha\s*life|hle)\b/i,
+    /\b(?:sở\s*thú\s*nhà|fanpage|fanclub|fandom|showbiz|hóng\s*hớt|hóng\s*biến|beatvn|kênh\s*14|kenh14|tiin|yan\s*news|tiin\.vn|bóng\s*đá|troll\s*bóng\s*đá|vietnam\s*esports|esports|gaming|game\s*tv|gamek|confessions|cộng\s*đồng\s*game|streamer|chuyện\s*showbiz|trạm\s*dừng\s*chân)\b/i,
+    /\b(?:meme|troll|gen\s*z|góc\s*thư\s*giãn|hội\s*những\s*người|hội\s*cuồng|báo\s*mới|tin\s*tức\s*24h)\b/i
+  ],
+  contentPatterns: [
+    /\b(?:tuyển\s*thủ|game\s*thủ|pro\s*player)\s+(?:pyosik|doran|keria|faker|chovy|gumayusi|oner|zeus|deft|showmaker|levi|sofm|kiaya)/i,
+    /\b(?:t1\s+doran|t1\s+keria|t1\s+faker|t1\s+oner|t1\s+gumayusi|t1\s+zeus)\b/i,
+    /\b(?:mẹ|bố|ba|gia\s*đình)\s+của\s+(?:tuyển\s*thủ|keria|doran|pyosik|faker|chovy)/i,
+    /\b(?:lck|lpl|vcs|msi|worlds\s*\d{4}|chung\s*kết\s*thế\s*giới|cktg|vòng\s*bảng\s*lck)\b/i,
+    /\b(?:esports|streamer|tiktoker|idol\s*kpop|showbiz\s*hàn|sao\s*hàn|diễn\s*viên\s*hàn)\b/i,
+    /[\uac00-\ud7af]/
+  ]
+};
+
+export function checkMediaEsportsGossipLead(post = {}) {
+  const author = `${post.authorName || ''}`.normalize('NFKC');
+  const content = `${post.content || ''}`.normalize('NFKC');
+
+  // Shop Owner Exemption
+  const isShopOwnerSignal = /(?:quán\s*(?:em|mình|nhà\s*em)|tiệm\s*(?:em|mình)|shop\s*(?:em|mình)|menu|thực\s*đơn|bảng\s*giá|giảm\s*(?:\d+%)|khuyến\s*mãi|kính\s*mời|mời\s*cả\s*nhà|đặt\s*bàn|địa\s*chỉ\s*(?:quán|tiệm|ở|tại)|hotline|sđt)/iu.test(content);
+
+  for (const regex of MEDIA_ESPORTS_GOSSIP_PATTERNS.authorPatterns) {
+    if (regex.test(author)) {
+      if (!isShopOwnerSignal) {
+        return { isMediaEsports: true, reason: `Fanpage / Kênh giải trí / Esports / Meme: "${author}"` };
+      }
+    }
+  }
+
+  for (const regex of MEDIA_ESPORTS_GOSSIP_PATTERNS.contentPatterns) {
+    const m = content.match(regex);
+    if (m) {
+      if (!isShopOwnerSignal) {
+        return { isMediaEsports: true, reason: `Nội dung Esports / Tuyển thủ / Showbiz / Chữ Hàn: "${m[0]}"` };
+      }
+    }
+  }
+
+  return { isMediaEsports: false };
 }
 
 // Patterns detecting B2B Supporting Services, Event Gifts, Fruit Gift Baskets, Florals, Wedding Decor, Printing
@@ -484,11 +535,24 @@ export class LeadFilter {
     if (foreignCheck.isForeign) {
       return {
         qualified: false,
-        leadQuality: 'review',
-        qualityBadge: 'Cần xem lại',
+        leadQuality: 'rejected',
+        qualityBadge: 'Loại trừ',
         category: 'foreign_location',
         matchedTerm: foreignCheck.reason,
         reason: `Khách hàng / Cửa hàng ở NƯỚC NGOÀI (${foreignCheck.reason}), không thuộc phạm vi kinh doanh tại Việt Nam.`
+      };
+    }
+
+    // 0.1. Fanpage Media / Esports / Meme / Showbiz / Gossip Check
+    const mediaCheck = checkMediaEsportsGossipLead(post);
+    if (mediaCheck.isMediaEsports) {
+      return {
+        qualified: false,
+        leadQuality: 'rejected',
+        qualityBadge: 'Loại trừ',
+        category: 'media_esports_gossip',
+        matchedTerm: mediaCheck.reason,
+        reason: `Fanpage tin tức / Esports / Giải trí / Tuyển thủ (${mediaCheck.reason}), không phải cơ sở kinh doanh độc lập.`
       };
     }
 
@@ -513,8 +577,8 @@ export class LeadFilter {
     if (congratCheck.isCongratulatory) {
       return {
         qualified: false,
-        leadQuality: 'review',
-        qualityBadge: 'Cần xem lại',
+        leadQuality: 'rejected',
+        qualityBadge: 'Loại trừ',
         category: 'guest_congratulations',
         matchedTerm: congratCheck.reason,
         reason: `Bài viết chúc mừng khai trương của khách mời / bạn bè (${congratCheck.reason}), không phải chủ cơ sở kinh doanh mở mới.`
@@ -526,8 +590,8 @@ export class LeadFilter {
     if (industrialCheck.isIndustrial) {
       return {
         qualified: false,
-        leadQuality: 'review',
-        qualityBadge: 'Cần xem lại',
+        leadQuality: 'rejected',
+        qualityBadge: 'Loại trừ',
         category: 'industrial_manufacturing',
         matchedTerm: industrialCheck.reason,
         reason: `Cơ sở sản xuất / Nhà máy / Khu công nghiệp / Lao động phổ thông (${industrialCheck.reason}).`

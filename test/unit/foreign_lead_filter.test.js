@@ -46,6 +46,7 @@ test('Lead Filter & AI Evaluator: Strictly reject foreign / overseas leads while
 
     const filterRes = leadFilter.evaluateLead(post, filterConfig);
     assert.equal(filterRes.qualified, false, `Post from [${post.authorName}] must be rejected by LeadFilter`);
+    assert.equal(filterRes.leadQuality, 'rejected', `Post from [${post.authorName}] must have leadQuality rejected`);
     assert.equal(filterRes.category, 'foreign_location');
 
     const localNLP = aiLeadEvaluator._localNLPEvaluate(post.authorName, post.content, post.phones);
