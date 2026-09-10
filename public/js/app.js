@@ -911,10 +911,68 @@ function isFuzzyMatch(item, rawQuery = '') {
 }
 
 /**
+ * Lọc bỏ và gộp các bài viết trùng lặp theo SĐT hoặc mã Tác giả
+ */
+function deduplicateLeadList(list = []) {
+    if (!Array.isArray(list) || list.length <= 1) return list;
+    const seenKeys = new Set();
+    const seenPhones = new Map();
+    const result = [];
+
+    for (const item of list) {
+        if (!item) continue;
+        const key = getItemKey(item);
+        if (key && seenKeys.has(key)) continue;
+
+        const rawPhones = Array.isArray(item.phones) && item.phones.length > 0
+            ? item.phones
+            : (Array.isArray(item.verifiedPhones) ? item.verifiedPhones : []);
+
+        let duplicateLead = null;
+        for (const p of rawPhones) {
+            const cleanDigits = String(p).replace(/[^\d]/g, '');
+            if (cleanDigits.length >= 9 && cleanDigits.length <= 11) {
+                if (seenPhones.has(cleanDigits)) {
+                    duplicateLead = seenPhones.get(cleanDigits);
+                    break;
+                }
+            }
+        }
+
+        if (duplicateLead) {
+            // Gộp bài viết bổ sung vào lead đã tồn tại mà không tạo dòng mới
+            if (item.postLink && duplicateLead.postLink !== item.postLink) {
+                duplicateLead.supportingPosts = duplicateLead.supportingPosts || [];
+                if (!duplicateLead.supportingPosts.some(sp => sp.postLink === item.postLink)) {
+                    duplicateLead.supportingPosts.push({
+                        postLink: item.postLink,
+                        postedTime: item.postedTime,
+                        content: item.content,
+                        aiScore: item.aiScore
+                    });
+                }
+            }
+            continue;
+        }
+
+        if (key) seenKeys.add(key);
+        for (const p of rawPhones) {
+            const cleanDigits = String(p).replace(/[^\d]/g, '');
+            if (cleanDigits.length >= 9 && cleanDigits.length <= 11) {
+                seenPhones.set(cleanDigits, item);
+            }
+        }
+        result.push(item);
+    }
+
+    return result;
+}
+
+/**
  * Filters dataset by Quick Search Query (SĐT/Tên tương đối), Date Range, & Lead Status, and sorts newest first on top if date filter is active
  */
 function getFilteredAndSortedResults() {
-    let list = [...(state.search.results || [])];
+    let list = deduplicateLeadList([...(state.search.results || [])]);
 
     // 1. Instant Fuzzy Search Filter (Phone numbers or Author Name or Content)
     const query = state.dateFilter.query || '';
@@ -1493,6 +1551,7 @@ async function handleStartSearch(e) {
         },
         cookie: clientCookie || undefined,
         existingKeys: existingSignatures.keys,
+        existingPhones: existingSignatures.phones,
         clientId: getClientId()
     };
 
@@ -1750,7 +1809,7 @@ let _prevStatCounts = { total: -1, highQuality: -1, reviewQuality: -1, new: -1, 
  * Cập nhật số liệu thống kê Realtime & Trạng thái Active trên các huy hiệu (Stat Pills)
  */
 function updateStatPills() {
-    const allStoredResults = state.search.results || [];
+    const allStoredResults = deduplicateLeadList(state.search.results || []);
     const statTotalCount = allStoredResults.length;
     let statNewCount = 0;
     let statLeadCount = 0;

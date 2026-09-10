@@ -70,7 +70,7 @@ export class AILeadEvaluator {
           if (config.excludeHotels) negativeList.push('khách sạn', 'resort', 'homestay', 'nhà nghỉ', 'du lịch');
           if (config.excludeBeautySpa) negativeList.push('spa', 'thẩm mỹ', 'massage', 'salon tóc', 'tiệm nail', 'barber');
           if (config.excludeEventGifts !== false) negativeList.push('hoa khai trương', 'hoa sáp', 'hoa tiền', 'kệ hoa', 'lẵng hoa', 'giỏ trái cây', 'giỏ quà', 'mâm quả', 'decor gia tiên', 'múa lân', 'backdrop');
-          if (config.excludeEnterpriseChains !== false) negativeList.push('chuỗi lớn');
+          if (config.excludeEnterpriseChains !== false) negativeList.push('chuỗi lớn', 'viễn thông', 'nhà mạng', 'tập đoàn', 'fpt', 'viettel', 'vnpt', 'mobifone', 'vinaphone');
 
           const negRegex = new RegExp(`\\b(?:${negativeList.join('|')})\\b`, 'i');
           const combinedAiCheck = `${aiResult.businessType || ''} ${aiResult.intent || ''} ${aiResult.reason || ''}`;

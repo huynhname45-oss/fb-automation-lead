@@ -41,6 +41,7 @@ router.post('/start', async (req, res) => {
 
     if (hasClientCookie) parsed.filters.cookie = req.body.cookie.trim();
     if (Array.isArray(req.body.existingKeys)) parsed.filters.existingKeys = req.body.existingKeys;
+    if (Array.isArray(req.body.existingPhones)) parsed.filters.existingPhones = req.body.existingPhones;
     parsed.filters.isClientIsolated = clientId !== 'default';
 
     // Start search asynchronously so we can return response immediately

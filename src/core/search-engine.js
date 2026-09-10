@@ -412,21 +412,19 @@ export function getCanonicalAuthorKey(post = {}) {
   const authorName = (post.authorName || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
   if (profileLink) {
-    // 1. Extract id parameter if profile.php?id=12345
-    const idMatch = profileLink.match(/[?&]id=(\d+)/i);
-    if (idMatch && idMatch[1]) {
-      return `author_id_${idMatch[1]}`;
+    // 1. Extract UID if present (supports ?id=, /groups/.../user/UID, /member/UID, /profile/UID, /people/.../UID)
+    const uid = extractUidFromUrl(profileLink);
+    if (uid) {
+      return `author_id_${uid}`;
     }
 
-    // 2. Extract username from facebook.com/username
+    // 2. Extract clean username from facebook.com/username
     try {
       const u = new URL(profileLink.startsWith('http') ? profileLink : `https://${profileLink}`);
       const pathname = u.pathname.replace(/^\/+|\/+$/g, '');
-      if (pathname && !['profile.php', 'people', 'groups', 'pages'].includes(pathname.toLowerCase())) {
-        const firstSegment = pathname.split('/')[0];
-        if (firstSegment && firstSegment.length >= 2) {
-          return `author_user_${firstSegment.toLowerCase()}`;
-        }
+      const segments = pathname.split('/').filter(Boolean);
+      if (segments.length === 1 && !['profile.php', 'people', 'groups', 'pages', 'photo', 'photos', 'permalink', 'watch'].includes(segments[0].toLowerCase())) {
+        return `author_user_${segments[0].toLowerCase()}`;
       }
     } catch (e) {}
 
@@ -887,6 +885,16 @@ class SearchEngine extends EventEmitter {
       }
 
       const acceptedAuthorIndex = new Map();
+      const acceptedPhoneIndex = new Map();
+
+      if (Array.isArray(filters.existingPhones) && filters.existingPhones.length > 0) {
+        filters.existingPhones.forEach(p => {
+          const cleanP = String(p).replace(/[^\d]/g, '');
+          if (cleanP.length >= 9) acceptedPhoneIndex.set(cleanP, -1);
+        });
+        logger.info(`📱 [ĐỒNG BỘ CLIENT] Đã nạp ${filters.existingPhones.length} SĐT đã lưu từ máy Client để chống cào trùng.`);
+      }
+
       let scrollAttempts = 0;
       let noNewPostsCount = 0;
 
@@ -1598,45 +1606,79 @@ class SearchEngine extends EventEmitter {
             supportingPosts: []
           };
 
+          // Kiểm tra trùng lặp theo Tác giả hoặc theo Số Điện Thoại
+          let existingIndex = -1;
           if (acceptedAuthorIndex.has(authorKey)) {
-            const existingIndex = acceptedAuthorIndex.get(authorKey);
-            const existingLead = this.results[existingIndex];
-            const mergedEvidence = mergePhoneEvidenceCollections(
-              existingLead.phoneEvidence,
-              cleanPostObj.phoneEvidence
-            );
-            existingLead.phoneEvidence = mergedEvidence;
-            existingLead.phones = mergedEvidence.map(item => item.phone);
-            existingLead.verifiedPhones = mergedEvidence
-              .filter(item => item.verified === true)
-              .map(item => item.phone);
-            existingLead.supportingPosts = [
-              ...(Array.isArray(existingLead.supportingPosts) ? existingLead.supportingPosts : []),
-              {
-                postLink: cleanPostObj.postLink,
-                postedTime: cleanPostObj.postedTime,
-                content: cleanPostObj.content,
-                aiScore: cleanPostObj.aiScore
+            existingIndex = acceptedAuthorIndex.get(authorKey);
+          } else if (phones.length > 0) {
+            for (const p of phones) {
+              const cleanP = String(p).replace(/[^\d]/g, '');
+              if (cleanP.length >= 9 && acceptedPhoneIndex.has(cleanP)) {
+                existingIndex = acceptedPhoneIndex.get(cleanP);
+                if (existingIndex !== -1) break;
               }
-            ];
+            }
+          }
 
-            if ((cleanPostObj.aiScore || 0) > (existingLead.aiScore || 0)) {
-              for (const field of [
-                'summary', 'aiSummary', 'aiScore', 'businessType', 'intent',
-                'salesPitch', 'recommendedFeatures', 'aiReason'
-              ]) {
-                existingLead[field] = cleanPostObj[field];
+          // Kiểm tra nếu SĐT này đã có sẵn trong danh bạ Client từ trước (được nạp từ IndexedDB)
+          if (existingIndex === -1 && phones.length > 0) {
+            const clientDuplicatePhone = phones.find(p => {
+              const cleanP = String(p).replace(/[^\d]/g, '');
+              return cleanP.length >= 9 && acceptedPhoneIndex.get(cleanP) === -1;
+            });
+            if (clientDuplicatePhone) {
+              logger.info(`⏩ [BỎ QUA TRÙNG SĐT CLIENT] BỎ QUA [${post.authorName}] (SĐT: ${clientDuplicatePhone}) - Đã tồn tại trong danh bạ máy bạn.`);
+              this.rejectedCount++;
+              continue;
+            }
+          }
+
+          if (existingIndex >= 0) {
+            const existingLead = isClientIsolated ? task.results[existingIndex] : (this.results[existingIndex] || task.results[existingIndex]);
+            if (existingLead) {
+              const mergedEvidence = mergePhoneEvidenceCollections(
+                existingLead.phoneEvidence,
+                cleanPostObj.phoneEvidence
+              );
+              existingLead.phoneEvidence = mergedEvidence;
+              existingLead.phones = mergedEvidence.map(item => item.phone);
+              existingLead.verifiedPhones = mergedEvidence
+                .filter(item => item.verified === true)
+                .map(item => item.phone);
+              existingLead.supportingPosts = [
+                ...(Array.isArray(existingLead.supportingPosts) ? existingLead.supportingPosts : []),
+                {
+                  postLink: cleanPostObj.postLink,
+                  postedTime: cleanPostObj.postedTime,
+                  content: cleanPostObj.content,
+                  aiScore: cleanPostObj.aiScore
+                }
+              ];
+
+              if ((cleanPostObj.aiScore || 0) > (existingLead.aiScore || 0)) {
+                for (const field of [
+                  'summary', 'aiSummary', 'aiScore', 'businessType', 'intent',
+                  'salesPitch', 'recommendedFeatures', 'aiReason'
+                ]) {
+                  existingLead[field] = cleanPostObj[field];
+                }
               }
+              if (existingLead.location === '—' && cleanPostObj.location !== '—') {
+                existingLead.location = cleanPostObj.location;
+                existingLead.locationSource = cleanPostObj.locationSource;
+                existingLead.locationConfidence = cleanPostObj.locationConfidence;
+                existingLead.locationEvidence = cleanPostObj.locationEvidence;
+              }
+              logger.info(`➕ [GỘP BÀI CÙNG LEAD/SĐT] Đã gộp bài viết của [${post.authorName}] (SĐT: ${existingLead.phones.join(', ')}) vào lead đã có, không tạo dòng mới.`);
             }
-            if (existingLead.location === '—' && cleanPostObj.location !== '—') {
-              existingLead.location = cleanPostObj.location;
-              existingLead.locationSource = cleanPostObj.locationSource;
-              existingLead.locationConfidence = cleanPostObj.locationConfidence;
-              existingLead.locationEvidence = cleanPostObj.locationEvidence;
-            }
-            logger.info(`➕ [GỘP BÀI CÙNG TÁC GIẢ] Đã bổ sung bằng chứng từ bài khác của [${post.authorName}] mà không tăng số lead.`);
           } else {
-            acceptedAuthorIndex.set(authorKey, task.results.length);
+            const targetIdx = task.results.length;
+            acceptedAuthorIndex.set(authorKey, targetIdx);
+            phones.forEach(p => {
+              const cleanP = String(p).replace(/[^\d]/g, '');
+              if (cleanP.length >= 9) acceptedPhoneIndex.set(cleanP, targetIdx);
+            });
+
             if (!isClientIsolated) {
               this.results.push(cleanPostObj);
               if (isHighQuality) {
