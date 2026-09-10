@@ -137,6 +137,7 @@ async function dbSaveLeads(leads = []) {
     if (!db) return 0;
 
     return new Promise((resolve, reject) => {
+        let count = 0;
         const tx = db.transaction('leads', 'readwrite');
         const store = tx.objectStore('leads');
         const getAllReq = store.getAll();
@@ -162,7 +163,7 @@ async function dbSaveLeads(leads = []) {
                 });
             });
 
-            let count = 0;
+            count = 0;
             leads.forEach(lead => {
                 if (!lead) return;
                 const cleanKey = lead.key || computeLeadKey(lead);

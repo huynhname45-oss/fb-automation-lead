@@ -2131,10 +2131,10 @@ function renderTable() {
             <td>${phoneDisplay}</td>
             <td>${escapeHtml(item.postedTime || '')}</td>
             <td>${summaryDisplay}</td>
-            <td style="min-width: 125px; white-space: nowrap;">
-                <div class="d-flex flex-col gap-1" style="min-width: 115px;">
-                    ${postLink ? `<a href="${escapeHtml(postLink)}" target="_blank" class="btn btn-ghost btn-xs text-xs font-semibold" style="color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 5px; padding: 4px 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;" title="Mở đúng bài viết gốc trên Facebook">📄 Bài Viết ↗</a>` : ''}
-                    ${profileLink ? `<a href="${escapeHtml(profileLink)}" target="_blank" class="link text-xs text-muted" style="display: inline-flex; align-items: center; gap: 3px; padding-left: 4px; white-space: nowrap;" title="Mở Profile">👤 Profile ↗</a>` : ''}
+            <td style="min-width: 130px; text-align: center; white-space: nowrap;">
+                <div class="d-flex flex-col gap-1 align-center" style="width: 100%;">
+                    ${postLink ? `<a href="${escapeHtml(postLink)}" target="_blank" class="btn btn-ghost btn-xs text-xs font-semibold" style="color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 5px; padding: 3px 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; width: 100%; box-sizing: border-box;" title="Mở đúng bài viết gốc trên Facebook">📄 Bài Viết ↗</a>` : ''}
+                    ${profileLink ? `<a href="${escapeHtml(profileLink)}" target="_blank" class="link text-xs text-muted" style="display: inline-flex; align-items: center; justify-content: center; gap: 3px; padding: 2px 4px; white-space: nowrap; width: 100%; box-sizing: border-box;" title="Mở Profile">👤 Profile ↗</a>` : ''}
                     ${(!postLink && !profileLink) ? '<span class="text-muted">—</span>' : ''}
                 </div>
             </td>

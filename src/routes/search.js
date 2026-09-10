@@ -73,11 +73,14 @@ router.get('/status', (req, res) => {
 router.get('/results', async (req, res) => {
   try {
     const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
+    const progress = searchEngine.getProgress(clientId);
+    const isSearching = progress && progress.status === 'searching';
+
     let results = searchEngine.getResults(clientId);
-    if (!results || results.length === 0) {
+    if ((!results || results.length === 0) && !isSearching) {
       results = await historyManager.getHistory().catch(() => []);
     }
-    return res.json({ count: results.length, results });
+    return res.json({ count: results ? results.length : 0, results: results || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
