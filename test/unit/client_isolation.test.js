@@ -147,3 +147,30 @@ test('Session Isolation: sessionManager isolates client sessions in RAM and neve
   // Clean up
   await sessionManager.logout(clientWin);
 });
+
+test('SESSION-EXPIRED-001: searchEngine getProgress reports error and isSessionExpired flag properly', () => {
+  const testClientId = 'client_expired_test_' + Date.now();
+  searchEngine.clientTasks.set(testClientId, {
+    status: 'error',
+    keyword: 'tiệm nail',
+    found: 0,
+    total: 50,
+    acceptedCount: 0,
+    reviewCount: 0,
+    rejectedCount: 0,
+    isStopped: false,
+    results: [],
+    error: 'Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập).',
+    isSessionExpired: true,
+    finishedReason: 'session_expired'
+  });
+
+  const progress = searchEngine.getProgress(testClientId);
+  assert.equal(progress.status, 'error');
+  assert.equal(progress.isSessionExpired, true);
+  assert.equal(progress.finishedReason, 'session_expired');
+  assert.match(progress.error, /Phiên đăng nhập Facebook đã hết hạn/);
+
+  // Clean up
+  searchEngine.clientTasks.delete(testClientId);
+});

@@ -144,63 +144,75 @@ async function dbSaveLeads(leads = []) {
         getAllReq.onsuccess = () => {
             const existingAll = getAllReq.result || [];
             const phoneToKeyMap = new Map();
+            const existingMap = new Map();
+
             existingAll.forEach(item => {
+                if (!item) return;
+                const itemKey = item.key || computeLeadKey(item);
+                if (itemKey) existingMap.set(itemKey, item);
+
                 const rawPhones = Array.isArray(item.phones) && item.phones.length > 0
                     ? item.phones
                     : (Array.isArray(item.verifiedPhones) ? item.verifiedPhones : []);
                 rawPhones.forEach(p => {
                     const digits = String(p).replace(/[^\d]/g, '');
                     if (digits.length >= 9 && digits.length <= 11) {
-                        phoneToKeyMap.set(digits, item.key);
+                        phoneToKeyMap.set(digits, itemKey);
                     }
                 });
             });
 
             let count = 0;
             leads.forEach(lead => {
-                if (lead) {
-                    const cleanKey = lead.key || computeLeadKey(lead);
-                    if (cleanKey) {
-                        // Kiểm tra nếu SĐT này đã có trong DB thì cập nhật vào lead cũ thay vì tạo dòng mới
-                        const rawPhones = Array.isArray(lead.phones) && lead.phones.length > 0
-                            ? lead.phones
-                            : (Array.isArray(lead.verifiedPhones) ? lead.verifiedPhones : []);
-                        let matchedExistingKey = null;
-                        for (const p of rawPhones) {
-                            const digits = String(p).replace(/[^\d]/g, '');
-                            if (digits.length >= 9 && digits.length <= 11 && phoneToKeyMap.has(digits)) {
-                                matchedExistingKey = phoneToKeyMap.get(digits);
-                                break;
-                            }
-                        }
+                if (!lead) return;
+                const cleanKey = lead.key || computeLeadKey(lead);
+                if (!cleanKey) return;
 
-                        const targetKey = matchedExistingKey || cleanKey;
-                        lead.key = targetKey;
-
-                        const getReq = store.get(targetKey);
-                        getReq.onsuccess = () => {
-                            const existing = getReq.result;
-                            if (existing && existing.status) {
-                                lead.status = existing.status;
-                            } else if (!lead.status) {
-                                lead.status = 'Mới tạo';
-                            }
-                            if (existing && existing.createdAt) {
-                                lead.createdAt = existing.createdAt;
-                            } else if (!lead.createdAt) {
-                                lead.createdAt = new Date().toISOString();
-                            }
-                            if (existing && Array.isArray(existing.supportingPosts)) {
-                                lead.supportingPosts = [
-                                    ...existing.supportingPosts,
-                                    ...(Array.isArray(lead.supportingPosts) ? lead.supportingPosts : [])
-                                ];
-                            }
-                            store.put(lead);
-                            count++;
-                        };
+                // Kiểm tra nếu SĐT này đã có trong DB thì cập nhật vào lead cũ thay vì tạo dòng mới
+                const rawPhones = Array.isArray(lead.phones) && lead.phones.length > 0
+                    ? lead.phones
+                    : (Array.isArray(lead.verifiedPhones) ? lead.verifiedPhones : []);
+                let matchedExistingKey = null;
+                for (const p of rawPhones) {
+                    const digits = String(p).replace(/[^\d]/g, '');
+                    if (digits.length >= 9 && digits.length <= 11 && phoneToKeyMap.has(digits)) {
+                        matchedExistingKey = phoneToKeyMap.get(digits);
+                        break;
                     }
                 }
+
+                const targetKey = matchedExistingKey || cleanKey;
+                lead.key = targetKey;
+
+                // Dùng existingMap đồng bộ thay cho store.get() bất đồng bộ
+                const existing = existingMap.get(targetKey);
+                if (existing && existing.status) {
+                    lead.status = existing.status;
+                } else if (!lead.status) {
+                    lead.status = 'Mới tạo';
+                }
+                if (existing && existing.createdAt) {
+                    lead.createdAt = existing.createdAt;
+                } else if (!lead.createdAt) {
+                    lead.createdAt = new Date().toISOString();
+                }
+                if (existing && Array.isArray(existing.supportingPosts)) {
+                    lead.supportingPosts = [
+                        ...existing.supportingPosts,
+                        ...(Array.isArray(lead.supportingPosts) ? lead.supportingPosts : [])
+                    ];
+                }
+
+                existingMap.set(targetKey, lead);
+                rawPhones.forEach(p => {
+                    const digits = String(p).replace(/[^\d]/g, '');
+                    if (digits.length >= 9 && digits.length <= 11) {
+                        phoneToKeyMap.set(digits, targetKey);
+                    }
+                });
+
+                store.put(lead);
+                count++;
             });
         };
 

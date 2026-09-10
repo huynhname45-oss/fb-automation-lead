@@ -3,7 +3,8 @@ import browserManager from './browser-manager.js';
 import configManager from './config-manager.js';
 import logger from './logger.js';
 import { processResults, generateExcerpt, generateSummary } from './data-processor.js';
-import { getCanonicalPostKey } from './history-manager.js';
+import historyManager, { getCanonicalPostKey } from './history-manager.js';
+import sessionManager from './session-manager.js';
 import { extractPhonesFromText, mergePhoneEvidence, mergePhoneEvidenceCollections, isJobApplicantComment } from './phone-validator.js';
 import { extractLocationDetailed } from './location-extractor.js';
 import leadFilter from './lead-filter.js';
@@ -713,7 +714,19 @@ class SearchEngine extends EventEmitter {
     this.results = [];
     this.currentKeyword = '';
     this.finishedReason = null;
+    this.error = null;
+    this.isSessionExpired = false;
     this.clientTasks = new Map();
+
+    // Auto-load historical leads on startup if any
+    try {
+      historyManager.getHistory().then(past => {
+        if (Array.isArray(past) && past.length > 0 && this.results.length === 0) {
+          this.results = [...past];
+          this.found = this.results.length;
+        }
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   async search(keyword, filters = {}, maxPosts = null, clientId = 'default') {
@@ -725,6 +738,8 @@ class SearchEngine extends EventEmitter {
       status: 'searching',
       keyword,
       finishedReason: null,
+      error: null,
+      isSessionExpired: false,
       found: 0,
       acceptedCount: 0,
       reviewCount: 0,
@@ -738,6 +753,8 @@ class SearchEngine extends EventEmitter {
     this.status = 'searching';
     this.currentKeyword = keyword;
     this.finishedReason = null;
+    this.error = null;
+    this.isSessionExpired = false;
     this.found = 0;
     this.acceptedCount = 0;
     this.reviewCount = 0;
@@ -843,7 +860,9 @@ class SearchEngine extends EventEmitter {
 
       if (navRes?.status() === 404 || pageBodyText === 'Not Found' || currentUrl.includes('/login') || currentUrl.includes('/checkpoint')) {
         logger.warn('Facebook session expired or logged out. Directing user to re-login.');
-        throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
+        const expErr = new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
+        expErr.isSessionExpired = true;
+        throw expErr;
       }
 
       // 2. Thao tác Bộ lọc Facebook
@@ -1697,6 +1716,8 @@ class SearchEngine extends EventEmitter {
             }
             task.found = task.results.length;
           }
+          // Auto-persist lead to disk history
+          historyManager.addPosts([cleanPostObj]).catch(() => {});
           this.emit('progress', this.getProgress(clientId));
 
           const phoneLogStr = phones.length > 0 ? `SĐT: [${phones.join(', ')}]` : `[CHƯA CÓ SĐT - NHẮN TIN FB]`;
@@ -1764,10 +1785,38 @@ class SearchEngine extends EventEmitter {
       }
       logger.error({ err: error }, 'Search failed');
 
+      const isSessionExpired = !!error.isSessionExpired || (error.message && (
+        error.message.includes('Phiên đăng nhập Facebook đã hết hạn') ||
+        error.message.includes('Session expired') ||
+        error.message.includes('checkpoint') ||
+        error.message.includes('Not Found')
+      ));
+
+      task.status = 'error';
+      task.error = error.message;
+      task.isSessionExpired = isSessionExpired;
+      task.finishedReason = isSessionExpired ? 'session_expired' : 'error';
+
+      if (!isClientIsolated) {
+        this.status = 'error';
+        this.error = error.message;
+        this.isSessionExpired = isSessionExpired;
+        this.finishedReason = task.finishedReason;
+      }
+
+      if (isSessionExpired) {
+        try {
+          sessionManager.status = 'expired';
+          sessionManager.emit('session_expired', { clientId, message: error.message });
+        } catch (e) {}
+      }
+
       throw error;
     } finally {
-      task.status = task.isStopped ? 'stopped' : 'idle';
-      if (!isClientIsolated) {
+      if (task.status !== 'error') {
+        task.status = task.isStopped ? 'stopped' : 'idle';
+      }
+      if (!isClientIsolated && this.status !== 'error') {
         this.status = this.isStopped ? 'stopped' : 'idle';
       }
       this.emit('progress', this.getProgress(clientId));
@@ -2728,7 +2777,9 @@ class SearchEngine extends EventEmitter {
         rejected: task.rejectedCount,
         keyword: task.keyword || '',
         finishedReason: task.finishedReason || null,
-        phoneCount: phonesFound
+        phoneCount: phonesFound,
+        error: task.error || null,
+        isSessionExpired: !!task.isSessionExpired
       };
     }
 
@@ -2745,7 +2796,9 @@ class SearchEngine extends EventEmitter {
       rejected: this.rejectedCount,
       keyword: this.currentKeyword || '',
       finishedReason: this.finishedReason || null,
-      phoneCount: phonesFound
+      phoneCount: phonesFound,
+      error: this.error || null,
+      isSessionExpired: !!this.isSessionExpired
     };
   }
 

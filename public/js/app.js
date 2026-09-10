@@ -1652,6 +1652,31 @@ async function pollSearchProgress() {
 
         updateProgressUI(progress);
 
+        // 1. Phát hiện phiên đăng nhập Facebook hết hạn hoặc lỗi tác vụ tìm kiếm
+        const isSessionExpired = progress.isSessionExpired || 
+            progress.finishedReason === 'session_expired' || 
+            (progress.error && (
+                progress.error.includes('Phiên đăng nhập Facebook đã hết hạn') ||
+                progress.error.includes('Session expired') ||
+                progress.error.includes('checkpoint') ||
+                progress.error.includes('Not Found')
+            ));
+
+        if (isSessionExpired || progress.status === 'error') {
+            stopPollingSearch();
+            setSearchState('idle');
+
+            if (isSessionExpired) {
+                updateSessionUI({ status: 'expired' });
+                state.session = { status: 'expired' };
+                showSessionExpiredModal(progress.error);
+                showToast('Phiên đăng nhập Facebook đã hết hạn! Vui lòng đăng nhập lại.', 'error');
+            } else if (progress.error) {
+                showToast(progress.error, 'error');
+            }
+            return;
+        }
+
         if (progress.status === 'idle' || progress.status === 'stopped') {
             const wasSearching = state.search.status === 'searching';
             stopPollingSearch();
@@ -1679,6 +1704,66 @@ async function pollSearchProgress() {
     } catch (err) {
         // Silently retry polling
     }
+}
+
+/**
+ * Modal Pop-up Cảnh Báo Phiên Đăng Nhập Facebook Đã Hết Hạn
+ */
+function showSessionExpiredModal(errorMessage) {
+    const existing = document.getElementById('sessionExpiredModalOverlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'sessionExpiredModalOverlay';
+    overlay.style.zIndex = '10005';
+    overlay.innerHTML = `
+      <div class="modal glass-panel" style="max-width: 490px; width: 92%; border-radius: 18px; border: 1px solid rgba(239, 68, 68, 0.35); box-shadow: 0 25px 60px rgba(0,0,0,0.35); background: var(--bg-card); animation: fadeIn 0.25s ease-out; padding: 26px 26px; text-align: center; position: relative;">
+        <button type="button" class="modal-close" id="btnCloseSessionExpiredModal" style="position: absolute; top: 14px; right: 16px; font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-muted);">&times;</button>
+        <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(239, 68, 68, 0.12); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 14px auto; border: 1px solid rgba(239, 68, 68, 0.25);">
+          🔐
+        </div>
+        <h3 style="margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700; color: #dc2626;">
+          Phiên Đăng Nhập Facebook Đã Hết Hạn!
+        </h3>
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.22); border-radius: 10px; padding: 12px 14px; font-size: 0.86rem; color: var(--text-primary); margin-bottom: 16px; text-align: left; line-height: 1.5; font-weight: 500; word-break: break-word;">
+          ${escapeHtml(errorMessage || 'Facebook hiển thị Not Found hoặc yêu cầu đăng nhập lại. Phiên làm việc của bạn đã hết hạn hoặc bị đăng xuất.')}
+        </div>
+        <p style="margin: 0 0 22px 0; font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5;">
+          Để tiếp tục bóc tách dữ liệu và tìm kiếm khách hàng, vui lòng vào mục <strong>Session Manager</strong> để đăng nhập lại hoặc dán Cookie Facebook mới.
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button type="button" class="btn btn-secondary" id="btnDismissSessionExpiredModal" style="flex: 1; padding: 10px 14px; font-weight: 600; font-size: 0.9rem;">
+            Để sau
+          </button>
+          <button type="button" class="btn btn-primary" id="btnGoToSessionManager" style="flex: 1.8; padding: 10px 16px; font-weight: 700; font-size: 0.9rem; background: #2563eb; border-color: #2563eb; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);">
+            🔑 Đến Session Manager
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    document.getElementById('btnCloseSessionExpiredModal')?.addEventListener('click', closeFn);
+    document.getElementById('btnDismissSessionExpiredModal')?.addEventListener('click', closeFn);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeFn();
+    });
+
+    document.getElementById('btnGoToSessionManager')?.addEventListener('click', () => {
+        closeFn();
+        const navSession = document.getElementById('navSession');
+        if (navSession) navSession.click();
+        setTimeout(() => {
+            const cookieInput = document.getElementById('cookieInput');
+            if (cookieInput) {
+                cookieInput.focus();
+                cookieInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 200);
+    });
 }
 
 function showSearchCompletionModal(progress) {
@@ -1785,22 +1870,28 @@ function updateProgressUI(progress) {
 
 async function fetchResultsHistory() {
     try {
-        // 1. Nạp 100% dữ liệu từ IndexedDB trên máy Client (độc lập hoàn toàn, không nạp tự động từ Server)
+        let leads = [];
         if (window.ClientDB) {
-            const clientLeads = await window.ClientDB.getAllLeads();
-            state.search.results = clientLeads || [];
-            renderTable();
-            return;
+            leads = await window.ClientDB.getAllLeads();
         }
 
-        // 2. Fallback nếu trình duyệt không hỗ trợ IndexedDB (chỉ lấy task kết quả của riêng clientId này)
-        const clientId = getClientId();
-        const res = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
-        if (res && res.results) {
-            state.search.results = res.results;
-            renderTable();
+        // Fallback an toàn: Nếu IndexedDB trên client đang rỗng (mới mở máy/xóa cache), nạp lại từ Server disk history
+        if (!leads || leads.length === 0) {
+            const clientId = getClientId();
+            const res = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
+            if (res && Array.isArray(res.results) && res.results.length > 0) {
+                leads = res.results;
+                if (window.ClientDB) {
+                    await window.ClientDB.saveLeads(leads);
+                }
+            }
         }
-    } catch (e) {}
+
+        state.search.results = leads || [];
+        renderTable();
+    } catch (e) {
+        console.warn('[fetchResultsHistory] Lỗi nạp lịch sử:', e);
+    }
 }
 
 let _prevStatCounts = { total: -1, highQuality: -1, reviewQuality: -1, new: -1, lead: -1, duplicate: -1, none: -1 };

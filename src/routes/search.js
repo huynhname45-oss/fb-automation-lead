@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import searchEngine from '../core/search-engine.js';
 import sessionManager from '../core/session-manager.js';
-import { getCanonicalPostKey } from '../core/history-manager.js';
+import historyManager, { getCanonicalPostKey } from '../core/history-manager.js';
 import logger from '../core/logger.js';
 
 const router = express.Router();
@@ -73,7 +73,10 @@ router.get('/status', (req, res) => {
 router.get('/results', async (req, res) => {
   try {
     const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
-    const results = searchEngine.getResults(clientId);
+    let results = searchEngine.getResults(clientId);
+    if ((!results || results.length === 0) && clientId === 'default') {
+      results = await historyManager.getHistory().catch(() => []);
+    }
     return res.json({ count: results.length, results });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -86,7 +89,8 @@ router.post('/clear-history', async (req, res) => {
     searchEngine.clientTasks.get(clientId).results = [];
   }
   searchEngine.results = [];
-  res.json({ message: 'Cleared in-memory task', count: 0, results: [] });
+  await historyManager.clearHistory().catch(() => {});
+  res.json({ message: 'Cleared in-memory task and disk history', count: 0, results: [] });
 });
 
 router.post('/delete-selected', async (req, res) => {
@@ -104,7 +108,9 @@ router.post('/delete-selected', async (req, res) => {
       searchEngine.results = searchEngine.results.filter(post => !keySet.has(getCanonicalPostKey(post)));
     }
 
-    res.json({ message: 'Deleted from in-memory task', count: 0, results: [] });
+    await historyManager.deletePostsByKeys(keyList).catch(() => {});
+
+    res.json({ message: 'Deleted from in-memory task and disk history', count: 0, results: [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
