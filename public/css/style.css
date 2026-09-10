@@ -727,7 +727,7 @@ body {
 
 .data-table {
   width: 100%;
-  min-width: 1050px;
+  min-width: 850px;
   border-collapse: collapse;
   text-align: left;
 }

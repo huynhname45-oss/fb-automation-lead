@@ -2125,9 +2125,7 @@ function renderTable() {
                     <option value="Không có nhu cầu" ${statusVal === 'Không có nhu cầu' ? 'selected' : ''}>❌ Không có nhu cầu</option>
                 </select>
             </td>
-            <td class="text-center">${qualityBadge}</td>
             <td><strong>${escapeHtml(item.authorName || 'N/A')}</strong></td>
-            <td>${locationDisplay}</td>
             <td>${phoneDisplay}</td>
             <td>${escapeHtml(item.postedTime || '')}</td>
             <td>${summaryDisplay}</td>
