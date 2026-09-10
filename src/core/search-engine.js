@@ -792,23 +792,11 @@ class SearchEngine extends EventEmitter {
       const pages = context.pages();
       page = pages.length > 0 ? pages[0] : await context.newPage();
 
-      // 1. Navigate to Posts Search Page (Use /search/posts/ for full infinite-scroll feed of posts)
-      const searchUrl = `https://www.facebook.com/search/posts/?q=${encodeURIComponent(keyword)}`;
-      logger.info(`1. Đang mở trang tìm kiếm Bài viết Facebook: ${searchUrl}`);
-      const navRes = await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await delay(crawlDelay);
-
-      const pageBodyText = await page.evaluate(() => (document.body?.innerText || '').trim());
-      const currentUrl = page.url();
-
-      if (navRes?.status() === 404 || pageBodyText === 'Not Found' || currentUrl.includes('/login') || currentUrl.includes('/checkpoint')) {
-        logger.warn('Facebook session expired or logged out. Directing user to re-login.');
-        throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
-      }
-
-      // 2. Select All (Tất cả) Tab in sidebar to expand sub-filters (Bài viết mới đây, Ngày đăng)
-      // Khi người dùng chọn mốc 24h: Bật "Tất cả" và "Bài viết mới đây".
-      // Các mốc khác (3 ngày, 1 tuần, bất kỳ): Giữ nguyên feed mặc định để không bị ẩn bài cũ.
+      // =========================================================================
+      // BƯỚC 1: XÁC ĐỊNH MỐC THỜI GIAN & ĐIỀU HƯỚNG TÌM KIẾM
+      // - Mốc 24h: Mở tab "Tất cả" (/search/top/) và BẬT nút gạt "Bài viết mới đây"
+      // - Mốc 3 ngày / 1 tuần / Bất kỳ: Mở tab "Bài viết", KHÔNG bật "Bài viết mới đây"
+      // =========================================================================
       let targetRecencyHours = 24;
       let enableRecent = true;
 
@@ -834,22 +822,35 @@ class SearchEngine extends EventEmitter {
 
       const hasDateFilter = filters.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '';
 
-      if (enableRecent || hasDateFilter) {
-        // Đảm bảo ở mục "Bài viết" (Posts tab) để lấy danh sách bài viết từ người dùng và hội nhóm thay vì các trang Fanpage/Tin tức giải trí
-        const currentUrl = page.url();
-        if (!currentUrl.includes('/search/posts')) {
-          await this._applyPostsTab(page);
-          await delay(1200);
-        }
+      // 1. Navigate to Search Page:
+      // Khi chọn 24h: Vào thẳng /search/top/ (Tab "Tất cả") để hiển thị ngay nút gạt "Bài viết mới đây"
+      // Khi chọn mốc khác (3 ngày, 1 tuần, bất kỳ): Vào /search/posts/ (Tab "Bài viết") để không giới hạn bài cũ
+      const searchUrl = enableRecent
+        ? `https://www.facebook.com/search/top/?q=${encodeURIComponent(keyword)}`
+        : `https://www.facebook.com/search/posts/?q=${encodeURIComponent(keyword)}`;
+      logger.info(`1. Đang mở trang tìm kiếm Facebook (${enableRecent ? 'Tab Tất cả - Mốc 24h' : 'Tab Bài viết - Mở rộng'}): ${searchUrl}`);
+      const navRes = await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await delay(crawlDelay);
 
-        if (enableRecent) {
-          logger.info('3. Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây" (Mốc 24h)...');
-          await this._applyRecentPostsToggle(page, true);
-          await delay(1200);
-        } else {
-          logger.info(`3. Kiểm tra nút gạt "Bài viết mới đây" trên Facebook (Đảm bảo TẮT cho mốc: ${filters.timeRange || 'mở rộng'})...`);
-          await this._applyRecentPostsToggle(page, false);
-        }
+      const pageBodyText = await page.evaluate(() => (document.body?.innerText || '').trim());
+      const currentUrl = page.url();
+
+      if (navRes?.status() === 404 || pageBodyText === 'Not Found' || currentUrl.includes('/login') || currentUrl.includes('/checkpoint')) {
+        logger.warn('Facebook session expired or logged out. Directing user to re-login.');
+        throw new Error('Phiên đăng nhập Facebook đã hết hạn hoặc bị đăng xuất (Facebook hiển thị Not Found / Yêu cầu đăng nhập). Bạn vui lòng vào Tab "Session Manager" đăng nhập lại Facebook rồi bấm Bắt đầu tìm kiếm tiếp nhé!');
+      }
+
+      // 2. Thao tác Bộ lọc Facebook
+      if (enableRecent) {
+        // Mốc 24h: Vào mục "Tất cả" trên thanh bên để mở rộng sub-filters
+        logger.info('2. Mốc 24h: Đang kiểm tra và chọn mục "Tất cả" trên thanh bên...');
+        await this._applyAllTab(page);
+        await delay(1200);
+
+        // Bật nút gạt "Bài viết mới đây"
+        logger.info('3. Mốc 24h: Kích hoạt bộ lọc Facebook: Bật nút gạt "Bài viết mới đây"...');
+        await this._applyRecentPostsToggle(page, true);
+        await delay(1200);
 
         if (hasDateFilter) {
           logger.info(`4. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
@@ -857,7 +858,16 @@ class SearchEngine extends EventEmitter {
           await delay(1200);
         }
       } else {
-        logger.info(`3. Giữ nguyên bộ lọc Facebook Bài viết mặc định (Khoảng thời gian: ${filters.timeRange || 'mở rộng'}). Không bật nút gạt "Bài viết mới đây".`);
+        // Các mốc 3 ngày, 1 tuần, bất kỳ: KHÔNG bật "Bài viết mới đây" (Đảm bảo TẮT nếu đang bật)
+        logger.info(`2. Mốc thời gian (${filters.timeRange || 'mở rộng'}): Giữ nguyên feed mở rộng, KHÔNG bật nút gạt "Bài viết mới đây".`);
+        await this._applyRecentPostsToggle(page, false).catch(() => {});
+        await delay(500);
+
+        if (hasDateFilter) {
+          logger.info(`3. Kích hoạt bộ lọc: "Ngày đăng" (Năm ${filters.datePosted})...`);
+          await this._applyDateFilter(page, filters.datePosted);
+          await delay(1200);
+        }
       }
 
       const processedPostKeys = new Set();
@@ -2651,11 +2661,11 @@ class SearchEngine extends EventEmitter {
       // 1. Check if sub-filters are already visible
       const isAlreadyExpanded = await page.evaluate(() => {
         const textNodes = Array.from(document.querySelectorAll('span, div, label, p'));
-        return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Ngày đăng|Date posted)/i.test((el.innerText || el.textContent || '').trim()));
+        return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts)/i.test((el.innerText || el.textContent || '').trim()));
       }).catch(() => false);
 
-      if (isAlreadyExpanded) {
-        logger.info('✔ Bộ lọc "Tất cả" đã được mở sẵn (sub-filters đã hiển thị).');
+      if (isAlreadyExpanded && page.url().includes('/search/top')) {
+        logger.info('✔ Bộ lọc "Tất cả" đã được mở sẵn (nút gạt Bài viết mới đây đã hiển thị).');
         return true;
       }
 
@@ -2714,11 +2724,9 @@ class SearchEngine extends EventEmitter {
         }
       }
 
-      // Strategy 3: Fallback to "Bài viết" / "Posts" if "Tất cả" was not found
-      if (!clicked) {
-        logger.info('ℹ️ Không thấy "Tất cả", thử tìm mục "Bài viết"...');
-        const postsClicked = await this._applyPostsTab(page);
-        if (postsClicked) return true;
+      // Strategy 3: Check if page is already on /search/top
+      if (!clicked && page.url().includes('/search/top')) {
+        clicked = true;
       }
 
       // Wait up to 5s for sub-filters to render
@@ -2728,10 +2736,10 @@ class SearchEngine extends EventEmitter {
         try {
           const subFilterReady = await page.evaluate(() => {
             const textNodes = Array.from(document.querySelectorAll('span, div, label, p'));
-            return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts|Ngày đăng|Date posted)/i.test((el.innerText || el.textContent || '').trim()));
+            return textNodes.some(el => /(Bài viết mới đây|Bài viết gần đây|Bài viết mới nhất|Recent posts)/i.test((el.innerText || el.textContent || '').trim()));
           });
           if (subFilterReady) {
-            logger.info('✔ Các mục bộ lọc con đã hiển thị thành công!');
+            logger.info('✔ Nút gạt "Bài viết mới đây" đã hiển thị thành công!');
             return true;
           }
         } catch (e) {}
