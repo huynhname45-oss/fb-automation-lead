@@ -2451,8 +2451,8 @@ body {
 .system-update-banner {
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   color: #ffffff;
-  padding: 13px 24px;
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+  padding: 14px 28px;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -2477,57 +2477,65 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .system-update-banner .banner-left {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .system-update-banner .banner-badge {
   background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  padding: 5px 13px;
   border-radius: 20px;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .system-update-banner .banner-title {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
+  flex-shrink: 0;
 }
 
 .system-update-banner .banner-commit-msg {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 3px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 4px 12px;
   border-radius: 6px;
-  font-size: 0.92rem;
-  max-width: 520px;
+  font-size: 0.95rem;
+  max-width: 480px;
+  min-width: 80px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: inline-block;
   vertical-align: middle;
+  flex: 0 1 auto;
 }
 
 .system-update-banner .banner-time {
-  font-size: 0.84rem;
-  opacity: 0.9;
+  font-size: 0.88rem;
+  opacity: 0.95;
+  flex-shrink: 0;
 }
 
 .system-update-banner .banner-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .btn-update-action {
@@ -2535,38 +2543,45 @@ body {
   color: #2563eb !important;
   font-weight: 700 !important;
   border: none !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   border-radius: 8px;
-  padding: 8px 16px;
+  padding: 9px 18px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.92rem;
+  gap: 8px;
+  font-size: 0.96rem;
+  white-space: nowrap;
+}
+
+.btn-update-action svg {
+  width: 18px;
+  height: 18px;
 }
 
 .btn-update-action:hover {
   background: #f8fafc !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
 
 .btn-banner-close {
   background: transparent;
   border: none;
   color: #ffffff;
-  opacity: 0.8;
-  font-size: 1.25rem;
-  padding: 4px 10px;
+  opacity: 0.85;
+  font-size: 1.35rem;
+  padding: 5px 10px;
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .btn-banner-close:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Sidebar Update Dot */
