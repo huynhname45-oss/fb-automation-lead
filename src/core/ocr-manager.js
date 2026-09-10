@@ -5,8 +5,10 @@ import { extractPhonesFromText } from './phone-validator.js';
 
 export function cleanOCRDigits(text = '') {
   if (!text || typeof text !== 'string') return '';
+  // Normalize common OCR misreads of contact labels like "sdt", "hotline"
+  let cleaned = text.replace(/\b(?:sor|sct|sot|sdt|sđt|hotline|lh)\b/gi, 'sđt');
   // Replace letter O/o/D/Q when acting as leading 0 or inside digits
-  let cleaned = text.replace(/(?<=[0-9.\s\-_/])[oOQD](?=[0-9.\s\-_/])/g, '0')
+  cleaned = cleaned.replace(/(?<=[0-9.\s\-_/])[oOQD](?=[0-9.\s\-_/])/g, '0')
                     .replace(/(?<=\s|^)[oOQD](?=\d{8,9}\b)/g, '0');
   // Replace l/I/|/i/! when acting as 1 inside digit sequences
   cleaned = cleaned.replace(/(?<=[0-9.\s\-_/])[lI|i!](?=[0-9.\s\-_/])/g, '1')
@@ -35,7 +37,10 @@ class OCRManager {
       try {
         logger.info('Initializing Tesseract OCR worker for Image Phone Recognition...');
         this.worker = await createWorker('eng');
-        logger.info('Tesseract OCR worker initialized successfully!');
+        await this.worker.setParameters({
+          tessedit_pageseg_mode: '11' // PSM 11: Sparse text - optimal for signs, banners, kiosks, posters
+        });
+        logger.info('Tesseract OCR worker initialized successfully with PSM 11 (Sparse Text)!');
         return this.worker;
       } catch (err) {
         logger.warn({ err: err.message }, 'Failed to initialize Tesseract OCR worker');
@@ -281,7 +286,7 @@ class OCRManager {
 
       let ocrTimer = null;
       const timeoutPromise = new Promise((_, reject) => {
-        ocrTimer = setTimeout(() => reject(new Error('OCR Timeout')), 7000);
+        ocrTimer = setTimeout(() => reject(new Error('OCR Timeout')), 8000);
       });
       
       let ocrResult = null;
@@ -294,15 +299,37 @@ class OCRManager {
       const data = ocrResult && ocrResult.data ? ocrResult.data : null;
       const confidence = (data && typeof data.confidence === 'number') ? data.confidence : 0;
       const rawText = (data && data.text) ? data.text : '';
-      const recognizedText = cleanOCRDigits(rawText);
+      let recognizedText = cleanOCRDigits(rawText);
 
-      if (confidence >= 15 && recognizedText && recognizedText.trim().length > 3) {
-        const phones = extractPhonesFromText(recognizedText, { isOCR: true });
-        if (phones.length > 0) {
-          logger.info(`📸 [TESSERACT OCR] Nhận diện SĐT từ ảnh: [${phones.join(', ')}] (Độ tin cậy: ${Math.round(confidence)}%)`);
-          this.cache.set(imageUrl, phones);
-          return phones;
+      let phones = [];
+      if (recognizedText && recognizedText.trim().length > 3) {
+        phones = extractPhonesFromText(recognizedText, { isOCR: true });
+      }
+
+      // Nếu lần quét đầu tiên (PSM 11) chưa tìm thấy số, thử quét bổ sung với PSM 3
+      if (phones.length === 0) {
+        try {
+          await worker.setParameters({ tessedit_pageseg_mode: '3' });
+          const ocrResult2 = await Promise.race([
+            worker.recognize(buffer),
+            new Promise((_, r) => setTimeout(() => r(new Error('OCR Timeout')), 6000))
+          ]);
+          const rawText2 = ocrResult2?.data?.text || '';
+          const cleaned2 = cleanOCRDigits(rawText2);
+          const phones2 = extractPhonesFromText(cleaned2, { isOCR: true });
+          if (phones2.length > 0) {
+            phones = phones2;
+          }
+          await worker.setParameters({ tessedit_pageseg_mode: '11' });
+        } catch (e) {
+          try { await worker.setParameters({ tessedit_pageseg_mode: '11' }); } catch (_) {}
         }
+      }
+
+      if (phones.length > 0) {
+        logger.info(`📸 [TESSERACT OCR] Nhận diện SĐT từ ảnh: [${phones.join(', ')}] (Độ tin cậy: ${Math.round(confidence)}%)`);
+        this.cache.set(imageUrl, phones);
+        return phones;
       }
     } catch (err) {
       logger.debug({ err: err.message }, 'OCR extraction skipped or timed out for image');

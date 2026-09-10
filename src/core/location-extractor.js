@@ -451,7 +451,8 @@ export const PROVINCES_MAP = [
     name: 'Kiên Giang',
     keywords: [
       'kiên giang', 'kien giang', 'kiengiang', 'phú quốc', 'phu quoc', 'phuquoc',
-      'rạch giá', 'rach gia', 'hà tiên', 'ha tien', 'kiên lương', 'hòn đất', 'tân hiệp kiên giang', 'châu thành kiên giang', 'giồng riềng', 'gò quao', 'an biên', 'an minh', 'u minh thượng'
+      'rạch giá', 'rach gia', 'hà tiên', 'ha tien', 'kiên lương', 'hòn đất', 'tân hiệp kiên giang', 'châu thành kiên giang', 'giồng riềng', 'gò quao', 'an biên', 'an minh', 'u minh thượng',
+      'minh lương', 'minh luong', 'chợ minh lương', 'cho minh luong', 'ngã ba minh lương', 'nga ba minh luong'
     ]
   },
   // 49. Hậu Giang

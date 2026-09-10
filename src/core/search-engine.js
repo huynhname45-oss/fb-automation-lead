@@ -1501,7 +1501,8 @@ class SearchEngine extends EventEmitter {
                 const isTaggedPlace = targetUrl === post.taggedPlaceUrl;
                 const profileRes = await this._extractPhonesFromProfile(context, targetUrl, crawlDelay, post.authorName);
                 if (profileRes) {
-                  if (profileRes.location && profileRes.location !== '—' && (detectedLocation === '—' || profileRes.source?.includes('timeline') || profileRes.source?.includes('search'))) {
+                  // Chỉ lấy địa điểm từ profile nếu bài viết gốc không có bất kỳ thông tin địa chỉ/địa phương nào
+                  if (profileRes.location && profileRes.location !== '—' && detectedLocation === '—') {
                     detectedLocation = profileRes.location;
                     locationResult = profileRes.locationResult || {
                       province: profileRes.location,

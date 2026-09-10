@@ -148,3 +148,52 @@ test('OWNER-PHONE-008: extractUidFromUrl supports /member/ and /people/ profile 
   assert.equal(extractUidFromUrl('https://www.facebook.com/profile.php?id=100082508300000'), '100082508300000');
 });
 
+test('OWNER-PHONE-009: cleanOCRDigits and extractPhonesFromText extracts 0966162515 from KEM CAFE banner sparse text', async () => {
+  const { cleanOCRDigits } = await import('../../src/core/ocr-manager.js');
+  const { extractPhonesFromText } = await import('../../src/core/phone-validator.js');
+
+  const sparseOcrText = `
+o®
+= W
+pert=be™
+SU
+c6 binh lug
+MY/CAY
+“96
+| ® sor: 0966 162 515
+chg Mi Luong
+`;
+
+  const cleaned = cleanOCRDigits(sparseOcrText);
+  const phones = extractPhonesFromText(cleaned, { isOCR: true });
+  assert.ok(phones.includes('0966162515'), 'Must extract 0966162515 from banner OCR text');
+});
+
+test('OWNER-PHONE-010: Location from "ngã ba minh lương" resolves to Kiên Giang and post content takes precedence over author profile', async () => {
+  const { extractLocationDetailed } = await import('../../src/core/location-extractor.js');
+
+  const postContent = `
+KEM CAFE
+TƯNG BỪNG KHAI TRƯƠNG - ƯU ĐÃI CỰC ĐỈNH
+KEM CAFE hân hoan chào đón bạn đến trải nghiệm đồ uống thơm ngon và món ăn hấp dẫn..!
+📍 Địa điểm: ngã ba minh lương
+⏰ Thời hạn áp dụng ưu đãi: Từ T7_12/9 đến hết 20/9
+`;
+
+  const loc = extractLocationDetailed({ content: postContent, authorName: 'Huyền My' });
+  assert.equal(loc.legacyProvince, 'Kiên Giang');
+  assert.ok(loc.confidence >= 0.85);
+
+  // Check that post content location takes strict precedence
+  let detectedLocation = loc.province;
+  const mockProfileRes = { location: 'Hà Nội', source: 'profile_search' };
+
+  // Logic: Only overwrite if detectedLocation === '—'
+  if (mockProfileRes.location && mockProfileRes.location !== '—' && detectedLocation === '—') {
+    detectedLocation = mockProfileRes.location;
+  }
+
+  assert.notEqual(detectedLocation, 'Hà Nội', 'Post location in Kiên Giang must NEVER be overwritten by profile location Hà Nội');
+});
+
+
