@@ -2026,8 +2026,7 @@ function renderTable() {
         for (let p = startP; p <= endP; p++) {
             const btnP = document.createElement('button');
             btnP.type = 'button';
-            btnP.className = `btn btn-sm ${p === state.pagination.currentPage ? 'btn-purple-full' : 'btn-ghost'}`;
-            btnP.style.padding = '4px 10px';
+            btnP.className = `btn btn-sm ${p === state.pagination.currentPage ? 'active' : 'btn-ghost'}`;
             btnP.textContent = p;
             btnP.addEventListener('click', () => {
                 state.pagination.currentPage = p;
