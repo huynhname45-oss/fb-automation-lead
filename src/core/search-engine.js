@@ -1623,6 +1623,7 @@ class SearchEngine extends EventEmitter {
             qualityReason: aiEval.reason || deepEval.reason || quickEval.reason || '',
             decisionReasons: isHighQuality ? ['AI_ACCEPTED'] : ['AI_REVIEW'],
             status: 'Mới tạo',
+            createdAt: new Date().toISOString(),
             supportingPosts: []
           };
 

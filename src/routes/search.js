@@ -74,7 +74,7 @@ router.get('/results', async (req, res) => {
   try {
     const clientId = (req.query?.clientId && typeof req.query.clientId === 'string') ? req.query.clientId.trim() : 'default';
     let results = searchEngine.getResults(clientId);
-    if ((!results || results.length === 0) && clientId === 'default') {
+    if (!results || results.length === 0) {
       results = await historyManager.getHistory().catch(() => []);
     }
     return res.json({ count: results.length, results });

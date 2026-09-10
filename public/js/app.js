@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await fetchConfig();
     fetchResultsHistory(); // Automatically load history on startup
     loadSavedGroups();     // Automatically load cached groups on startup
+    checkActiveSearchTask(); // Tự động phát hiện và kết nối lại tiến trình tìm kiếm nếu đang quét dở
     startIdleSync();
     initSystemUpdater();   // Khởi tạo trình kiểm tra và cập nhật hệ thống tự động qua Git
 });
@@ -1585,8 +1586,12 @@ async function handleStopSearch() {
     }
 }
 
+let _isPollingSearch = false;
+let _lastSearchRenderKey = '';
+
 function startPollingSearch() {
     stopPollingSearch();
+    _lastSearchRenderKey = '';
     state.pollingInterval = setInterval(pollSearchProgress, 1000);
 }
 
@@ -1633,26 +1638,54 @@ window.addEventListener('focus', () => {
     }
 });
 
+/**
+ * Tự động phát hiện và kết nối lại tiến trình tìm kiếm nếu server đang quét dở
+ */
+async function checkActiveSearchTask() {
+    try {
+        const clientId = getClientId();
+        const progress = await api('GET', `/api/search/status?clientId=${encodeURIComponent(clientId)}`);
+        if (progress && progress.status === 'searching') {
+            setSearchState('searching');
+            updateProgressUI(progress);
+            startPollingSearch();
+        }
+    } catch (e) {}
+}
+
 async function pollSearchProgress() {
+    if (_isPollingSearch) return;
+    _isPollingSearch = true;
     const clientId = getClientId();
     try {
         const progress = await api('GET', `/api/search/status?clientId=${encodeURIComponent(clientId)}`);
         const resData = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
 
         state.search.progress = progress;
-        if (resData.results && resData.results.length > 0) {
-            if (window.ClientDB) {
-                await window.ClientDB.saveLeads(resData.results);
-                state.search.results = await window.ClientDB.getAllLeads();
-            } else {
-                state.search.results = resData.results;
+        const incoming = (resData && Array.isArray(resData.results)) ? resData.results : [];
+
+        if (incoming.length > 0) {
+            // 1. Cập nhật ngay lập tức vào state.search.results trong RAM để hiển thị Realtime không độ trễ
+            const merged = deduplicateLeadList([...incoming, ...(state.search.results || [])]);
+            
+            // 2. Chỉ re-render DOM khi thực sự có dữ liệu mới để bảo đảm độ mượt 60fps
+            const currentRenderKey = `${merged.length}_${incoming.length}_${incoming[incoming.length - 1]?.key || ''}`;
+            if (currentRenderKey !== _lastSearchRenderKey) {
+                _lastSearchRenderKey = currentRenderKey;
+                state.search.results = merged;
+                renderTable();
+                updateStatPills();
+
+                // 3. Ghi vào IndexedDB client dưới nền, tuyệt đối không block chu kỳ render UI
+                if (window.ClientDB) {
+                    window.ClientDB.saveLeads(incoming).catch(e => console.warn('[ClientDB] Background saveLeads error:', e));
+                }
             }
-            renderTable();
         }
 
         updateProgressUI(progress);
 
-        // 1. Phát hiện phiên đăng nhập Facebook hết hạn hoặc lỗi tác vụ tìm kiếm
+        // 4. Phát hiện phiên đăng nhập Facebook hết hạn hoặc lỗi tác vụ tìm kiếm
         const isSessionExpired = progress.isSessionExpired || 
             progress.finishedReason === 'session_expired' || 
             (progress.error && (
@@ -1682,17 +1715,18 @@ async function pollSearchProgress() {
             stopPollingSearch();
             setSearchState('idle');
 
-            // Final fetch to get fully persisted results
+            // Đồng bộ kết thúc một lần cuối với ClientDB để đảm bảo toàn vẹn dữ liệu
             try {
                 const finalData = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
-                if (finalData.results && finalData.results.length > 0) {
+                if (finalData && Array.isArray(finalData.results) && finalData.results.length > 0) {
                     if (window.ClientDB) {
                         await window.ClientDB.saveLeads(finalData.results);
                         state.search.results = await window.ClientDB.getAllLeads();
                     } else {
-                        state.search.results = finalData.results;
+                        state.search.results = deduplicateLeadList([...finalData.results, ...(state.search.results || [])]);
                     }
                     renderTable();
+                    updateStatPills();
                 }
             } catch (e) {}
 
@@ -1703,6 +1737,8 @@ async function pollSearchProgress() {
         }
     } catch (err) {
         // Silently retry polling
+    } finally {
+        _isPollingSearch = false;
     }
 }
 

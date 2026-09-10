@@ -1,5 +1,5 @@
 {
-  "headless": true,
+  "headless": false,
   "crawlDelay": 2000,
   "maxPosts": 20,
   "excludeEnterpriseChains": true,
@@ -12,7 +12,7 @@
   "requireMobilePhoneOnly": true,
   "requirePhoneOnly": false,
   "excludeKeywords": "",
-  "searchKeyword": "tưng bừng khai trương",
+  "searchKeyword": "sắp khai trương",
   "aiEnabled": true,
   "aiProvider": "groq",
   "aiApiKey": "AQ.Ab8RN6K7D64ZvqO_oCalWpUg3VJw4oK8UWt47jPmA1ynCZUsDQ",
@@ -36,7 +36,7 @@
     "groupUrls": "phanmemketoan.quanlybanhang"
   },
   "userFormPreferences": {
-    "searchKeyword": "tưng bừng khai trương",
+    "searchKeyword": "sắp khai trương",
     "excludeKeywords": "",
     "timeRange": "24h",
     "requirePhoneOnly": false,
@@ -50,7 +50,7 @@
     "memberDeepPhone": true,
     "maxMembersPerGroup": 60,
     "memberGroupUrls": "phanmemketoan.quanlybanhang",
-    "headless": true,
+    "headless": false,
     "filterQuality": "all",
     "filterStatus": "all",
     "filterAiScore": "all"
