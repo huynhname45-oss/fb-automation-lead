@@ -861,6 +861,64 @@ export class LeadFilter {
   classifyPhoneType(phone = '') {
     return classifyPhoneType(phone);
   }
+
+  matchesSearchKeyword(searchKeyword = '', content = '', ocrText = '', groupName = '') {
+    return matchesSearchKeyword(searchKeyword, content, ocrText, groupName);
+  }
+}
+
+/**
+ * Evaluates whether post content/OCR/group matches the user's search keyword.
+ * Strictly prevents crawling Facebook's algorithmic suggested/unrelated posts.
+ */
+export function matchesSearchKeyword(searchKeyword = '', content = '', ocrText = '', groupName = '') {
+  if (!searchKeyword || typeof searchKeyword !== 'string') return true;
+  const kw = searchKeyword.trim();
+  if (!kw) return true;
+
+  const rawCombined = `${content || ''} ${ocrText || ''} ${groupName || ''}`;
+  if (!rawCombined.trim()) return false;
+
+  const combinedClean = cleanTextForMatching(rawCombined);
+  const combinedNoAccent = cleanTextForMatching(removeAccents(rawCombined));
+
+  const kwLower = kw.toLowerCase().trim();
+  const kwClean = cleanTextForMatching(kwLower).trim();
+  const kwNoAccent = cleanTextForMatching(removeAccents(kwLower)).trim();
+
+  // 1. Exact phrase match (accented)
+  if (combinedClean.includes(` ${kwClean} `)) return true;
+
+  // 2. Exact phrase match (unaccented)
+  if (combinedNoAccent.includes(` ${kwNoAccent} `)) return true;
+
+  // 3. Opening-intent special equivalence:
+  // If user is searching for opening phrases (e.g. "chính thức mở cửa", "khai trương quán", "sắp khai trương", "tưng bừng khai trương"):
+  const isOpeningSearch = /(?:khai\s*trương|khai\s*truong|mở\s*cửa|mo\s*cua|mở\s*bán|mo\s*ban|mở\s*quán|mo\s*quan|mở\s*tiệm|mo\s*tiem|mở\s*chi\s*nhánh|opening)/i.test(kwLower);
+  if (isOpeningSearch) {
+    const hasOpeningSignal = /(?:khai\s*trương|khai\s*truong|grand\s*opening|soft\s*opening|mở\s*cửa|mo\s*cua|mở\s*bán|mo\s*ban|mở\s*quán|mo\s*quan|mở\s*tiệm|mo\s*tiem|chính\s*thức\s*(?:hoạt\s*động|đón\s*khách|mở|bán)|đón\s*khách|lên\s*đèn|chạy\s*thử)/i.test(rawCombined);
+    if (hasOpeningSignal) return true;
+  }
+
+  // 4. Multi-token decomposition:
+  const tokens = kwClean.split(/\s+/).filter(t => t.length >= 2);
+  if (tokens.length > 1) {
+    const allTokensPresent = tokens.every(token => {
+      const tokenNoAccent = removeAccents(token);
+      return combinedClean.includes(` ${token} `) || combinedNoAccent.includes(` ${tokenNoAccent} `);
+    });
+    if (allTokensPresent) return true;
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const biGram = `${tokens[i]} ${tokens[i+1]}`;
+      const biGramNoAccent = removeAccents(biGram);
+      if (biGram.length >= 5 && (combinedClean.includes(` ${biGram} `) || combinedNoAccent.includes(` ${biGramNoAccent} `))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const leadFilter = new LeadFilter();

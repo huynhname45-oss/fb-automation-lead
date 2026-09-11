@@ -12,7 +12,7 @@
   "requireMobilePhoneOnly": true,
   "requirePhoneOnly": false,
   "excludeKeywords": "",
-  "searchKeyword": "sắp khai trương",
+  "searchKeyword": "chính thức mở cửa",
   "aiEnabled": true,
   "aiProvider": "groq",
   "aiApiKey": "AQ.Ab8RN6K7D64ZvqO_oCalWpUg3VJw4oK8UWt47jPmA1ynCZUsDQ",
@@ -36,7 +36,7 @@
     "groupUrls": "phanmemketoan.quanlybanhang"
   },
   "userFormPreferences": {
-    "searchKeyword": "sắp khai trương",
+    "searchKeyword": "chính thức mở cửa",
     "excludeKeywords": "",
     "timeRange": "24h",
     "requirePhoneOnly": false,

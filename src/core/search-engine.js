@@ -1385,6 +1385,24 @@ class SearchEngine extends EventEmitter {
             ? postVerification.imageUrls 
             : (post.imageUrls || []);
 
+          // 2.3. Search Keyword Relevance Check
+          // Đảm bảo bài viết thực sự khớp với từ khóa tìm kiếm (tránh cào các bài gợi ý/lạc đề của Facebook)
+          const isKeywordMatched = leadFilter.matchesSearchKeyword(
+            keyword,
+            fullPostContent,
+            '',
+            post.groupName
+          );
+
+          if (!isKeywordMatched) {
+            const hasImages = (postImages && postImages.length > 0);
+            if (!hasImages || fullPostContent.length >= 100) {
+              logger.info(`❌ [KHÔNG KHỚP TỪ KHÓA TÌM KIẾM] BỎ QUA [${post.authorName}]: Bài viết không chứa từ khóa liên quan đến "${keyword}".`);
+              if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
+              continue;
+            }
+          }
+
           const postExcerpt = generateExcerpt(fullPostContent);
 
 
@@ -1499,6 +1517,12 @@ class SearchEngine extends EventEmitter {
                 { ...evidenceMetadata, verified: true }
               );
             }
+          }
+
+          if (!isKeywordMatched && phoneEvidence.length === 0) {
+            logger.info(`❌ [KHÔNG KHỚP TỪ KHÓA TÌM KIẾM] BỎ QUA [${post.authorName}]: Cả nội dung lẫn ảnh đều không có thông tin liên quan đến "${keyword}".`);
+            if (isClientIsolated) task.rejectedCount++; else this.rejectedCount++;
+            continue;
           }
 
           // 5.2. Nếu vẫn chưa có SĐT nào (cả trong chữ lẫn ảnh): Mới truy vấn Profile / Tagged Place Page
