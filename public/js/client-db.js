@@ -300,7 +300,7 @@ async function dbUpdateLeadStatus(key, newStatus) {
 }
 
 /**
- * Xóa các Lead đã chọn trong IndexedDB trên máy Client
+ * Xóa các Lead đã chọn trong IndexedDB trên máy Client (Hỗ trợ đa khóa key, id, canonical key)
  */
 async function dbDeleteSelectedLeads(keys = []) {
     if (!Array.isArray(keys) || keys.length === 0) return 0;
@@ -310,12 +310,30 @@ async function dbDeleteSelectedLeads(keys = []) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction('leads', 'readwrite');
         const store = tx.objectStore('leads');
+        const keySet = new Set(keys.map(k => String(k).toLowerCase().trim()));
         let deleted = 0;
 
-        keys.forEach(k => {
-            store.delete(k);
-            deleted++;
-        });
+        const getAllReq = store.getAll();
+        getAllReq.onsuccess = () => {
+            const allItems = getAllReq.result || [];
+            allItems.forEach(item => {
+                if (!item) return;
+                const itemKey = String(item.key || '').toLowerCase().trim();
+                const itemId = String(item.id || '').toLowerCase().trim();
+                const itemIdUnderscore = String(item._id || '').toLowerCase().trim();
+                const itemComputed = String(computeLeadKey(item) || '').toLowerCase().trim();
+
+                if (keySet.has(itemKey) || keySet.has(itemId) || keySet.has(itemIdUnderscore) || keySet.has(itemComputed)) {
+                    store.delete(item.key);
+                    deleted++;
+                }
+            });
+
+            // Direct deletes for any exact primary keys
+            keys.forEach(k => {
+                if (k) store.delete(k);
+            });
+        };
 
         tx.oncomplete = () => resolve(deleted);
         tx.onerror = (e) => reject(e.target.error);

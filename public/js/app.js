@@ -730,6 +730,7 @@ function initEventListeners() {
  */
 function getItemKey(post) {
   if (!post) return '';
+  if (post.key) return String(post.key).trim();
   if (post.id) return String(post.id).trim();
   if (post._id) return String(post._id).trim();
 
@@ -1560,6 +1561,7 @@ async function handleStartSearch(e) {
     state.search.keyword = keyword;
     state.search.progress.total = maxPosts;
     state.selectedKeys = new Set();  // Reset selections for new search
+    localStorage.removeItem('fb_user_cleared_leads');
 
     try {
         await api('POST', '/api/search/start', payload);
@@ -1911,8 +1913,9 @@ async function fetchResultsHistory() {
             leads = await window.ClientDB.getAllLeads();
         }
 
-        // Fallback an toàn: Nếu IndexedDB trên client đang rỗng (mới mở máy/xóa cache), nạp lại từ Server disk history
-        if (!leads || leads.length === 0) {
+        // Fallback an toàn: Chỉ nạp lại từ Server disk history khi IndexedDB rỗng VÀ người dùng chưa chủ động xóa sạch dữ liệu
+        const userClearedLeads = localStorage.getItem('fb_user_cleared_leads') === 'true';
+        if ((!leads || leads.length === 0) && !userClearedLeads) {
             const clientId = getClientId();
             const res = await api('GET', `/api/search/results?clientId=${encodeURIComponent(clientId)}`);
             if (res && Array.isArray(res.results) && res.results.length > 0) {
@@ -2133,6 +2136,7 @@ function renderTable() {
                 <div class="d-flex flex-col gap-1 align-center" style="width: 100%;">
                     ${postLink ? `<a href="${escapeHtml(postLink)}" target="_blank" class="btn btn-ghost btn-xs text-xs font-semibold" style="color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 5px; padding: 3px 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; width: 100%; box-sizing: border-box;" title="Mở đúng bài viết gốc trên Facebook">📄 Bài Viết ↗</a>` : ''}
                     ${profileLink ? `<a href="${escapeHtml(profileLink)}" target="_blank" class="link text-xs text-muted" style="display: inline-flex; align-items: center; justify-content: center; gap: 3px; padding: 2px 4px; white-space: nowrap; width: 100%; box-sizing: border-box;" title="Mở Profile">👤 Profile ↗</a>` : ''}
+                    <button type="button" class="btn btn-ghost btn-xs btn-delete-single-lead" data-key="${escapeHtml(key)}" style="color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 5px; padding: 2px 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; width: 100%; box-sizing: border-box; font-size: 11px; margin-top: 1px;" title="Xóa bài viết này khỏi danh sách">🗑️ Xóa</button>
                     ${(!postLink && !profileLink) ? '<span class="text-muted">—</span>' : ''}
                 </div>
             </td>
@@ -2186,6 +2190,16 @@ function renderTable() {
                 if (e.target.checked) state.selectedKeys.add(key);
                 else state.selectedKeys.delete(key);
                 renderTable();
+            });
+        }
+
+        // Row single delete button listener
+        const deleteBtn = tr.querySelector('.btn-delete-single-lead');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDeleteSingleRow(key);
             });
         }
 
@@ -2290,7 +2304,8 @@ async function handleClearHistory() {
         if (window.ClientDB) {
             await window.ClientDB.clearAll();
         }
-        api('POST', '/api/search/clear-history', { clientId: getClientId() }).catch(() => {});
+        localStorage.setItem('fb_user_cleared_leads', 'true');
+        await api('POST', '/api/search/clear-history', { clientId: getClientId() }).catch(() => {});
         state.search.results = [];
         state.selectedKeys.clear();
         state.pagination.currentPage = 1;
@@ -2317,12 +2332,46 @@ async function handleDeleteSelected() {
             state.search.results = (state.search.results || []).filter(item => !state.selectedKeys.has(getItemKey(item)));
         }
 
-        api('POST', '/api/search/delete-selected', { keys: keysArray, clientId: getClientId() }).catch(() => {});
+        // Đợi đồng bộ xóa triệt để trên Server disk history
+        await api('POST', '/api/search/delete-selected', { keys: keysArray, clientId: getClientId() }).catch(err => console.warn('[delete-selected] Server sync error:', err));
+
+        if (!state.search.results || state.search.results.length === 0) {
+            localStorage.setItem('fb_user_cleared_leads', 'true');
+        }
+
         state.selectedKeys.clear();
         renderTable();
         showToast(`Đã xóa vĩnh viễn ${keysArray.length} bài viết đã chọn khỏi lịch sử!`, 'info');
     } catch (e) {
         showToast(e.message || 'Không thể xóa bài viết khỏi lịch sử', 'error');
+    }
+}
+
+async function handleDeleteSingleRow(key) {
+    if (!key) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa bài viết này khỏi danh sách?')) return;
+
+    try {
+        const keysArray = [key];
+        if (window.ClientDB) {
+            await window.ClientDB.deleteSelected(keysArray);
+            state.search.results = await window.ClientDB.getAllLeads();
+        } else {
+            state.search.results = (state.search.results || []).filter(item => getItemKey(item) !== key);
+        }
+
+        // Đợi đồng bộ xóa triệt để trên Server disk history
+        await api('POST', '/api/search/delete-selected', { keys: keysArray, clientId: getClientId() }).catch(err => console.warn('[delete-single] Server sync error:', err));
+
+        if (!state.search.results || state.search.results.length === 0) {
+            localStorage.setItem('fb_user_cleared_leads', 'true');
+        }
+
+        state.selectedKeys.delete(key);
+        renderTable();
+        showToast('Đã xóa 1 bài viết khỏi danh sách!', 'info');
+    } catch (e) {
+        showToast(e.message || 'Không thể xóa bài viết', 'error');
     }
 }
 

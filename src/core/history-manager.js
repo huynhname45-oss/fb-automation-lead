@@ -207,7 +207,10 @@ class HistoryManager {
 
     const prevCount = this.history.length;
     this.history = this.history.filter(post => {
-      // 1. Direct ID match
+      // 1. Direct ID & Key match
+      if (post.key && (rawKeySet.has(post.key) || normalizedKeySet.has(String(post.key).toLowerCase()))) {
+        return false;
+      }
       if (post.id && (rawKeySet.has(post.id) || normalizedKeySet.has(String(post.id).toLowerCase()))) {
         return false;
       }

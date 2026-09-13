@@ -102,13 +102,22 @@ router.post('/delete-selected', async (req, res) => {
     const keyList = Array.isArray(keys) ? keys : (keys ? [keys] : []);
     const keySet = new Set(keyList.map(k => String(k).toLowerCase().trim()));
 
+    function isPostDeleted(post) {
+      if (!post) return false;
+      const pKey = post.key ? String(post.key).toLowerCase().trim() : '';
+      const pId = post.id ? String(post.id).toLowerCase().trim() : '';
+      const pIdUnderscore = post._id ? String(post._id).toLowerCase().trim() : '';
+      const cKey = String(getCanonicalPostKey(post) || '').toLowerCase().trim();
+      return keySet.has(pKey) || keySet.has(pId) || keySet.has(pIdUnderscore) || keySet.has(cKey);
+    }
+
     if (clientId && searchEngine.clientTasks.has(clientId)) {
       const task = searchEngine.clientTasks.get(clientId);
-      task.results = (task.results || []).filter(post => !keySet.has(getCanonicalPostKey(post)));
+      task.results = (task.results || []).filter(post => !isPostDeleted(post));
     }
 
     if (searchEngine.results && searchEngine.results.length > 0) {
-      searchEngine.results = searchEngine.results.filter(post => !keySet.has(getCanonicalPostKey(post)));
+      searchEngine.results = searchEngine.results.filter(post => !isPostDeleted(post));
     }
 
     await historyManager.deletePostsByKeys(keyList).catch(() => {});
