@@ -202,16 +202,20 @@ export async function checkUpdateStatus(force = false) {
     localDate = parts[1] || '—';
   }
 
-  // 2. Fetch origin main ngầm để lấy thông tin mới nhất từ remote
-  const fetchRes = await runCommand('git fetch origin main', { timeout: 20000 });
+  // 2. Fetch origin main ngầm để lấy thông tin mới nhất từ remote (hỗ trợ tự động thử lại nếu mạng chập chờn)
+  let fetchRes = await runCommand('git fetch origin main', { timeout: 20000 });
   if (!fetchRes.success) {
-    logger.warn({ err: fetchRes.error }, 'Không thể fetch origin main');
+    await new Promise(r => setTimeout(r, 1500));
+    fetchRes = await runCommand('git fetch origin main', { timeout: 20000 });
+  }
+  if (!fetchRes.success) {
+    logger.warn({ err: fetchRes.error }, 'Không thể kết nối tới Git server để kiểm tra bản cập nhật (Mạng chập chờn hoặc GitHub tạm thời không phản hồi)');
     const busyCheck = isSystemBusy();
     const lastUpdateNotice = await getLastUpdateNotice();
     return {
       supported: true,
       hasUpdate: false,
-      fetchError: 'Không thể kết nối tới Git server để kiểm tra bản mới.',
+      fetchError: 'Không thể kết nối tới Git server để kiểm tra bản mới (Mạng chập chờn).',
       currentCommit: { sha: localSha, message: localMessage, date: localDate },
       remoteCommit: null,
       lastUpdateNotice,
@@ -355,11 +359,15 @@ export async function executeSelfUpdate({ force = false, port = 3001 } = {}) {
     const diffFilesRes = await runCommand('git diff --name-only HEAD origin/main');
     const hasPackageChanges = diffFilesRes.success && diffFilesRes.stdout.includes('package.json');
 
-    // 4. Kéo code mới từ Git: fetch & reset --hard
+    // 4. Kéo code mới từ Git: fetch & reset --hard (hỗ trợ thử lại nếu mạng chập chờn)
     updateProgress = { step: 'pulling', message: 'Đang tải code mới nhất từ GitHub...', progress: 50, error: null };
-    const fetchRes = await runCommand('git fetch origin main', { timeout: 30000 });
+    let fetchRes = await runCommand('git fetch origin main', { timeout: 30000 });
     if (!fetchRes.success) {
-      throw new Error(`Không thể fetch code từ GitHub: ${fetchRes.error || fetchRes.stderr}`);
+      await new Promise(r => setTimeout(r, 2000));
+      fetchRes = await runCommand('git fetch origin main', { timeout: 30000 });
+    }
+    if (!fetchRes.success) {
+      throw new Error(`Không thể kết nối tải code từ GitHub (Mạng chập chờn): ${fetchRes.error || fetchRes.stderr}`);
     }
 
     const resetRes = await runCommand('git reset --hard origin/main', { timeout: 15000 });
