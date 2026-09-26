@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { exec } from 'child_process';
 import logger from './src/core/logger.js';
 import browserManager from './src/core/browser-manager.js';
 
@@ -15,8 +16,10 @@ import groupsRoutes from './src/routes/groups.js';
 import membersRoutes from './src/routes/members.js';
 import systemRoutes from './src/routes/system.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import fsSync from 'fs';
+
+const currentFilename = typeof __filename !== 'undefined' ? __filename : (typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '');
+const currentDirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(currentFilename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,10 +28,31 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Create required directories
-const requiredDirs = ['session', 'exports', 'logs', 'public'].map(dir => path.join(__dirname, dir));
+// Static public directory (bundled inside pkg or local in dev)
+const candidatePublicDirs = [
+  path.join(currentDirname, 'public'),
+  path.join(currentDirname, '..', 'public'),
+  path.join(process.cwd(), 'public')
+];
+const publicDir = candidatePublicDirs.find(d => {
+  try { return fsSync.existsSync(path.join(d, 'index.html')); } catch (_) { return false; }
+}) || path.join(process.cwd(), 'public');
+
+app.use(express.static(publicDir));
+
+// Fallback serve index.html for root or client routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  const indexPath = path.join(publicDir, 'index.html');
+  if (fsSync.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  next();
+});
+
+// Create required runtime data directories in user's working directory
+const requiredDirs = ['session', 'exports', 'logs', 'data'].map(dir => path.join(process.cwd(), dir));
 
 async function initDirs() {
   for (const dir of requiredDirs) {
@@ -71,9 +95,8 @@ async function startServer() {
       console.log(`==================================================\n`);
       
       try {
-        const { exec } = await import('child_process');
         const startCmd = process.platform === 'win32' ? `start http://localhost:${p}` : `open http://localhost:${p}`;
-        exec(startCmd);
+        exec(startCmd, () => {});
       } catch (e) {}
     });
 
@@ -121,7 +144,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.warn({ reason }, 'UNHANDLED PROMISE REJECTION');
+  logger.warn({ err: reason, reason: reason instanceof Error ? reason.stack : reason }, 'UNHANDLED PROMISE REJECTION');
 });
 
 process.on('SIGTERM', () => {

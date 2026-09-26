@@ -1,4 +1,4 @@
-﻿import ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -6,8 +6,17 @@ import { existsSync } from 'fs';
 import logger from './logger.js';
 import configManager from './config-manager.js';
 
+const currentFilename = typeof __filename !== 'undefined' ? __filename : (typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '');
+const currentDirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(currentFilename);
+
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
-const TEMPLATE_FILE = path.join(process.cwd(), 'template_import_lead.xlsx');
+const candidateTemplatePaths = [
+  path.join(process.cwd(), 'template_import_lead.xlsx'),
+  path.join(currentDirname, 'template_import_lead.xlsx'),
+  path.join(currentDirname, '..', 'template_import_lead.xlsx'),
+  path.join(currentDirname, '..', '..', 'template_import_lead.xlsx')
+];
+const TEMPLATE_FILE = candidateTemplatePaths.find(p => existsSync(p)) || candidateTemplatePaths[0];
 
 export const DEFAULT_IMPORT_CONFIG = {
   provinceCode: '__export__.res_province_121_cf34d119',

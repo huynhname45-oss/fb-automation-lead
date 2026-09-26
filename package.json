@@ -3,18 +3,21 @@
   "version": "1.0.2",
   "type": "module",
   "main": "server.js",
-  "bin": "app_launcher.cjs",
+  "bin": "dist/server.cjs",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test test/**/*.test.js",
-    "build:exe": "npx --yes pkg@5.8.1 . --targets node18-win-x64 --output FB_Automation.exe"
+    "build:exe": "node scripts/build.js"
   },
   "pkg": {
     "assets": [
       "public/**/*",
-      "src/**/*",
-      "server.js"
+      "dist/public/**/*",
+      "src/config/**/*",
+      "dist/config/**/*",
+      "template_import_lead.xlsx",
+      "node_modules/playwright-core/browsers.json"
     ]
   },
   "dependencies": {

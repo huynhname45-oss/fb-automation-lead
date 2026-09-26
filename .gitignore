@@ -11,7 +11,8 @@ FB_Automation.exe
 logs/
 exports/
 session/
-data/history.json
+data/
+dist/
 
 # Temporary & System files
 ~$*

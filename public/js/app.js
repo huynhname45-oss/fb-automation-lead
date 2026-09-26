@@ -4773,6 +4773,17 @@ async function startSystemUpdate(force = false) {
             return;
         }
 
+        // Trường hợp tải thủ công nếu GitHub chưa có file exe trực tiếp
+        if (res.status === 'manual_download') {
+            if (btnBanner) btnBanner.disabled = false;
+            if (btnConfig) btnConfig.disabled = false;
+            if (res.downloadUrl) {
+                window.open(res.downloadUrl, '_blank');
+            }
+            showToast(res.message || 'Đã mở liên kết tải bản cập nhật mới nhất!', 'info');
+            return;
+        }
+
         // Trường hợp cập nhật thành công -> Bật màn hình phủ đếm ngược
         showUpdateOverlay('Cập nhật thành công! Server đang khởi động lại...');
 

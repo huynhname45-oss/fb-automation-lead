@@ -3,8 +3,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { classifyPhoneType } from './phone-validator.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(__dirname, '..', 'config', 'excluded-entities.json');
+const currentFilename = typeof __filename !== 'undefined' ? __filename : (typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '');
+const currentDirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(currentFilename);
+
+const candidateConfigPaths = [
+  path.join(currentDirname, '..', 'config', 'excluded-entities.json'),
+  path.join(currentDirname, '..', 'src', 'config', 'excluded-entities.json'),
+  path.join(currentDirname, 'config', 'excluded-entities.json'),
+  path.join(currentDirname, 'src', 'config', 'excluded-entities.json'),
+  path.join(process.cwd(), 'src', 'config', 'excluded-entities.json'),
+  path.join(process.cwd(), 'config', 'excluded-entities.json')
+];
+const CONFIG_PATH = candidateConfigPaths.find(p => fs.existsSync(p)) || candidateConfigPaths[0];
 
 let excludedEntities = {
   enterpriseChains: [],
